@@ -101,7 +101,7 @@ npm run tauri:build            # بسته نهایی دسکتاپ
 adb install -r app-universal-debug.apk
 ```
 
-نکته‌ها: APK با کلید دیباگ امضا می‌شود (نصب‌شدنی، اما مناسب انتشار در Play Store نیست). با اجرای دستی می‌توان ورودی `target` را روی `aarch64` گذاشت تا فقط ARM64 ساخته شود (سریع‌تر). کش‌ها: Rust (`Swatinem/rust-cache`)، Gradle (`setup-gradle`) و npm.
+نکته‌ها: APK با کلید دیباگ امضا می‌شود (نصب‌شدنی، اما مناسب انتشار در Play Store نیست). به‌صورت پیش‌فرض فقط `aarch64` ساخته می‌شود چون هر گوشی مدرنی ARM64 است و نسخه universal چهار برابر بزرگ‌تر می‌شود (هر ABI یک `lib*.so` جدا دارد). در بیلد دیباگ، سمبل‌های دیباگِ Rust بخش عمده حجم هستند؛ ورک‌فلو با `CARGO_PROFILE_DEV_STRIP=debuginfo` آن‌ها را فقط در CI حذف می‌کند تا APK از حدود ۵۰۰ مگابایت به چند ده مگابایت برسد. برای ساخت همه ABIها، اجرای دستی با `target: all`. کش‌ها: Rust (`Swatinem/rust-cache`)، Gradle (`setup-gradle`) و npm.
 
 ## ابزار توسعه
 

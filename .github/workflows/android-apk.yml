@@ -35,12 +35,12 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "Which ABI(s) to build"
+        description: "Which ABI(s) to build — aarch64 is ~10x smaller than all"
         type: choice
-        default: all
+        default: aarch64
         options:
-          - all
           - aarch64
+          - all
 
 # One build per ref; a newer push cancels the previous run.
 concurrency:
@@ -214,15 +214,21 @@ jobs:
       - name: Build debug APK
         env:
           CI: "true"
-          TARGET_INPUT: ${{ inputs.target || 'all' }}
+          # Default is arm64 only: every phone from ~2017 on is arm64, and the
+          # universal build is ~4x bigger because each ABI ships its own .so.
+          TARGET_INPUT: ${{ inputs.target || 'aarch64' }}
+          # Debug symbols are the bulk of the Rust .so (~120 MB each). They are
+          # useless in a downloadable APK, so strip them for CI only — this does
+          # not touch the local `[profile.dev]` used by `npm run tauri:dev`.
+          CARGO_PROFILE_DEV_STRIP: debuginfo
         run: |
           set -euo pipefail
           ARGS=(--apk --debug)
           if [ "${TARGET_INPUT}" = "aarch64" ]; then
-            echo "Building arm64-v8a only (faster)."
+            echo "Building arm64-v8a only (smallest, covers modern phones)."
             ARGS+=(--target aarch64)
           else
-            echo "Building all four ABIs (universal APK)."
+            echo "Building all four ABIs (universal APK, ~4x bigger)."
           fi
           npx tauri android build "${ARGS[@]}"
 
