@@ -27,6 +27,7 @@ No third-party dependencies — standard library only.
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -211,6 +212,49 @@ def collect(root: Path, include_lock: bool, max_bytes: int) -> tuple[list[Source
     return files, notes
 
 
+def git_info(root: Path, included: set[str]) -> dict[str, str]:
+    """Branch / commit / dirty state, so the dump is traceable to a revision.
+
+    Only files that actually appear in the bundle count as "changed", so
+    unrelated local edits do not make the dump look dirty.
+    Silently returns `{}` when git is missing or the folder is not a repo.
+    """
+
+    def run(*args: str) -> str:
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(root), *args],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return ""
+        return result.stdout.strip() if result.returncode == 0 else ""
+
+    branch = run("rev-parse", "--abbrev-ref", "HEAD")
+    if not branch:
+        return {}
+
+    commit = run("log", "-1", "--pretty=%h %s")
+
+    dirty: list[str] = []
+    for line in run("status", "--porcelain").splitlines():
+        if not line.strip():
+            continue
+        path = line[3:].strip()
+        if " -> " in path:  # renames show as "old -> new"
+            path = path.split(" -> ")[-1]
+        path = path.strip('"').replace("\\", "/")
+        if path in included:
+            dirty.append(path)
+
+    info = {"branch": branch, "commit": commit}
+    info["state"] = f"{len(dirty)} uncommitted change(s)" if dirty else "clean"
+    return info
+
+
 # --------------------------------------------------------------------------- #
 # Rendering
 # --------------------------------------------------------------------------- #
@@ -259,6 +303,9 @@ def build_bundle(root: Path, files: list[SourceFile], notes: list[str]) -> str:
     add(f" Project : {root.name}")
     add(f" Root    : {root}")
     add(f" Created : {generated}")
+    git = git_info(root, {item.rel for item in files})
+    if git:
+        add(f" Revision: {git['branch']} @ {git['commit']} ({git['state']})")
     add(f" Files   : {len(files)}    Lines: {total_lines:,}    Size: {human_size(total_bytes)}")
     add(f" Tokens  : ~{total_bytes // 4:,} (rough estimate, chars / 4)")
     add(SEPARATOR)
@@ -275,7 +322,9 @@ def build_bundle(root: Path, files: list[SourceFile], notes: list[str]) -> str:
     add(" Tauri v2 (Android + Desktop) fitness tracker.")
     add(" Backend: Rust (src-tauri/src) — models, atomic JSON storage, IPC commands.")
     add(" Frontend: Vite + TypeScript + Tailwind, 100% Persian RTL UI (src/).")
-    add(" CI: GitHub Actions builds a debug Android APK (.github/workflows).")
+    add(" CI: GitHub Actions (.github/workflows) builds a debug Android APK for")
+    add("     arm64 by default, with Rust debug symbols stripped; the artifact")
+    add("     ships as a downloadable zip of the .apk.")
     add("")
 
     # ------------------------------------------------------------------ tree
