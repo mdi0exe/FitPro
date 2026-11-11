@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Hypertrophy",
+  "version": "0.1.0",
+  "identifier": "ir.student.hypertrophy",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "هایپرتروفی | برنامه تمرینی دانشجویی",
+        "width": 430,
+        "height": 920,
+        "minWidth": 360,
+        "minHeight": 620,
+        "resizable": true,
+        "center": true,
+        "theme": "Dark",
+        "backgroundColor": "#020617"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost https:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "HealthAndFitness",
+    "shortDescription": "برنامه تمرینی و تغذیه هایپرتروفی دانشجویی",
+    "longDescription": "برنامه ۴ روزه بالاتنه/پایین‌تنه با گرم کردن تعاملی، ثبت وزنه و تکرار هر ست، تایمر استراحت، افزایش وزنه دو هفته‌ای و چک‌لیست تغذیه دانشجویی.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "android": {
+      "minSdkVersion": 24
+    },
+    "ios": {
+      "minimumSystemVersion": "13.0"
+    }
+  },
+  "plugins": {}
+}

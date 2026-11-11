@@ -1,0 +1,256 @@
+name: Android APK
+
+# Builds a debug (debug-keystore signed, installable) Android APK of the Tauri v2
+# app and publishes it as a downloadable workflow artifact.
+#
+# Notes
+# - `src-tauri/gen/android` is git-ignored, so a fresh checkout generates it with
+#   `tauri android init --ci`.
+# - `tauri android init` also provisions the SDK platform + NDK it needs through
+#   sdkmanager; the "Resolve Android toolchain" step then exports the paths the
+#   Gradle/Rust build expects.
+# - The produced APK is signed with the Android debug key: great for sideloading,
+#   not suitable for Play Store upload.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "index.html"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - "tsconfig.json"
+      - "tailwind.config.js"
+      - "postcss.config.js"
+      - ".github/workflows/android-apk.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which ABI(s) to build"
+        type: choice
+        default: all
+        options:
+          - all
+          - aarch64
+
+# One build per ref; a newer push cancels the previous run.
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Keep Gradle from starting a daemon and give it enough heap for R8/AGP.
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-apk:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------------
+      # Toolchains
+      # ---------------------------------------------------------------------
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Rust with Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          key: android-apk
+
+      # Installs cmdline-tools, accepts SDK licenses and puts sdkmanager on PATH.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+          log-accepted-android-sdk-licenses: false
+
+      - name: Set up Gradle (wrapper + dependency cache)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # "basic" uses the GitHub Actions cache only — no external service.
+          cache-provider: basic
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      # ---------------------------------------------------------------------
+      # Project
+      # ---------------------------------------------------------------------
+      - name: Install npm dependencies
+        run: npm ci --no-audit --no-fund
+
+      # --ci skips prompts. --skip-targets-install is safe because the Rust step
+      # above already installed the four Android targets.
+      - name: Initialise Tauri Android project (if needed)
+        run: |
+          set -euo pipefail
+          if [ -d src-tauri/gen/android ]; then
+            echo "src-tauri/gen/android already exists — skipping init."
+          else
+            npx tauri android init --ci --skip-targets-install
+          fi
+          echo "--- generated project ---"
+          ls -1 src-tauri/gen/android
+
+      # ---------------------------------------------------------------------
+      # Toolchain paths
+      # ---------------------------------------------------------------------
+      - name: Resolve Android toolchain (NDK / SDK platform)
+        run: |
+          set -euo pipefail
+          GRADLE_DIR="src-tauri/gen/android"
+
+          # 1) NDK — use the version pinned by the generated project when present,
+          #    otherwise the newest one on the runner, otherwise install a default.
+          PINNED_NDK=$(grep -rhoE 'ndkVersion[[:space:]]*=[[:space:]]*"[0-9.]+"' "$GRADLE_DIR" \
+            --include='*.gradle' --include='*.kts' 2>/dev/null \
+            | head -n 1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+
+          NDK_DIR=""
+          if [ -n "${PINNED_NDK}" ] && [ -d "${ANDROID_HOME}/ndk/${PINNED_NDK}" ]; then
+            NDK_DIR="${ANDROID_HOME}/ndk/${PINNED_NDK}"
+          elif [ -d "${ANDROID_HOME}/ndk" ]; then
+            NEWEST_NDK=$(ls "${ANDROID_HOME}/ndk" | sort -V | tail -n 1 || true)
+            if [ -n "${NEWEST_NDK}" ]; then
+              NDK_DIR="${ANDROID_HOME}/ndk/${NEWEST_NDK}"
+            fi
+          fi
+
+          if [ -z "${NDK_DIR}" ]; then
+            echo "No NDK found on the runner — installing 27.0.12077973"
+            # `yes | sdkmanager` trips pipefail when yes gets SIGPIPE; the
+            # directory check below is the real verification.
+            yes 2>/dev/null | sdkmanager --install "ndk;27.0.12077973" > /dev/null 2>&1 || true
+            NDK_DIR="${ANDROID_HOME}/ndk/27.0.12077973"
+          fi
+
+          if [ ! -d "${NDK_DIR}" ]; then
+            echo "::error::Android NDK not found at ${NDK_DIR}"
+            exit 1
+          fi
+          echo "ANDROID_NDK_HOME=${NDK_DIR}" >> "$GITHUB_ENV"
+          echo "NDK_HOME=${NDK_DIR}" >> "$GITHUB_ENV"
+          echo "Using NDK: ${NDK_DIR}"
+
+          # 2) compileSdk platform — best effort; AGP can also auto-download it.
+          SDK_API=$(grep -rhoE 'compileSdk[[:space:]]*=[[:space:]]*[0-9]+' "$GRADLE_DIR" \
+            --include='*.gradle' --include='*.kts' 2>/dev/null \
+            | head -n 1 | grep -oE '[0-9]+' || true)
+          echo "compileSdk: ${SDK_API:-unknown}"
+          if [ -n "${SDK_API}" ] && [ ! -d "${ANDROID_HOME}/platforms/android-${SDK_API}" ]; then
+            yes 2>/dev/null | sdkmanager --install "platforms;android-${SDK_API}" > /dev/null 2>&1 || true
+          fi
+
+          echo "--- environment ---"
+          java -version 2>&1 | head -n 2 || true
+          rustc --version
+          node --version
+
+      # ---------------------------------------------------------------------
+      # Build
+      # ---------------------------------------------------------------------
+      # `tauri android build` also runs `beforeBuildCommand` (vite build), so the
+      # frontend is bundled automatically before Gradle packages the APK.
+      - name: Build debug APK
+        env:
+          CI: "true"
+          TARGET_INPUT: ${{ inputs.target || 'all' }}
+        run: |
+          set -euo pipefail
+          ARGS=(--apk --debug)
+          if [ "${TARGET_INPUT}" = "aarch64" ]; then
+            echo "Building arm64-v8a only (faster)."
+            ARGS+=(--target aarch64)
+          else
+            echo "Building all four ABIs (universal APK)."
+          fi
+          npx tauri android build "${ARGS[@]}"
+
+      - name: Collect APKs
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          while IFS= read -r apk; do
+            echo "Found ${apk}"
+            cp "${apk}" artifacts/
+          done < <(find src-tauri/gen/android/app/build/outputs -type f -name '*.apk' 2>/dev/null)
+
+          if [ -z "$(ls -A artifacts)" ]; then
+            echo "::error::No APK was produced by the build."
+            exit 1
+          fi
+
+          (cd artifacts && sha256sum ./*.apk | tee SHA256SUMS.txt)
+          ls -lh artifacts
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: persian-hypertrophy-android-debug
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0 # APKs are already compressed
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## 📦 Android debug APK"
+            echo ""
+            if [ -d artifacts ] && [ -n "$(ls -A artifacts 2>/dev/null)" ]; then
+              echo "| File | Size |"
+              echo "| --- | --- |"
+              for file in artifacts/*.apk; do
+                [ -e "$file" ] || continue
+                printf '| `%s` | %s |\n' "$(basename "$file")" "$(du -h "$file" | cut -f1)"
+              done
+              echo ""
+              echo "Download it from the **Artifacts** section of this run, then install with:"
+              echo ""
+              echo '```bash'
+              echo "adb install -r app-universal-debug.apk"
+              echo '```'
+              echo ""
+              echo "_Debug-signed APK — installable, not suitable for Play Store upload._"
+            else
+              echo "⚠️ No APK was produced — check the build logs above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

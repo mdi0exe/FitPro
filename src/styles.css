@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #020617;
+    background-image:
+      radial-gradient(900px 420px at 88% -8%, rgba(16, 185, 129, 0.18), transparent 62%),
+      radial-gradient(680px 380px at 2% 4%, rgba(34, 211, 238, 0.1), transparent 58%);
+    background-attachment: fixed;
+    overscroll-behavior-y: none;
+  }
+
+  ::selection {
+    background: rgba(52, 211, 153, 0.3);
+  }
+
+  /* Persian digits read better with tabular figures in the logger rows. */
+  input,
+  button,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-3xl border border-slate-800/80 bg-slate-900/55 p-4 shadow-card backdrop-blur-md;
+  }
+
+  .card-tight {
+    @apply rounded-2xl border border-slate-800/80 bg-slate-900/60 p-3;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] font-medium text-slate-300;
+  }
+
+  .chip-emerald {
+    @apply border-emerald-500/30 bg-emerald-500/10 text-emerald-300;
+  }
+
+  .chip-cyan {
+    @apply border-cyan-500/30 bg-cyan-500/10 text-cyan-300;
+  }
+
+  .chip-amber {
+    @apply border-amber-500/30 bg-amber-500/10 text-amber-300;
+  }
+
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-primary {
+    @apply btn bg-gradient-to-l from-emerald-500 to-cyan-400 text-slate-950 shadow-glow;
+  }
+
+  .btn-ghost {
+    @apply btn border border-slate-700/80 bg-slate-900/60 text-slate-200 hover:border-slate-600;
+  }
+
+  .btn-danger {
+    @apply btn border border-rose-500/40 bg-rose-500/10 text-rose-300;
+  }
+
+  .btn-icon {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-900/70 text-slate-300 transition active:scale-90;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-slate-700/70 bg-slate-950/60 px-3 py-2 text-center text-base font-bold text-slate-100 outline-none transition focus:border-emerald-400/80 focus:ring-2 focus:ring-emerald-400/20;
+  }
+
+  .field-sm {
+    @apply rounded-lg px-2 py-1.5 text-sm;
+  }
+
+  .label {
+    @apply mb-1 block text-[11px] font-medium text-slate-400;
+  }
+
+  .pill {
+    @apply whitespace-nowrap rounded-2xl border px-3 py-2 text-xs font-bold transition active:scale-95;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+  }
+
+  .divider {
+    @apply h-px w-full bg-gradient-to-l from-transparent via-slate-800 to-transparent;
+  }
+}
+
+/* Keep long Persian coaching cues readable. */
+.tip-text {
+  line-height: 1.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

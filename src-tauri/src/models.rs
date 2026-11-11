@@ -1,0 +1,412 @@
+//! Domain models shared between the Rust backend and the Persian frontend.
+//!
+//! Every struct is serialised to `camelCase` JSON so the TypeScript layer can
+//! consume the payload without an extra mapping layer.
+
+use serde::{Deserialize, Serialize};
+
+/// Bumped whenever the on-disk shape changes in a backwards-incompatible way.
+pub const STATE_VERSION: u32 = 1;
+
+/// Default rest timer between sets (seconds).
+pub const DEFAULT_REST_SECONDS: u32 = 90;
+
+/// Length of one progressive-overload cycle (days).
+pub const OVERLOAD_CYCLE_DAYS: i64 = 14;
+
+// ---------------------------------------------------------------------------
+// Profile
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfile {
+    pub name: String,
+    pub age: u32,
+    pub height_cm: f32,
+    pub start_weight: f32,
+    pub current_weight: f32,
+    pub target_weight: f32,
+    /// e.g. "حجم خشک (Lean Bulk)"
+    pub goal: String,
+    /// Golden rule: best training window.
+    pub training_window: String,
+}
+
+impl Default for UserProfile {
+    fn default() -> Self {
+        Self {
+            name: "دانشجوی ورزشکار".to_string(),
+            age: 25,
+            height_cm: 179.0,
+            start_weight: 65.0,
+            current_weight: 65.0,
+            target_weight: 75.0,
+            goal: "افزایش حجم خشک (Lean Bulk)".to_string(),
+            training_window: "۴ عصر تا ۷ شب".to_string(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Warm-up
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WarmupItem {
+    pub id: String,
+    pub text: String,
+    /// Search phrase used to look up an animated demo.
+    pub query: String,
+    #[serde(default)]
+    pub done: bool,
+}
+
+// ---------------------------------------------------------------------------
+// Exercises & sets
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetLog {
+    /// 1-based set number.
+    pub index: u32,
+    pub weight: f32,
+    pub reps: u32,
+    pub done: bool,
+}
+
+impl SetLog {
+    pub fn new(index: u32, weight: f32, reps: u32) -> Self {
+        Self {
+            index,
+            weight,
+            reps,
+            done: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Exercise {
+    pub id: String,
+    pub name: String,
+    pub sets: u32,
+    /// Free-form Persian rep prescription, e.g. "8-10" or "حداکثر توان".
+    pub reps: String,
+    /// GIF search query for the in-app viewer.
+    pub query: String,
+    /// Persian coaching cue.
+    pub tip: String,
+    /// Optional direct `.gif` URL pasted by the user.
+    #[serde(default)]
+    pub gif_url: Option<String>,
+    /// Working weight in kilograms. `0.0` means bodyweight-only.
+    #[serde(default)]
+    pub target_weight: f32,
+    #[serde(default)]
+    pub bodyweight: bool,
+    #[serde(default)]
+    pub logs: Vec<SetLog>,
+}
+
+impl Exercise {
+    /// Ensure `logs` has exactly `sets` rows, preserving what the user typed.
+    pub fn sync_logs(&mut self) {
+        let sets = self.sets.max(1);
+        let fallback_reps = parse_first_number(&self.reps).unwrap_or(8);
+        let mut logs = std::mem::take(&mut self.logs);
+        logs.sort_by_key(|l| l.index);
+
+        let mut next: Vec<SetLog> = Vec::with_capacity(sets as usize);
+        for i in 1..=sets {
+            match logs.iter().find(|l| l.index == i) {
+                Some(existing) => next.push(existing.clone()),
+                None => next.push(SetLog::new(i, self.target_weight, fallback_reps)),
+            }
+        }
+        self.logs = next;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Days
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkoutDay {
+    pub id: String,
+    /// Short pill label, e.g. "روز ۱".
+    pub label: String,
+    /// e.g. "بالاتنه A".
+    pub title: String,
+    /// e.g. "سینه، پهنای زیربغل، بازو".
+    pub focus: String,
+    pub warmups: Vec<WarmupItem>,
+    pub exercises: Vec<Exercise>,
+}
+
+// ---------------------------------------------------------------------------
+// Progress, diet, milestones
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightEntry {
+    /// ISO date, `YYYY-MM-DD`.
+    pub date: String,
+    pub weight: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DietItem {
+    pub id: String,
+    pub text: String,
+    #[serde(default)]
+    pub hint: String,
+    #[serde(default)]
+    pub done: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DietState {
+    pub items: Vec<DietItem>,
+    /// ISO date of the last daily reset.
+    pub last_reset_date: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Milestone {
+    pub id: String,
+    pub date: String,
+    pub text: String,
+    /// "overload" | "weight" | "system" | "goal"
+    pub kind: String,
+}
+
+// ---------------------------------------------------------------------------
+// Root state
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppStateData {
+    pub version: u32,
+    pub profile: UserProfile,
+    pub days: Vec<WorkoutDay>,
+    pub weight_history: Vec<WeightEntry>,
+    pub diet: DietState,
+    pub milestones: Vec<Milestone>,
+    /// ISO date of the last applied overload cycle.
+    pub last_overload_date: String,
+    pub overload_count: u32,
+    /// Index of the day currently selected in the UI.
+    pub active_day: usize,
+    pub rest_seconds: u32,
+}
+
+impl AppStateData {
+    /// Keep every exercise's `logs` vector in sync with its `sets` count.
+    pub fn normalize(&mut self) {
+        if self.days.is_empty() {
+            return;
+        }
+        if self.active_day >= self.days.len() {
+            self.active_day = 0;
+        }
+        if self.rest_seconds < 15 || self.rest_seconds > 600 {
+            self.rest_seconds = DEFAULT_REST_SECONDS;
+        }
+        if self.profile.target_weight <= 0.0 {
+            self.profile.target_weight = 75.0;
+        }
+        for day in self.days.iter_mut() {
+            for exercise in day.exercises.iter_mut() {
+                exercise.sets = exercise.sets.clamp(1, 12);
+                exercise.sync_logs();
+            }
+        }
+    }
+
+    pub fn push_milestone(&mut self, date: &str, text: impl Into<String>, kind: &str) {
+        self.milestones.insert(
+            0,
+            Milestone {
+                id: format!("ms-{}", self.milestones.len() + 1),
+                date: date.to_string(),
+                text: text.into(),
+                kind: kind.to_string(),
+            },
+        );
+        // Keep the log tidy; the UI only shows the recent history anyway.
+        self.milestones.truncate(60);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Progressive overload
+// ---------------------------------------------------------------------------
+
+/// Weight step applied to every loaded exercise each cycle.
+pub const OVERLOAD_STEP_KG: f32 = 2.5;
+
+/// Applies one progressive-overload cycle and returns how many exercises moved.
+///
+/// * Loaded exercises: `+2.5 kg` on the working weight.
+/// * Bodyweight exercises: `+1` rep on the prescribed rep range.
+/// * Logged sets are cleared so the new cycle starts from a clean slate.
+pub fn apply_overload(state: &mut AppStateData) -> usize {
+    let mut changed = 0usize;
+
+    for day in state.days.iter_mut() {
+        for exercise in day.exercises.iter_mut() {
+            if exercise.bodyweight || exercise.target_weight <= 0.0 {
+                let bumped = increment_reps(&exercise.reps);
+                if bumped != exercise.reps {
+                    exercise.reps = bumped;
+                    changed += 1;
+                }
+            } else {
+                exercise.target_weight = round_step(exercise.target_weight + OVERLOAD_STEP_KG);
+                changed += 1;
+            }
+            // Fresh cycle: clear the per-set checkmarks and pre-fill new targets.
+            exercise.logs.clear();
+            exercise.sync_logs();
+        }
+    }
+
+    changed
+}
+
+/// Rounds to the nearest 2.5 kg plate step.
+pub fn round_step(value: f32) -> f32 {
+    let step = OVERLOAD_STEP_KG;
+    ((value / step).round() * step * 10.0).round() / 10.0
+}
+
+/// Increments the rep prescription found in a string.
+///
+/// A range shifts as a whole so its width is preserved:
+/// `"8-10"` → `"9-11"`, `"12"` → `"13"`, `"10 هر پا"` → `"11 هر پا"`,
+/// `"حداکثر توان"` → unchanged.
+pub fn increment_reps(reps: &str) -> String {
+    let chars: Vec<char> = reps.chars().collect();
+
+    let Some(start) = chars.iter().position(|c| c.is_ascii_digit()) else {
+        return reps.to_string();
+    };
+
+    let mut end = start;
+    while end < chars.len() && chars[end].is_ascii_digit() {
+        end += 1;
+    }
+    let first: u32 = chars[start..end]
+        .iter()
+        .collect::<String>()
+        .parse()
+        .unwrap_or(0);
+
+    // Look for a range separator right after the first number ("8-10", "8 - 10").
+    let mut cursor = end;
+    while cursor < chars.len() && chars[cursor] == ' ' {
+        cursor += 1;
+    }
+    let mut second: Option<(u32, usize, usize)> = None;
+    if cursor < chars.len() && (chars[cursor] == '-' || chars[cursor] == '–') {
+        let mut second_start = cursor + 1;
+        while second_start < chars.len() && chars[second_start] == ' ' {
+            second_start += 1;
+        }
+        let mut second_end = second_start;
+        while second_end < chars.len() && chars[second_end].is_ascii_digit() {
+            second_end += 1;
+        }
+        if second_end > second_start {
+            let value: u32 = chars[second_start..second_end]
+                .iter()
+                .collect::<String>()
+                .parse()
+                .unwrap_or(0);
+            second = Some((value, second_start, second_end));
+        }
+    }
+
+    let mut out: String = chars[..start].iter().collect();
+    out.push_str(&(first + 1).to_string());
+
+    match second {
+        Some((value, second_start, second_end)) => {
+            out.extend(chars[end..second_start].iter());
+            out.push_str(&(value + 1).to_string());
+            out.extend(chars[second_end..].iter());
+        }
+        None => out.extend(chars[end..].iter()),
+    }
+
+    out
+}
+
+/// First integer in a rep prescription, if any.
+pub fn parse_first_number(reps: &str) -> Option<u32> {
+    let mut digits = String::new();
+    for c in reps.chars() {
+        if c.is_ascii_digit() {
+            digits.push(c);
+        } else if !digits.is_empty() {
+            break;
+        }
+    }
+    digits.parse().ok()
+}
+
+/// Converts latin digits inside a string to Persian digits for display text.
+pub fn to_persian_digits(input: &str) -> String {
+    input
+        .chars()
+        .map(|c| match c {
+            '0' => '۰',
+            '1' => '۱',
+            '2' => '۲',
+            '3' => '۳',
+            '4' => '۴',
+            '5' => '۵',
+            '6' => '۶',
+            '7' => '۷',
+            '8' => '۸',
+            '9' => '۹',
+            other => other,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn increments_rep_ranges() {
+        assert_eq!(increment_reps("8-10"), "9-11");
+        assert_eq!(increment_reps("12"), "13");
+        assert_eq!(increment_reps("10 هر پا"), "11 هر پا");
+        assert_eq!(increment_reps("حداکثر توان"), "حداکثر توان");
+    }
+
+    #[test]
+    fn rounds_to_plate_steps() {
+        assert_eq!(round_step(12.5 + 2.5), 15.0);
+        assert_eq!(round_step(11.0 + 2.5), 12.5);
+    }
+
+    #[test]
+    fn parses_first_number() {
+        assert_eq!(parse_first_number("12-15"), Some(12));
+        assert_eq!(parse_first_number("حداکثر توان"), None);
+    }
+}
