@@ -21,3 +21,6 @@ Thumbs.db
 # verification artefacts
 shots/
 shot-*.png
+
+# generated code dump (python bundle_code.py)
+project-code-dump.txt
