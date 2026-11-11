@@ -64,7 +64,7 @@ const timerVisible = await page.evaluate(() => {
 });
 check("rest timer starts after a set", timerVisible);
 const timerText = await page.$eval("#rest-timer p:nth-of-type(2)", (n) => n.textContent.trim());
-check("rest timer counts from 90s", /^1:2\d$|^1:30$/.test(timerText), timerText);
+check("rest timer counts from 90s", /^[۱1]:([۲2][۰-۹0-9]|۳۰|30)$/.test(timerText), timerText);
 
 // skip rest
 await clickByText("#rest-timer button", "رد کردن");

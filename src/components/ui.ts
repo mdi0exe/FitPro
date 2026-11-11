@@ -55,7 +55,7 @@ export function openModal(options: ModalOptions): ModalHandle {
   });
   header.append(titles, closeButton);
 
-  const body = el("div", "min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-4");
+  const body = el("div", "min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(var(--safe-bottom)+1.25rem)] pt-4");
   body.append(options.body);
 
   sheet.append(header, body);

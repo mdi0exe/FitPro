@@ -5,6 +5,15 @@
 @layer base {
   :root {
     color-scheme: dark;
+    /* WebViews report 0 for env(safe-area-*) but still draw under the system
+       bars; html.is-android (set in main.ts) supplies a usable minimum. */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html.is-android {
+    --safe-top: max(env(safe-area-inset-top, 0px), 2.25rem);
+    --safe-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
   }
 
   html {
@@ -115,10 +124,6 @@
 
   .no-scrollbar {
     scrollbar-width: none;
-  }
-
-  .safe-bottom {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
   }
 
   .divider {

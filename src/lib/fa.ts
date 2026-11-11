@@ -67,6 +67,15 @@ export function faWeight(value: number): string {
 }
 
 /**
+ * Signed number for RTL text. Without the leading Left-to-Right Mark the bidi
+ * algorithm pushes the sign to the wrong side (`۲٫۵+` instead of `+۲٫۵`).
+ */
+export function faSigned(value: number, digits = 1): string {
+  const sign = value >= 0 ? "+" : "−";
+  return `\u200E${sign}${faNum(Math.abs(value), digits)}`;
+}
+
+/**
  * Rep prescription for display, fixing RTL range flipping:
  * `"8-10"` → `"۸ تا ۱۰"`, `"10 هر پا"` → `"۱۰ هر پا"`.
  */

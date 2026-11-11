@@ -52,7 +52,7 @@ fn apply_progressive_overload(app: AppHandle) -> Result<AppStateData, String> {
     state.overload_count = state.overload_count.saturating_add(1);
 
     let text = format!(
-        "چرخه {} افزایش وزنه اعمال شد: {} حرکت به‌روزرسانی شد (+۲٫۵ کیلوگرم / +۱ تکرار).",
+        "چرخه {} افزایش وزنه اعمال شد: {} حرکت به‌روزرسانی شد (\u{200E}+۲٫۵ کیلوگرم / \u{200E}+۱ تکرار).",
         to_persian_digits(&state.overload_count.to_string()),
         to_persian_digits(&changed.to_string())
     );
@@ -103,7 +103,7 @@ fn log_body_weight(app: AppHandle, weight: f32) -> Result<AppStateData, String> 
         let text = format!(
             "وزن امروز ثبت شد: {} کیلوگرم ({} کیلوگرم نسبت به ثبت قبلی).",
             to_persian_digits(&format!("{rounded:.1}")),
-            to_persian_digits(&format!("{:+.1}", rounded - previous))
+            to_persian_digits(&format!("\u{200E}{:+.1}", rounded - previous))
         );
         state.push_milestone(&today, text, "weight");
     }

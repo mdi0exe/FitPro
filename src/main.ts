@@ -25,9 +25,15 @@ import { renderCoach } from "./views/coach";
 
 const app = document.getElementById("app") as HTMLElement;
 
+// Android WebView paints edge-to-edge but reports 0 for env(safe-area-*), so the
+// CSS variables fall back to fixed minima on that platform only.
+if (/Android/i.test(navigator.userAgent)) {
+  document.documentElement.classList.add("is-android");
+}
+
 function buildShell(): void {
   clear(app);
-  app.className = "mx-auto min-h-screen w-full max-w-2xl pb-28";
+  app.className = "mx-auto min-h-screen w-full max-w-2xl pb-36";
 
   const headerSlot = el("div");
   headerSlot.id = "header-slot";

@@ -56,7 +56,8 @@ export function renderWorkout(): HTMLElement {
 
 function dayStrip(): HTMLElement {
   const state = getState();
-  const strip = el("div", "no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 pt-0.5");
+  // Four fixed days fit a 2x2 grid: no horizontal scrolling, no clipped labels.
+  const strip = el("div", "grid grid-cols-2 gap-2 pb-1 pt-0.5");
 
   state.days.forEach((day, index) => {
     const active = index === state.activeDay;
@@ -65,7 +66,7 @@ function dayStrip(): HTMLElement {
     const finished = total > 0 && done === total;
 
     const pill = btn(
-      `pill flex min-w-[92px] flex-col items-start gap-0.5 ${
+      `pill flex w-full min-w-0 flex-col items-start gap-0.5 ${
         active
           ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-300 shadow-glow"
           : "border-slate-800 bg-slate-900/60 text-slate-400"
@@ -74,7 +75,7 @@ function dayStrip(): HTMLElement {
          <span>${escapeHtml(day.label)}</span>
          ${finished ? '<span class="text-emerald-400">✓</span>' : `<span>${fa(done)}/${fa(total)}</span>`}
        </span>
-       <span class="text-xs font-extrabold">${escapeHtml(day.title)}</span>`,
+       <span class="w-full truncate text-right text-xs font-extrabold">${escapeHtml(day.title)}</span>`,
       () => {
         if (getState().activeDay === index) return;
         mutate((state) => {
@@ -123,14 +124,14 @@ function overloadBanner(): HTMLElement {
       `آخرین چرخه: ${faDate(state.lastOverloadDate, { withYear: false })} • ${fa(state.overloadCount)} بار اعمال شده`,
     ),
   );
-  top.append(info, el("span", "chip chip-emerald shrink-0", "+۲٫۵ کیلو"));
+  top.append(info, el("span", "chip chip-emerald shrink-0", "\u200E+۲٫۵ کیلو"));
 
   const bar = progressBar(percent, "mt-3");
   bar.setAttribute("data-overload-bar", "1");
 
   const action = btn(
     "btn-primary mt-3 w-full",
-    "⚡ اعمال افزایش وزنه دو هفته‌ای (+۲٫۵ کیلوگرم)",
+    "⚡ اعمال افزایش وزنه دو هفته‌ای (\u200E+۲٫۵ کیلوگرم)",
     () => void runOverload(),
   );
 
@@ -147,8 +148,8 @@ async function runOverload(): Promise<void> {
     title: "افزایش وزنه چرخه جدید",
     message:
       remaining > 0
-        ? `هنوز ${fa(remaining)} روز تا پایان چرخه مانده. اگر مطمئنی، وزنه همه حرکات +۲٫۵ کیلوگرم زیاد می‌شود (حرکات وزن بدن: +۱ تکرار) و تیک ست‌های فعلی پاک می‌شود.`
-        : "وزنه همه حرکات +۲٫۵ کیلوگرم زیاد می‌شود (حرکات وزن بدن: +۱ تکرار) و تیک ست‌های فعلی پاک می‌شود.",
+        ? `هنوز ${fa(remaining)} روز تا پایان چرخه مانده. اگر مطمئنی، وزنه همه حرکات \u200E+۲٫۵ کیلوگرم زیاد می‌شود (حرکات وزن بدن: \u200E+۱ تکرار) و تیک ست‌های فعلی پاک می‌شود.`
+        : "وزنه همه حرکات \u200E+۲٫۵ کیلوگرم زیاد می‌شود (حرکات وزن بدن: \u200E+۱ تکرار) و تیک ست‌های فعلی پاک می‌شود.",
     confirmText: "اعمال افزایش",
   });
   if (!confirmed) return;
@@ -291,7 +292,7 @@ function cardioTimerBlock(): HTMLElement {
   const timeText = el(
     "span",
     "absolute inset-0 flex items-center justify-center font-mono text-[11px] font-extrabold text-slate-100",
-    "5:00",
+    "۵:۰۰",
   );
   ringWrap.append(timeText);
 
@@ -321,7 +322,7 @@ function cardioTimerBlock(): HTMLElement {
     if (ring) {
       ring.style.strokeDashoffset = `${CARDIO_RING_LENGTH * (1 - cardioTimer.progress)}`;
     }
-    timeText.textContent = formatClock(cardioTimer.remaining);
+    timeText.textContent = fa(formatClock(cardioTimer.remaining));
     playPause.innerHTML = "";
     playPause.append(svgIcon(cardioTimer.running ? icons.pause : icons.play, "h-4 w-4"));
   };
@@ -527,7 +528,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
   weightInput.inputMode = "decimal";
   weightInput.autocomplete = "off";
   weightInput.placeholder = "kg";
-  weightInput.value = log.weight ? String(log.weight) : "";
+  weightInput.value = log.weight ? faNum(log.weight, 1) : "";
   weightInput.setAttribute("aria-label", `وزنه ست ${log.index}`);
 
   const repsInput = el("input", "field field-sm");
@@ -535,7 +536,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
   repsInput.inputMode = "numeric";
   repsInput.autocomplete = "off";
   repsInput.placeholder = "تکرار";
-  repsInput.value = log.reps ? String(log.reps) : "";
+  repsInput.value = log.reps ? fa(String(log.reps)) : "";
   repsInput.setAttribute("aria-label", `تکرار ست ${log.index}`);
 
   // Accepts Persian/Arabic-Indic digits typed on an Android Persian keyboard.

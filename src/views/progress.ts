@@ -1,7 +1,7 @@
 /** Progress tab: body-weight tracking, chart, stats and milestones. */
 import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { daysBetween, fa, faDate, faNum, faRelative, isoToday, parseNum } from "../lib/fa";
+import { daysBetween, fa, faDate, faNum, faRelative, faSigned, isoToday, parseNum } from "../lib/fa";
 import { logBodyWeight } from "../lib/api";
 import { getState, requestRender, setState } from "../lib/store";
 import type { Milestone, WeightEntry } from "../types";
@@ -59,7 +59,7 @@ function weightHero(): HTMLElement {
     el(
       "p",
       `text-sm font-extrabold ${gained >= 0 ? "text-emerald-400" : "text-rose-400"}`,
-      `${gained >= 0 ? "+" : "−"}${faNum(Math.abs(gained), 1)}`,
+      faSigned(gained),
     ),
     el("p", "mt-0.5 text-[9px] text-slate-500", "تغییر از شروع"),
   );
@@ -112,7 +112,7 @@ function weightLogger(): HTMLElement {
   input.inputMode = "decimal";
   input.autocomplete = "off";
   input.placeholder = "مثلاً ۶۶٫۵";
-  input.value = String(getState().profile.currentWeight);
+  input.value = faNum(getState().profile.currentWeight, 1);
 
   const submit = btn("btn-primary shrink-0 px-5", "ثبت وزن", () => void submitWeight(input));
   input.addEventListener("keydown", (event) => {

@@ -1,7 +1,7 @@
 /** Coach tab: golden rules, overload science and app settings. */
 import { btn, clamp, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { fa, parseNum } from "../lib/fa";
+import { fa, faNum, parseNum } from "../lib/fa";
 import { resetToDefaults, storageMode } from "../lib/api";
 import { getState, persist, requestRender, setState } from "../lib/store";
 import type { AppStateData } from "../types";
@@ -105,7 +105,11 @@ function overloadCard(): HTMLElement {
     box.append(el("p", "text-sm font-extrabold text-emerald-300", value), el("p", "mt-0.5 text-[9px] text-slate-500", label));
     return box;
   };
-  grid.append(cell("+۲٫۵", "کیلوگرم هر چرخه"), cell("+۱", "تکرار وزن بدن"), cell("۱۴", "روز هر چرخه"));
+  grid.append(
+    cell("\u200E+۲٫۵", "کیلوگرم هر چرخه"),
+    cell("\u200E+۱", "تکرار وزن بدن"),
+    cell("۱۴", "روز هر چرخه"),
+  );
   card.append(grid);
   return card;
 }
@@ -129,7 +133,7 @@ function profileEditor(state: AppStateData): HTMLElement {
     input.step = step;
     input.inputMode = "decimal";
     input.autocomplete = "off";
-    input.value = String(value);
+    input.value = faNum(value, 1);
     box.append(input);
     return { box, input };
   };
@@ -187,7 +191,7 @@ function settingsCard(): HTMLElement {
   restInput.type = "text";
   restInput.inputMode = "numeric";
   restInput.autocomplete = "off";
-  restInput.value = String(state.restSeconds);
+  restInput.value = fa(state.restSeconds);
   restForm.append(
     restInput,
     btn("btn-primary shrink-0 px-4", "ذخیره", () => {

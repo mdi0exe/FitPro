@@ -139,7 +139,7 @@ export function localApplyOverload(): AppStateData {
   state.overloadCount += 1;
   pushMilestone(
     state,
-    `چرخه ${fa(state.overloadCount)} افزایش وزنه اعمال شد: ${fa(changed)} حرکت به‌روزرسانی شد (+۲٫۵ کیلوگرم / +۱ تکرار).`,
+    `چرخه ${fa(state.overloadCount)} افزایش وزنه اعمال شد: ${fa(changed)} حرکت به‌روزرسانی شد (\u200E+۲٫۵ کیلوگرم / \u200E+۱ تکرار).`,
     "overload",
   );
   writeRaw(state);
@@ -171,7 +171,7 @@ export function localLogWeight(weight: number): AppStateData {
     const delta = rounded - previous;
     pushMilestone(
       state,
-      `وزن امروز ثبت شد: ${fa(rounded)} کیلوگرم (${delta > 0 ? "+" : "−"}${fa(Math.abs(delta))} کیلوگرم نسبت به ثبت قبلی).`,
+      `وزن امروز ثبت شد: ${fa(rounded)} کیلوگرم (\u200E${delta > 0 ? "+" : "−"}${fa(Math.abs(delta))} کیلوگرم نسبت به ثبت قبلی).`,
       "weight",
     );
   }

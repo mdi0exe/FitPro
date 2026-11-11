@@ -2,7 +2,7 @@
 import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { pushTab } from "../lib/navigation";
-import { fa, faDate, faNum, isoToday, parseNum } from "../lib/fa";
+import { fa, faDate, faNum, faSigned, isoToday, parseNum } from "../lib/fa";
 import { logBodyWeight } from "../lib/api";
 import { getActiveTab, getState, requestRender, setActiveTab, setState } from "../lib/store";
 import type { TabId } from "../types";
@@ -25,7 +25,7 @@ export function renderHeader(): HTMLElement {
     "header",
     "sticky top-0 z-40 border-b border-slate-800/70 bg-slate-950/85 backdrop-blur-xl",
   );
-  const inner = el("div", "mx-auto max-w-2xl px-4 pb-2.5 pt-3");
+  const inner = el("div", "mx-auto max-w-2xl px-4 pb-2.5 pt-[calc(var(--safe-top)+0.5rem)]");
 
   const row = el("div", "flex items-center justify-between gap-3");
   const titles = el("div", "min-w-0");
@@ -62,7 +62,7 @@ export function renderNav(): HTMLElement {
   );
   const inner = el(
     "div",
-    "mx-auto flex max-w-2xl items-stretch justify-around px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.35rem)] pt-1.5",
+    "mx-auto flex max-w-2xl items-stretch justify-around px-2 pb-[calc(var(--safe-bottom)+0.25rem)] pt-2",
   );
 
   NAV_ITEMS.forEach((item) => {
@@ -77,7 +77,7 @@ export function renderNav(): HTMLElement {
     button.append(svgIcon(item.icon, "h-5 w-5"));
     button.append(el("span", "text-[10px] font-bold", item.label));
     if (isActive) {
-      const dot = el("span", "absolute -top-1.5 h-1 w-6 rounded-full bg-emerald-400");
+      const dot = el("span", "absolute top-0 h-1 w-6 rounded-full bg-emerald-400");
       button.append(dot);
     }
     button.addEventListener("click", () => {
@@ -111,7 +111,7 @@ export function openWeightSheet(): void {
   input.type = "text";
   input.inputMode = "decimal";
   input.autocomplete = "off";
-  input.value = String(state.profile.currentWeight);
+  input.value = faNum(state.profile.currentWeight, 1);
 
   const label = el("div", "space-y-1");
   label.append(el("label", "label", "وزن امروز (کیلوگرم)"), input);
@@ -122,7 +122,7 @@ export function openWeightSheet(): void {
     quick.append(
       btn(
         "btn-ghost py-2 text-xs",
-        `${delta > 0 ? "+" : "−"}${faNum(Math.abs(delta), 1)}`,
+        faSigned(delta),
         () => {
           const current = parseNum(input.value) || state.profile.currentWeight;
           input.value = String(Math.round((current + delta) * 10) / 10);

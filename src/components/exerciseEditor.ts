@@ -1,6 +1,6 @@
 /** Add / edit exercise form. */
 import { btn, el, escapeHtml } from "../lib/dom";
-import { en, parseNum } from "../lib/fa";
+import { en, fa, faNum, parseNum } from "../lib/fa";
 import type { Exercise } from "../types";
 import { openModal, toast } from "./ui";
 
@@ -41,7 +41,7 @@ export function openExerciseEditor(options: {
   setsInput.type = "text";
   setsInput.inputMode = "numeric";
   setsInput.autocomplete = "off";
-  setsInput.value = String(initial?.sets ?? 3);
+  setsInput.value = fa(initial?.sets ?? 3);
   const setsField = field("تعداد ست");
   setsField.append(setsInput);
 
@@ -56,7 +56,7 @@ export function openExerciseEditor(options: {
   weightInput.type = "text";
   weightInput.inputMode = "decimal";
   weightInput.autocomplete = "off";
-  weightInput.value = String(initial?.targetWeight ?? 0);
+  weightInput.value = faNum(initial?.targetWeight ?? 0, 1);
   const weightField = field("وزنه کاری (کیلوگرم)", "صفر بگذارید اگر حرکت با وزن بدن است.");
   weightField.append(weightInput);
 

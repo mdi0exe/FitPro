@@ -6,7 +6,7 @@
  */
 import { btn, el, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { clock } from "../lib/fa";
+import { clock, fa } from "../lib/fa";
 import { alarm, restTimer, vibrate } from "../lib/timer";
 import { getState } from "../lib/store";
 
@@ -24,7 +24,7 @@ export function mountRestTimer(): void {
 
   container = el(
     "div",
-    "pointer-events-none fixed inset-x-0 bottom-0 z-[60] hidden px-3 pb-[calc(env(safe-area-inset-bottom,0px)+5.25rem)]",
+    "pointer-events-none fixed inset-x-0 bottom-0 z-[60] hidden px-3 pb-[calc(var(--safe-bottom)+5.25rem)]",
   );
   container.id = "rest-timer";
 
@@ -51,7 +51,7 @@ export function mountRestTimer(): void {
 
   const labels = el("div", "min-w-0 flex-1");
   caption = el("p", "text-[10px] font-medium text-emerald-300/90", "استراحت بین ست‌ها");
-  timeLabel = el("p", "font-mono text-xl font-extrabold leading-tight text-slate-50", "1:30");
+  timeLabel = el("p", "font-mono text-xl font-extrabold leading-tight text-slate-50", "۱:۳۰");
   labels.append(caption, timeLabel);
 
   const actions = el("div", "flex shrink-0 items-center gap-1");
@@ -80,7 +80,7 @@ export function mountRestTimer(): void {
     if (!ring || !timeLabel) return;
     const progress = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0;
     ring.style.strokeDashoffset = `${CIRCUMFERENCE * (1 - progress)}`;
-    timeLabel.textContent = clock(remaining);
+    timeLabel.textContent = fa(clock(remaining));
   };
   restTimer.onDone = () => {
     if (caption) {
