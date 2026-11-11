@@ -6,6 +6,10 @@ dist/
 src-tauri/target/
 src-tauri/gen/
 
+# python
+__pycache__/
+*.pyc
+
 # logs & env
 *.log
 .env

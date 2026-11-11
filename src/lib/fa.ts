@@ -33,6 +33,27 @@ export function en(input: string): string {
     .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
 }
 
+/**
+ * Parses a number typed on any keyboard: Persian (`۶۷٫۵`), Arabic-Indic
+ * (`٦٧.٥`) or latin (`67.5`). Returns `0` for anything unparseable.
+ */
+export function parseNum(raw: string | number | null | undefined): number {
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : 0;
+  if (!raw) return 0;
+  const normalized = en(String(raw))
+    .replace(/[٫,]/g, ".") // ٫ Persian decimal, , latin decimal
+    .replace(/[٬\s]/g, "") // ٬ Persian thousands, spaces
+    .replace(/\.(?=.*\.)/g, ""); // keep only the last dot
+  const value = Number.parseFloat(normalized);
+  return Number.isFinite(value) ? value : 0;
+}
+
+/** First integer inside a rep prescription, after digit normalisation. */
+export function firstNumber(raw: string | null | undefined): number {
+  const match = /\d+/.exec(en(raw ?? ""));
+  return match ? Number.parseInt(match[0], 10) : 0;
+}
+
 /** `65` → `"۶۵"`, `67.5` → `"۶۷٫۵"` (Persian decimal separator). */
 export function faNum(value: number, digits = 0): string {
   const fixed = digits > 0 ? value.toFixed(digits) : String(Math.round(value));

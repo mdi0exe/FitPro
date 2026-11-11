@@ -123,20 +123,33 @@ export function beep(times = 2, frequency = 880, duration = 0.16): void {
   const ctx = getAudioContext();
   if (!ctx) return;
 
-  for (let i = 0; i < times; i += 1) {
-    const startAt = ctx.currentTime + i * (duration + 0.1);
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
+  const schedule = () => {
+    for (let i = 0; i < times; i += 1) {
+      const startAt = ctx.currentTime + i * (duration + 0.1);
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
 
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, startAt);
-    gain.gain.setValueAtTime(0.0001, startAt);
-    gain.gain.exponentialRampToValueAtTime(0.22, startAt + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(frequency, startAt);
+      gain.gain.setValueAtTime(0.0001, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.22, startAt + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
 
-    oscillator.connect(gain).connect(ctx.destination);
-    oscillator.start(startAt);
-    oscillator.stop(startAt + duration + 0.02);
+      oscillator.connect(gain).connect(ctx.destination);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + duration + 0.02);
+    }
+  };
+
+  // Android WebView starts the context suspended; scheduling before it resumes
+  // silently drops the first beeps (or stacks them on resume).
+  if (ctx.state === "suspended") {
+    void ctx
+      .resume()
+      .then(schedule)
+      .catch(() => undefined);
+  } else {
+    schedule();
   }
 }
 

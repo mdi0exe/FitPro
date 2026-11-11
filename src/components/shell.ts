@@ -1,9 +1,10 @@
 /** App shell: sticky header, bottom navigation and quick weight sheet. */
 import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { fa, faDate, faNum, isoToday } from "../lib/fa";
+import { pushTab } from "../lib/navigation";
+import { fa, faDate, faNum, isoToday, parseNum } from "../lib/fa";
 import { logBodyWeight } from "../lib/api";
-import { getActiveTab, getState, persist, requestRender, setActiveTab, setState } from "../lib/store";
+import { getActiveTab, getState, requestRender, setActiveTab, setState } from "../lib/store";
 import type { TabId } from "../types";
 import { openModal, progressBar, toast } from "./ui";
 
@@ -81,6 +82,7 @@ export function renderNav(): HTMLElement {
     }
     button.addEventListener("click", () => {
       if (getActiveTab() === item.id) return;
+      pushTab(item.id);
       setActiveTab(item.id);
       requestRender();
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -106,11 +108,9 @@ export function openWeightSheet(): void {
   );
 
   const input = el("input", "field text-lg");
-  input.type = "number";
-  input.step = "0.1";
-  input.min = "25";
-  input.max = "300";
+  input.type = "text";
   input.inputMode = "decimal";
+  input.autocomplete = "off";
   input.value = String(state.profile.currentWeight);
 
   const label = el("div", "space-y-1");
@@ -124,7 +124,7 @@ export function openWeightSheet(): void {
         "btn-ghost py-2 text-xs",
         `${delta > 0 ? "+" : "−"}${faNum(Math.abs(delta), 1)}`,
         () => {
-          const current = Number.parseFloat(input.value.replace(",", ".")) || state.profile.currentWeight;
+          const current = parseNum(input.value) || state.profile.currentWeight;
           input.value = String(Math.round((current + delta) * 10) / 10);
         },
       ),
@@ -159,18 +159,14 @@ export function openWeightSheet(): void {
 }
 
 async function submit(raw: string, close: () => void): Promise<void> {
-  const normalized = raw
-    .replace(",", ".")
-    .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
-  const value = Number.parseFloat(normalized);
-  if (!Number.isFinite(value)) {
+  const value = parseNum(raw);
+  if (value <= 0) {
     toast("یک عدد معتبر وارد کن.", "error");
     return;
   }
   try {
     const next = await logBodyWeight(value);
     setState(next);
-    persist(0);
     close();
     toast("وزن ثبت شد ✅");
     requestRender();

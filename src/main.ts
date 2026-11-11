@@ -3,6 +3,7 @@ import "./styles.css";
 
 import { loadState } from "./lib/api";
 import { clear, el, escapeHtml, preserveScroll } from "./lib/dom";
+import { installNavigation } from "./lib/navigation";
 import { unlockAudio } from "./lib/timer";
 import {
   ensureDailyDietReset,
@@ -11,6 +12,7 @@ import {
   installLifecycleFlush,
   persist,
   requestRender,
+  setActiveTab,
   setRenderHook,
 } from "./lib/store";
 import { mountRestTimer } from "./components/restTimer";
@@ -114,6 +116,17 @@ async function boot(): Promise<void> {
     mountRestTimer();
     installLifecycleFlush();
     setRenderHook(() => renderView(true));
+
+    // Android back: close the open overlay first, otherwise return to the
+    // workout tab instead of letting the OS kill the app.
+    installNavigation(() => {
+      if (getActiveTab() !== "workout") {
+        setActiveTab("workout");
+        requestRender();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    });
+
     renderView();
 
     // Android requires a user gesture before audio playback is allowed.

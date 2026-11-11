@@ -7,7 +7,7 @@
  */
 import type { AppStateData, Exercise, Milestone, SetLog } from "../types";
 import { createSeedState, localIso } from "../data/seed";
-import { fa } from "./fa";
+import { en, fa, firstNumber } from "./fa";
 
 const STORAGE_KEY = "persian-hypertrophy::state::v1";
 
@@ -24,6 +24,8 @@ export function normalizeState(input: AppStateData): AppStateData {
   for (const day of state.days) {
     for (const exercise of day.exercises) {
       exercise.sets = Math.min(12, Math.max(1, exercise.sets || 1));
+      // Same rule as models.rs: keep prescriptions in ASCII digits.
+      exercise.reps = en(exercise.reps ?? "");
       exercise.logs = syncLogs(exercise);
     }
   }
@@ -32,7 +34,7 @@ export function normalizeState(input: AppStateData): AppStateData {
 }
 
 export function syncLogs(exercise: Exercise): SetLog[] {
-  const fallbackReps = Number.parseInt(exercise.reps ?? "", 10) || 8;
+  const fallbackReps = firstNumber(exercise.reps) || 8;
   const existing = [...(exercise.logs ?? [])].sort((a, b) => a.index - b.index);
   const rows: SetLog[] = [];
   for (let i = 1; i <= exercise.sets; i += 1) {
@@ -96,9 +98,12 @@ export function incrementReps(reps: string): string {
   return `${reps.slice(0, start)}${bumped}${reps.slice(end)}`;
 }
 
+let milestoneSeq = 0;
+
 function pushMilestone(state: AppStateData, text: string, kind: Milestone["kind"]): void {
+  milestoneSeq += 1;
   state.milestones.unshift({
-    id: `ms-${state.milestones.length + 1}`,
+    id: `ms-${Date.now()}-${milestoneSeq}`,
     date: localIso(),
     text,
     kind,
@@ -111,6 +116,7 @@ export function localApplyOverload(): AppStateData {
   let changed = 0;
 
   for (const day of state.days) {
+    for (const warmup of day.warmups) warmup.done = false;
     for (const exercise of day.exercises) {
       if (exercise.bodyweight || exercise.targetWeight <= 0) {
         const bumped = incrementReps(exercise.reps);
@@ -177,10 +183,8 @@ export function localLogWeight(weight: number): AppStateData {
 export function localReset(): AppStateData {
   const current = localLoad();
   const fresh = createSeedState();
-  fresh.profile.currentWeight = current.profile.currentWeight;
-  fresh.profile.startWeight = current.profile.startWeight;
-  fresh.profile.name = current.profile.name;
-  fresh.profile.age = current.profile.age;
+  // Only the plan is reset; the profile is the user's own data.
+  fresh.profile = { ...current.profile };
   if (current.weightHistory.length > 0) fresh.weightHistory = current.weightHistory;
   fresh.diet = current.diet;
   fresh.milestones = current.milestones;

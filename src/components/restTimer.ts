@@ -60,7 +60,7 @@ export function mountRestTimer(): void {
       "aria-label": "کاهش ۱۵ ثانیه",
       title: "−۱۵ ثانیه",
     }),
-    btn("btn-icon", svgIcon(icons.plus, "h-4 w-4"), () => restTimer.add(15), {
+    btn("btn-icon", svgIcon(icons.plus, "h-4 w-4"), () => bumpRest(15), {
       "aria-label": "افزایش ۱۵ ثانیه",
       title: "+۱۵ ثانیه",
     }),
@@ -128,6 +128,24 @@ export function stopRest(): void {
   container?.classList.add("hidden");
 }
 
+/**
+ * Adds (or removes) time. When the alarm already fired the timer is stopped but
+ * the banner is still on screen, so a "+15" has to revive it instead of letting
+ * the auto-hide swallow it.
+ */
 export function bumpRest(delta: number): void {
+  if (hideHandle !== null) {
+    window.clearTimeout(hideHandle);
+    hideHandle = null;
+  }
+  if (caption) {
+    caption.textContent = "استراحت بین ست‌ها";
+    caption.className = "text-[10px] font-medium text-emerald-300/90";
+  }
+
   restTimer.add(delta);
+
+  if (delta > 0 && !restTimer.running) {
+    restTimer.start();
+  }
 }

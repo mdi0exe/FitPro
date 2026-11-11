@@ -1,6 +1,7 @@
 /** Shared UI primitives: modal sheet, confirm dialog, toasts, progress bars. */
 import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
+import { pushOverlay, releaseOverlay } from "../lib/navigation";
 
 const overlayRoot = () => document.getElementById("overlay-root") as HTMLElement;
 const toastRoot = () => document.getElementById("toast-root") as HTMLElement;
@@ -73,14 +74,25 @@ export function openModal(options: ModalOptions): ModalHandle {
     if (event.key === "Escape") handle.close();
   };
 
+  let closed = false;
+
+  const closeDom = () => {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener("keydown", onKey);
+    backdrop.remove();
+    unlockScroll();
+    options.onClose?.();
+  };
+
+  // The Android back gesture pops this entry and closes the sheet.
+  const overlayId = pushOverlay(closeDom);
+
   const handle: ModalHandle = {
     element: sheet,
     close() {
-      if (!backdrop.isConnected) return;
-      document.removeEventListener("keydown", onKey);
-      backdrop.remove();
-      unlockScroll();
-      options.onClose?.();
+      releaseOverlay(overlayId);
+      closeDom();
     },
   };
 

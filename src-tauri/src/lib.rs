@@ -119,10 +119,8 @@ fn reset_to_defaults(app: AppHandle) -> Result<AppStateData, String> {
     let mut fresh = storage::seed();
     let today = timeutil::today_iso();
 
-    fresh.profile.current_weight = current.profile.current_weight;
-    fresh.profile.name = current.profile.name;
-    fresh.profile.age = current.profile.age;
-    fresh.profile.start_weight = current.profile.start_weight;
+    // Keep the whole profile — only the workout plan is reset.
+    fresh.profile = current.profile.clone();
     if !current.weight_history.is_empty() {
         fresh.weight_history = current.weight_history;
     }

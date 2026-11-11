@@ -1,9 +1,9 @@
 /** Progress tab: body-weight tracking, chart, stats and milestones. */
 import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { daysBetween, fa, faDate, faNum, faRelative, isoToday } from "../lib/fa";
+import { daysBetween, fa, faDate, faNum, faRelative, isoToday, parseNum } from "../lib/fa";
 import { logBodyWeight } from "../lib/api";
-import { getState, persist, requestRender, setState } from "../lib/store";
+import { getState, requestRender, setState } from "../lib/store";
 import type { Milestone, WeightEntry } from "../types";
 import { progressBar, sectionTitle, toast } from "../components/ui";
 
@@ -108,11 +108,9 @@ function weightLogger(): HTMLElement {
 
   const form = el("div", "mt-3 flex items-center gap-2");
   const input = el("input", "field flex-1");
-  input.type = "number";
-  input.step = "0.1";
-  input.min = "25";
-  input.max = "300";
+  input.type = "text";
   input.inputMode = "decimal";
+  input.autocomplete = "off";
   input.placeholder = "مثلاً ۶۶٫۵";
   input.value = String(getState().profile.currentWeight);
 
@@ -127,15 +125,14 @@ function weightLogger(): HTMLElement {
 }
 
 async function submitWeight(input: HTMLInputElement): Promise<void> {
-  const raw = Number.parseFloat(input.value.replace(",", ".").replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))));
-  if (!Number.isFinite(raw)) {
+  const raw = parseNum(input.value);
+  if (raw <= 0) {
     toast("یک عدد معتبر وارد کن.", "error");
     return;
   }
   try {
     const next = await logBodyWeight(raw);
     setState(next);
-    persist(0);
     toast("وزن ثبت شد. مسیر ۶۵ → ۷۵ ادامه دارد! 📈");
     requestRender();
   } catch (error) {
@@ -215,6 +212,8 @@ function chartCard(history: WeightEntry[]): HTMLElement {
     </svg>`;
 
   const axis = el("div", "mt-1 flex items-center justify-between text-[9px] text-slate-500");
+  // The SVG plots oldest→newest left→right; force LTR so the labels match.
+  axis.setAttribute("dir", "ltr");
   axis.append(
     el("span", "", faDate(entries[0].date, { withYear: false })),
     el("span", "text-cyan-400/80", `هدف ${faNum(profile.targetWeight, 1)}`),

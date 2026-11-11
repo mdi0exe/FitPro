@@ -1,9 +1,10 @@
 /** Coach tab: golden rules, overload science and app settings. */
-import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
+import { btn, clamp, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { fa } from "../lib/fa";
+import { fa, parseNum } from "../lib/fa";
 import { resetToDefaults, storageMode } from "../lib/api";
 import { getState, persist, requestRender, setState } from "../lib/store";
+import type { AppStateData } from "../types";
 import { confirmDialog, sectionTitle, toast } from "../components/ui";
 
 export function renderCoach(): HTMLElement {
@@ -109,10 +110,72 @@ function overloadCard(): HTMLElement {
   return card;
 }
 
+/** Editable profile: name, age, height and the start/target weights. */
+function profileEditor(state: AppStateData): HTMLElement {
+  const wrap = el("div", "space-y-2");
+
+  const nameWrap = el("div", "space-y-1");
+  nameWrap.append(el("label", "label", "نام"));
+  const nameInput = el("input", "field field-sm text-right");
+  nameInput.type = "text";
+  nameInput.value = state.profile.name;
+  nameWrap.append(nameInput);
+
+  const numberField = (label: string, value: number, step = "1") => {
+    const box = el("div", "space-y-1");
+    box.append(el("label", "label", label));
+    const input = el("input", "field field-sm");
+    input.type = "text";
+    input.step = step;
+    input.inputMode = "decimal";
+    input.autocomplete = "off";
+    input.value = String(value);
+    box.append(input);
+    return { box, input };
+  };
+
+  const age = numberField("سن", state.profile.age);
+  const height = numberField("قد (سانتی‌متر)", state.profile.heightCm);
+  const start = numberField("وزن شروع (کیلو)", state.profile.startWeight, "0.1");
+  const target = numberField("وزن هدف (کیلو)", state.profile.targetWeight, "0.1");
+
+  const grid = el("div", "grid grid-cols-2 gap-2");
+  grid.append(age.box, height.box, start.box, target.box);
+
+  const save = btn("btn-ghost w-full py-2 text-xs", "ذخیره مشخصات", () => {
+    const name = nameInput.value.trim();
+    if (name) state.profile.name = name;
+    state.profile.age = clamp(Math.round(parseNum(age.input.value)) || state.profile.age, 12, 99);
+    state.profile.heightCm = clamp(parseNum(height.input.value) || state.profile.heightCm, 120, 230);
+    state.profile.startWeight = clamp(parseNum(start.input.value) || state.profile.startWeight, 30, 300);
+    state.profile.targetWeight = clamp(parseNum(target.input.value) || state.profile.targetWeight, 30, 300);
+
+    persist(0);
+    toast("مشخصات ذخیره شد.");
+    requestRender();
+  });
+
+  wrap.append(
+    el("p", "text-xs font-extrabold text-slate-200", "مشخصات من"),
+    el(
+      "p",
+      "text-[10px] leading-5 text-slate-500",
+      "قد و وزن‌ها در نمودار پیشرفت و محاسبه پروتئین روزانه استفاده می‌شوند.",
+    ),
+    nameWrap,
+    grid,
+    save,
+    el("div", "divider"),
+  );
+
+  return wrap;
+}
+
 function settingsCard(): HTMLElement {
   const state = getState();
   const card = el("div", "card space-y-3");
   card.append(sectionTitle("تنظیمات", el("span", "chip", storageMode() === "native" ? "ذخیره بومی" : "مرورگر")));
+  card.append(profileEditor(state));
 
   const restRow = el("div", "space-y-1");
   restRow.append(
@@ -121,15 +184,14 @@ function settingsCard(): HTMLElement {
   );
   const restForm = el("div", "mt-1 flex items-center gap-2");
   const restInput = el("input", "field flex-1");
-  restInput.type = "number";
-  restInput.min = "30";
-  restInput.max = "300";
-  restInput.step = "15";
+  restInput.type = "text";
+  restInput.inputMode = "numeric";
+  restInput.autocomplete = "off";
   restInput.value = String(state.restSeconds);
   restForm.append(
     restInput,
     btn("btn-primary shrink-0 px-4", "ذخیره", () => {
-      const value = Math.min(300, Math.max(30, Number.parseInt(restInput.value, 10) || 90));
+      const value = Math.min(300, Math.max(30, Math.round(parseNum(restInput.value)) || 90));
       state.restSeconds = value;
       persist(0);
       toast(`استراحت روی ${fa(value)} ثانیه تنظیم شد.`);
@@ -143,7 +205,7 @@ function settingsCard(): HTMLElement {
 
   const info = el("div", "space-y-1 text-[10px] leading-5 text-slate-500");
   info.append(
-    el("p", "", `نسخه برنامه: ${fa(state.version)} • نسخه اسکیما: ${fa(state.version)}`),
+    el("p", "", `نسخه داده: ${fa(state.version)}`),
     el(
       "p",
       "",
@@ -178,7 +240,6 @@ async function resetPlan(): Promise<void> {
   try {
     const next = await resetToDefaults();
     setState(next);
-    persist(0);
     toast("برنامه به حالت پیش‌فرض بازگشت.", "info");
     requestRender();
   } catch (error) {

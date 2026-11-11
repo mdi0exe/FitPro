@@ -1,7 +1,7 @@
 /** Workout tab: day switcher, warm-up card, overload banner and set logger. */
 import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { daysBetween, fa, faDate, faNum, faReps, isoToday } from "../lib/fa";
+import { daysBetween, fa, faDate, faNum, faReps, firstNumber, isoToday, parseNum } from "../lib/fa";
 import { beep, cardioTimer, vibrate } from "../lib/timer";
 import { applyProgressiveOverload } from "../lib/api";
 import {
@@ -156,7 +156,6 @@ async function runOverload(): Promise<void> {
   try {
     const next = await applyProgressiveOverload();
     setState(next);
-    persist(0);
     toast("چرخه افزایش وزنه اعمال شد. سنگین‌تر بزن! 💪");
     beep(2, 990, 0.12);
     vibrate([60, 60, 60]);
@@ -249,6 +248,9 @@ function warmupCard(day: WorkoutDay): HTMLElement {
       }
       const nowDone = day.warmups.filter((w) => w.done).length;
       titles.querySelector("p:last-child")!.textContent = `${fa(nowDone)} از ${fa(total)} مرحله انجام شد`;
+      document
+        .querySelector<HTMLElement>("[data-day-restart]")
+        ?.classList.toggle("hidden", !dayHasProgress(day));
       check.className = `mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition active:scale-90 ${
         item.done
           ? "border-emerald-400 bg-emerald-400 text-slate-950"
@@ -369,8 +371,42 @@ function daySummary(day: WorkoutDay): HTMLElement {
   percent.firstElementChild?.setAttribute("data-day-percent", "1");
 
   card.append(left, percent);
+
+  // A 2-week cycle means every training day is repeated; once it is finished the
+  // user needs a way to clear the ticks (without losing the logged weights).
+  const restart = btn("btn-icon shrink-0", svgIcon(icons.reset, "h-4 w-4"), () => void restartDay(day), {
+    "aria-label": "شروع مجدد این روز",
+    title: "شروع مجدد این روز",
+  });
+  restart.setAttribute("data-day-restart", "1");
+  if (!dayHasProgress(day)) restart.classList.add("hidden");
+  card.append(restart);
+
   return card;
 }
+
+/** Clears every tick of the day, keeping the weights/reps the user typed. */
+async function restartDay(day: WorkoutDay): Promise<void> {
+  const doneSets = dayDone(day);
+  const confirmed = await confirmDialog({
+    title: "شروع مجدد این روز",
+    message: `تیک ${fa(doneSets)} ست و همه مراحل گرم کردن این روز پاک شود؟ وزنه‌ها و تکرارهایی که وارد کرده‌ای حفظ می‌شوند.`,
+    confirmText: "شروع مجدد",
+  });
+  if (!confirmed) return;
+
+  for (const exercise of day.exercises) {
+    for (const log of exercise.logs) log.done = false;
+  }
+  for (const warmup of day.warmups) warmup.done = false;
+
+  persist(0);
+  toast("این روز از نو آماده شد. برو سنگین بزن! 💪", "info");
+  requestRender();
+}
+
+const dayHasProgress = (day: WorkoutDay) =>
+  dayDone(day) > 0 || day.warmups.some((warmup) => warmup.done);
 
 const dayTotal = (day: WorkoutDay) => day.exercises.reduce((sum, e) => sum + e.logs.length, 0);
 const dayDone = (day: WorkoutDay) => day.exercises.reduce((sum, e) => sum + e.logs.filter((l) => l.done).length, 0);
@@ -486,25 +522,30 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
   );
 
   const weightInput = el("input", "field field-sm");
-  weightInput.type = "number";
-  weightInput.step = "2.5";
-  weightInput.min = "0";
+  // text + inputmode (not type="number") so Persian/Arabic digits survive
+  weightInput.type = "text";
   weightInput.inputMode = "decimal";
+  weightInput.autocomplete = "off";
   weightInput.placeholder = "kg";
   weightInput.value = log.weight ? String(log.weight) : "";
   weightInput.setAttribute("aria-label", `وزنه ست ${log.index}`);
 
   const repsInput = el("input", "field field-sm");
-  repsInput.type = "number";
-  repsInput.min = "0";
+  repsInput.type = "text";
   repsInput.inputMode = "numeric";
+  repsInput.autocomplete = "off";
   repsInput.placeholder = "تکرار";
   repsInput.value = log.reps ? String(log.reps) : "";
   repsInput.setAttribute("aria-label", `تکرار ست ${log.index}`);
 
+  // Accepts Persian/Arabic-Indic digits typed on an Android Persian keyboard.
+  const readInputs = () => {
+    log.weight = Math.max(0, parseNum(weightInput.value));
+    log.reps = Math.max(0, Math.round(parseNum(repsInput.value)));
+  };
+
   const commit = () => {
-    log.weight = Math.max(0, Number.parseFloat(weightInput.value.replace(",", ".")) || 0);
-    log.reps = Math.max(0, Number.parseInt(repsInput.value, 10) || 0);
+    readInputs();
     persist();
   };
   weightInput.addEventListener("change", commit);
@@ -525,8 +566,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
   check.innerHTML = svgIcon(icons.check, "h-4 w-4").outerHTML;
 
   check.addEventListener("click", () => {
-    log.weight = Math.max(0, Number.parseFloat(weightInput.value.replace(",", ".")) || 0);
-    log.reps = Math.max(0, Number.parseInt(repsInput.value, 10) || 0);
+    readInputs();
     log.done = !log.done;
     persist(0);
 
@@ -570,6 +610,9 @@ function refreshProgress(day: WorkoutDay, exercise: Exercise): void {
 
   const percentLabel = root.querySelector<HTMLElement>("[data-day-percent]");
   if (percentLabel) percentLabel.textContent = `${fa(percent)}٪`;
+
+  const restart = root.querySelector<HTMLElement>("[data-day-restart]");
+  if (restart) restart.classList.toggle("hidden", !dayHasProgress(day));
 
   if (exercise.logs.length > 0 && done === exercise.logs.length) {
     toast(`حرکت «${exercise.name}» کامل شد ✅`, "ok");
@@ -619,6 +662,9 @@ function editExercise(exercise: Exercise): void {
     mode: "edit",
     initial: exercise,
     onSubmit: (draft: ExerciseDraft) => {
+      const repsChanged = exercise.reps !== draft.reps;
+      const weightChanged = exercise.targetWeight !== draft.targetWeight;
+
       exercise.name = draft.name;
       exercise.reps = draft.reps;
       exercise.tip = draft.tip;
@@ -626,11 +672,19 @@ function editExercise(exercise: Exercise): void {
       exercise.gifUrl = draft.gifUrl;
       exercise.targetWeight = draft.targetWeight;
       exercise.bodyweight = draft.targetWeight <= 0;
-      const setsChanged = exercise.sets !== draft.sets;
       exercise.sets = draft.sets;
-      if (setsChanged) {
-        exercise.logs = syncLogs(exercise);
+
+      // Rows that are not checked yet follow the new prescription; completed
+      // sets are history and keep what was actually lifted.
+      for (const log of exercise.logs) {
+        if (log.done) continue;
+        if (weightChanged) log.weight = draft.targetWeight;
+        if (repsChanged) {
+          const targetReps = firstNumber(draft.reps);
+          if (targetReps > 0) log.reps = targetReps;
+        }
       }
+      exercise.logs = syncLogs(exercise);
       persist(0);
       toast("حرکت به‌روزرسانی شد.");
       requestRender();

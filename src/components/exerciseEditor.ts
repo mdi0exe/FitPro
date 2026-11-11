@@ -1,5 +1,6 @@
 /** Add / edit exercise form. */
 import { btn, el, escapeHtml } from "../lib/dom";
+import { en, parseNum } from "../lib/fa";
 import type { Exercise } from "../types";
 import { openModal, toast } from "./ui";
 
@@ -37,10 +38,9 @@ export function openExerciseEditor(options: {
   nameField.append(nameInput);
 
   const setsInput = el("input", "field");
-  setsInput.type = "number";
-  setsInput.min = "1";
-  setsInput.max = "12";
+  setsInput.type = "text";
   setsInput.inputMode = "numeric";
+  setsInput.autocomplete = "off";
   setsInput.value = String(initial?.sets ?? 3);
   const setsField = field("تعداد ست");
   setsField.append(setsInput);
@@ -53,10 +53,9 @@ export function openExerciseEditor(options: {
   repsField.append(repsInput);
 
   const weightInput = el("input", "field");
-  weightInput.type = "number";
-  weightInput.step = "2.5";
-  weightInput.min = "0";
+  weightInput.type = "text";
   weightInput.inputMode = "decimal";
+  weightInput.autocomplete = "off";
   weightInput.value = String(initial?.targetWeight ?? 0);
   const weightField = field("وزنه کاری (کیلوگرم)", "صفر بگذارید اگر حرکت با وزن بدن است.");
   weightField.append(weightInput);
@@ -95,8 +94,8 @@ export function openExerciseEditor(options: {
       nameInput.focus();
       return;
     }
-    const sets = Math.min(12, Math.max(1, Number.parseInt(setsInput.value, 10) || 3));
-    const targetWeight = Math.max(0, Number.parseFloat(weightInput.value.replace(",", ".")) || 0);
+    const sets = Math.min(12, Math.max(1, Math.round(parseNum(setsInput.value)) || 3));
+    const targetWeight = Math.max(0, parseNum(weightInput.value));
     const gifUrl = gifInput.value.trim();
     if (gifUrl && !/^https?:\/\//i.test(gifUrl)) {
       toast("لینک گیف باید با http یا https شروع شود.", "error");
@@ -106,7 +105,7 @@ export function openExerciseEditor(options: {
     options.onSubmit({
       name,
       sets,
-      reps: repsInput.value.trim() || "8-10",
+      reps: en(repsInput.value.trim()) || "8-10",
       targetWeight,
       tip: tipInput.value.trim(),
       query: queryInput.value.trim() || `${name} gif`,

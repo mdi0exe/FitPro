@@ -1,6 +1,6 @@
 /** Application state container + debounced persistence. */
 import type { AppStateData, TabId } from "../types";
-import { saveState } from "./api";
+import { saveState, setFlushHook } from "./api";
 import { isoToday } from "./fa";
 
 let state: AppStateData | null = null;
@@ -23,8 +23,19 @@ export function getState(): AppStateData {
 }
 
 export function setState(next: AppStateData): void {
+  // The backend command that produced `next` already wrote it to disk; dropping
+  // the pending debounce prevents an older snapshot from overwriting it.
+  cancelPendingSave();
   state = next;
   emit();
+}
+
+/** Drops a queued write (used when a Rust command just persisted the state). */
+export function cancelPendingSave(): void {
+  if (saveTimer !== null) {
+    window.clearTimeout(saveTimer);
+    saveTimer = null;
+  }
 }
 
 export function mutate(fn: (state: AppStateData) => void): void {
@@ -101,6 +112,11 @@ export function ensureDailyDietReset(): boolean {
   for (const item of current.diet.items) item.done = false;
   return true;
 }
+
+// Backend commands (overload / log weight / reset) read the JSON file directly,
+// so they must flush any debounced change first — otherwise Rust sees stale data
+// and the late timer would then overwrite the fresh file.
+setFlushHook(flushNow);
 
 /** Flush pending writes when the app is backgrounded (Android included). */
 export function installLifecycleFlush(): void {

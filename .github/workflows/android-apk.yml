@@ -35,10 +35,11 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "Which ABI(s) to build — aarch64 is ~10x smaller than all"
+        description: "Which ABI(s) to build — armv7 is the smallest, all is ~4x bigger"
         type: choice
-        default: aarch64
+        default: armv7
         options:
+          - armv7
           - aarch64
           - all
 
@@ -214,9 +215,9 @@ jobs:
       - name: Build debug APK
         env:
           CI: "true"
-          # Default is arm64 only: every phone from ~2017 on is arm64, and the
-          # universal build is ~4x bigger because each ABI ships its own .so.
-          TARGET_INPUT: ${{ inputs.target || 'aarch64' }}
+          # Default is armeabi-v7a: one ABI keeps the APK small (the universal
+          # build is ~4x bigger because each ABI ships its own .so).
+          TARGET_INPUT: ${{ inputs.target || 'armv7' }}
           # Debug symbols are the bulk of the Rust .so (~120 MB each). They are
           # useless in a downloadable APK, so strip them for CI only — this does
           # not touch the local `[profile.dev]` used by `npm run tauri:dev`.
@@ -224,12 +225,23 @@ jobs:
         run: |
           set -euo pipefail
           ARGS=(--apk --debug)
-          if [ "${TARGET_INPUT}" = "aarch64" ]; then
-            echo "Building arm64-v8a only (smallest, covers modern phones)."
-            ARGS+=(--target aarch64)
-          else
-            echo "Building all four ABIs (universal APK, ~4x bigger)."
-          fi
+          case "${TARGET_INPUT}" in
+            all)
+              echo "Building all four ABIs (universal APK, ~4x bigger)."
+              ;;
+            armv7)
+              echo "Building armeabi-v7a only (runs on 32-bit and most 64-bit phones)."
+              ARGS+=(--target armv7)
+              ;;
+            aarch64)
+              echo "Building arm64-v8a only."
+              ARGS+=(--target aarch64)
+              ;;
+            *)
+              echo "Building ${TARGET_INPUT} only."
+              ARGS+=(--target "${TARGET_INPUT}")
+              ;;
+          esac
           npx tauri android build "${ARGS[@]}"
 
       - name: Collect APKs

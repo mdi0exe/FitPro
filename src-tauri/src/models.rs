@@ -229,6 +229,9 @@ impl AppStateData {
         for day in self.days.iter_mut() {
             for exercise in day.exercises.iter_mut() {
                 exercise.sets = exercise.sets.clamp(1, 12);
+                // Users on a Persian/Android keyboard may type "۱۰-۱۲"; keep the
+                // stored prescription in ASCII digits so increment_reps works.
+                exercise.reps = to_ascii_digits(&exercise.reps);
                 exercise.sync_logs();
             }
         }
@@ -238,7 +241,7 @@ impl AppStateData {
         self.milestones.insert(
             0,
             Milestone {
-                id: format!("ms-{}", self.milestones.len() + 1),
+                id: next_milestone_id(),
                 date: date.to_string(),
                 text: text.into(),
                 kind: kind.to_string(),
@@ -265,6 +268,10 @@ pub fn apply_overload(state: &mut AppStateData) -> usize {
     let mut changed = 0usize;
 
     for day in state.days.iter_mut() {
+        // A new cycle starts from a clean slate: warm-up checkboxes included.
+        for warmup in day.warmups.iter_mut() {
+            warmup.done = false;
+        }
         for exercise in day.exercises.iter_mut() {
             if exercise.bodyweight || exercise.target_weight <= 0.0 {
                 let bumped = increment_reps(&exercise.reps);
@@ -366,6 +373,35 @@ pub fn parse_first_number(reps: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
+/// Converts Persian (`۰-۹`) and Arabic-Indic (`٠-٩`) digits to ASCII digits.
+///
+/// Android keyboards in Persian mode type those glyphs, and every numeric
+/// parser in this crate (`increment_reps`, `parse_first_number`) expects ASCII.
+pub fn to_ascii_digits(input: &str) -> String {
+    input
+        .chars()
+        .map(|c| match c {
+            '\u{06F0}'..='\u{06F9}' => char::from_u32('0' as u32 + (c as u32 - 0x06F0)).unwrap_or(c),
+            '\u{0660}'..='\u{0669}' => char::from_u32('0' as u32 + (c as u32 - 0x0660)).unwrap_or(c),
+            other => other,
+        })
+        .collect()
+}
+
+/// Unique milestone id: epoch millis plus a process-local counter, so the
+/// `truncate(60)` in `push_milestone` can never produce duplicate ids.
+fn next_milestone_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or(0);
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("ms-{millis}-{seq}")
+}
+
 /// Converts latin digits inside a string to Persian digits for display text.
 pub fn to_persian_digits(input: &str) -> String {
     input
@@ -402,6 +438,38 @@ mod tests {
     fn rounds_to_plate_steps() {
         assert_eq!(round_step(12.5 + 2.5), 15.0);
         assert_eq!(round_step(11.0 + 2.5), 12.5);
+    }
+
+    #[test]
+    fn normalises_persian_digits() {
+        assert_eq!(to_ascii_digits("۱۰-۱۲"), "10-12");
+        assert_eq!(to_ascii_digits("٦٧٫٥"), "67٫5");
+        assert_eq!(increment_reps(&to_ascii_digits("۱۰-۱۲")), "11-13");
+    }
+
+    #[test]
+    fn milestone_ids_are_unique() {
+        let mut state = AppStateData {
+            version: STATE_VERSION,
+            profile: UserProfile::default(),
+            days: Vec::new(),
+            weight_history: Vec::new(),
+            diet: DietState {
+                items: Vec::new(),
+                last_reset_date: String::new(),
+            },
+            milestones: Vec::new(),
+            last_overload_date: String::new(),
+            overload_count: 0,
+            active_day: 0,
+            rest_seconds: DEFAULT_REST_SECONDS,
+        };
+        for index in 0..80 {
+            state.push_milestone("2026-01-01", format!("event {index}"), "system");
+        }
+        let unique: std::collections::HashSet<&str> =
+            state.milestones.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(unique.len(), state.milestones.len());
     }
 
     #[test]

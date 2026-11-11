@@ -24,6 +24,20 @@ export function isTauri(): boolean {
 
 export type StorageMode = "native" | "browser";
 
+/**
+ * Registered by `store.ts`. Backend commands read the JSON file from disk, so
+ * any debounced frontend change has to be flushed before invoking them.
+ */
+let flushHook: (() => Promise<void>) | null = null;
+
+export function setFlushHook(fn: () => Promise<void>): void {
+  flushHook = fn;
+}
+
+async function ensureFlushed(): Promise<void> {
+  if (flushHook) await flushHook();
+}
+
 export function storageMode(): StorageMode {
   return isTauri() ? "native" : "browser";
 }
@@ -55,6 +69,7 @@ export async function saveState(state: AppStateData): Promise<void> {
 }
 
 export async function applyProgressiveOverload(): Promise<AppStateData> {
+  await ensureFlushed();
   if (isTauri()) {
     const state = await invoke<AppStateData>("apply_progressive_overload");
     return normalizeState(state);
@@ -63,6 +78,7 @@ export async function applyProgressiveOverload(): Promise<AppStateData> {
 }
 
 export async function logBodyWeight(weight: number): Promise<AppStateData> {
+  await ensureFlushed();
   if (isTauri()) {
     const state = await invoke<AppStateData>("log_body_weight", { weight });
     return normalizeState(state);
@@ -71,6 +87,7 @@ export async function logBodyWeight(weight: number): Promise<AppStateData> {
 }
 
 export async function resetToDefaults(): Promise<AppStateData> {
+  await ensureFlushed();
   if (isTauri()) {
     const state = await invoke<AppStateData>("reset_to_defaults");
     return normalizeState(state);
