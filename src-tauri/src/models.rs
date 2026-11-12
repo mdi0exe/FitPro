@@ -113,6 +113,19 @@ pub struct Exercise {
     pub bodyweight: bool,
     #[serde(default)]
     pub logs: Vec<SetLog>,
+    /// ISO date when the exercise was temporarily swapped for a busy machine.
+    /// A swap is a one-day override: `normalize` restores the original move as
+    /// soon as the calendar day changes.
+    #[serde(default)]
+    pub swapped_date: Option<String>,
+    #[serde(default)]
+    pub original_name: Option<String>,
+    #[serde(default)]
+    pub original_query: Option<String>,
+    #[serde(default)]
+    pub original_gif_url: Option<String>,
+    #[serde(default)]
+    pub original_tip: Option<String>,
 }
 
 impl Exercise {
@@ -131,6 +144,28 @@ impl Exercise {
             }
         }
         self.logs = next;
+    }
+
+    /// True while the movement is a one-day substitute for a busy machine.
+    pub fn is_swapped(&self) -> bool {
+        self.swapped_date.is_some() && self.original_name.is_some()
+    }
+
+    /// Puts the programmed movement back and clears every swap field.
+    pub fn restore_original(&mut self) {
+        if let Some(name) = self.original_name.take() {
+            self.name = name;
+        }
+        if let Some(query) = self.original_query.take() {
+            self.query = query;
+        }
+        // `None` means the programme had no demo for this movement; leaving it
+        // empty lets `normalize` re-inject the bundled GIF afterwards.
+        self.gif_url = self.original_gif_url.take();
+        if let Some(tip) = self.original_tip.take() {
+            self.tip = tip;
+        }
+        self.swapped_date = None;
     }
 }
 
@@ -460,6 +495,7 @@ impl AppStateData {
         }
 
         let gifs = default_gifs();
+        let today = crate::timeutil::today_iso();
         for day in self.days.iter_mut() {
             let day_id = day.id.clone();
             for warmup in day.warmups.iter_mut() {
@@ -471,6 +507,13 @@ impl AppStateData {
                 }
             }
             for exercise in day.exercises.iter_mut() {
+                // A "machine is busy" swap only covers the day it was made on.
+                // Opening the app on a new date restores the programmed move.
+                if let Some(swapped_on) = exercise.swapped_date.clone() {
+                    if swapped_on != today {
+                        exercise.restore_original();
+                    }
+                }
                 exercise.sets = exercise.sets.clamp(1, 12);
                 // Users on a Persian/Android keyboard may type "۱۰-۱۲"; keep the
                 // stored prescription in ASCII digits so increment_reps works.
@@ -760,6 +803,55 @@ mod tests {
         state.days[0].exercises[1].gif_url = Some(String::new());
         state.normalize();
         assert_eq!(state.days[0].exercises[1].gif_url.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn swapped_exercise_resets_on_a_new_day() {
+        let mut state = crate::storage::seed();
+        state.normalize(); // bundled GIFs are injected before the swap is made
+        let original = state.days[0].exercises[0].clone();
+
+        {
+            let exercise = &mut state.days[0].exercises[0];
+            exercise.swapped_date = Some("1999-01-01".to_string());
+            exercise.original_name = Some(original.name.clone());
+            exercise.original_query = Some(original.query.clone());
+            exercise.original_gif_url = original.gif_url.clone();
+            exercise.original_tip = Some(original.tip.clone());
+            exercise.name = "پرس سینه دستگاه (نشسته)".to_string();
+            exercise.query = "Chest Press Machine gif".to_string();
+            exercise.gif_url = Some("https://example.com/alt.gif".to_string());
+            exercise.tip = "نکته جایگزین".to_string();
+        }
+
+        state.normalize();
+
+        let exercise = &state.days[0].exercises[0];
+        assert_eq!(exercise.name, original.name);
+        assert_eq!(exercise.query, original.query);
+        assert_eq!(exercise.gif_url, original.gif_url);
+        assert_eq!(exercise.tip, original.tip);
+        assert!(!exercise.is_swapped());
+        assert!(exercise.swapped_date.is_none());
+        assert!(exercise.original_name.is_none());
+    }
+
+    #[test]
+    fn swapped_exercise_survives_within_the_same_day() {
+        let mut state = crate::storage::seed();
+        state.normalize();
+        {
+            let exercise = &mut state.days[0].exercises[0];
+            exercise.swapped_date = Some(crate::timeutil::today_iso());
+            exercise.original_name = Some("حرکت اصلی".to_string());
+            exercise.name = "حرکت جایگزین".to_string();
+        }
+
+        state.normalize();
+
+        let exercise = &state.days[0].exercises[0];
+        assert_eq!(exercise.name, "حرکت جایگزین");
+        assert!(exercise.is_swapped());
     }
 
     #[test]

@@ -16,6 +16,7 @@ import {
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 import { isTauri } from "./api";
+import { adjustTimestampForWaterQuietHours } from "./quietHours";
 
 /** Android 8+ needs a channel; High importance gives a heads-up banner. */
 const CHANNEL_ID = "fitpro-alerts";
@@ -130,7 +131,10 @@ export const WATER_NOTIFICATION_ID = 7701;
  * is handed to Android's AlarmManager instead of a JS timer.
  */
 export async function scheduleWaterNotificationAt(nextAtMs: number): Promise<void> {
-  if (!isTauri() || !Number.isFinite(nextAtMs) || nextAtMs <= Date.now() + 1000) return;
+  // Android's AlarmManager would happily ring at 03:00 — shift the OS alarm out
+  // of the 00:00–09:00 sleep window as well, not just the JS countdown.
+  const safeNextAt = adjustTimestampForWaterQuietHours(nextAtMs);
+  if (!isTauri() || !Number.isFinite(safeNextAt) || safeNextAt <= Date.now() + 1000) return;
   // Never prompt here — scheduling also runs on boot.
   if (!(await canPost())) return;
 
@@ -143,7 +147,7 @@ export async function scheduleWaterNotificationAt(nextAtMs: number): Promise<voi
       title: "💧 وقت نوشیدن آب است!",
       body: "۱ لیوان آب بنوش (۷۰٪ حجم عضله آب است و برای ریکاوری حیاتی است).",
       // `allowWhileIdle` keeps Doze from swallowing the alarm.
-      schedule: Schedule.at(new Date(nextAtMs), false, true),
+      schedule: Schedule.at(new Date(safeNextAt), false, true),
     });
   } catch (error) {
     console.warn("scheduled notification unavailable", error);

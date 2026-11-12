@@ -22,10 +22,12 @@ import { openValuePicker, stepper } from "../components/stepper";
 import { refreshWeeklyActivityCard, renderWeeklyActivityCard } from "../components/weeklyActivity";
 import {
   checkAndUpdatePR,
+  isExerciseSwapped,
   openPlateCalculatorModal,
   openWorkoutFinishModal,
   personalRecordFor,
   renderReadinessAndToolsBar,
+  restoreOriginalExercise,
   swapBusyExercise,
 } from "../lib/workoutTools";
 import { syncLogs } from "../lib/localBackend";
@@ -510,11 +512,17 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
   const info = el("div", "min-w-0 flex-1");
   info.append(el("h3", "text-sm font-extrabold leading-6 text-slate-50", escapeHtml(exercise.name)));
 
+  const swapped = isExerciseSwapped(exercise);
+
   const chips = el("div", "mt-1.5 flex flex-wrap items-center gap-1.5");
   chips.append(
     el("span", "chip", `${fa(exercise.sets)} ست`),
     el("span", "chip", `${escapeHtml(faReps(exercise.reps))} تکرار`),
   );
+  if (swapped) {
+    // Amber: this row is a one-day substitute, not the programmed movement.
+    chips.append(el("span", "chip chip-amber", "🔄 جایگزین امروز"));
+  }
   if (exercise.bodyweight || exercise.targetWeight <= 0) {
     chips.append(el("span", "chip chip-cyan", "وزن بدن"));
   } else {
@@ -553,12 +561,19 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
 
   const tools = el("div", "grid grid-cols-2 gap-1.5");
   tools.append(
-    btn(
-      "rounded-xl border border-slate-800 bg-slate-950 px-2 py-1.5 text-[10px] font-bold text-slate-300 transition active:scale-95",
-      "🔄 دستگاه شلوغه؟",
-      () => swapBusyExercise(exercise),
-      { "aria-label": "حرکت جایگزین" },
-    ),
+    swapped
+      ? btn(
+          "rounded-xl border border-amber-400/60 bg-amber-500/15 px-2 py-1.5 text-[10px] font-extrabold text-amber-200 transition active:scale-95",
+          "↩️ برگشت به حرکت اصلی",
+          () => restoreOriginalExercise(exercise),
+          { "aria-label": "برگشت به حرکت اصلی" },
+        )
+      : btn(
+          "rounded-xl border border-slate-800 bg-slate-950 px-2 py-1.5 text-[10px] font-bold text-slate-300 transition active:scale-95",
+          "🔄 دستگاه شلوغه / جایگزین",
+          () => swapBusyExercise(exercise),
+          { "aria-label": "حرکت جایگزین" },
+        ),
     btn(
       "rounded-xl border border-slate-800 bg-slate-950 px-2 py-1.5 text-[10px] font-bold text-slate-300 transition active:scale-95",
       "🏋️ صفحه‌های هالتر",

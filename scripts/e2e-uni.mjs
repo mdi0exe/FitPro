@@ -205,7 +205,7 @@ check(
 );
 
 const nameBefore = saved.days[0].exercises[0].name;
-await clickExact("🔄 دستگاه شلوغه؟");
+await clickExact("🔄 دستگاه شلوغه / جایگزین");
 await wait(700);
 saved = await state();
 check(

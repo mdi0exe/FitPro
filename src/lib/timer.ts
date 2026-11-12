@@ -110,6 +110,7 @@ import {
   pushSystemNotification,
   scheduleWaterNotificationAt,
 } from "./notify";
+import { adjustTimestampForWaterQuietHours, isWaterQuietHours } from "./quietHours";
 
 type SoundKey = "alarm" | "success" | "water" | "tap";
 
@@ -276,9 +277,14 @@ export function softTap(_frequency = 980, _duration = 0.09): void {
 
 /**
  * Water reminder: deliberately soft droplet sound, light buzz and a system
- * notification. Never the gym alarm.
+ * notification. Never the gym alarm — and never during the 00:00–09:00 sleep
+ * window, where the reminder has to be completely silent.
  */
 export function waterAlert(): void {
+  if (isWaterQuietHours()) {
+    // Silent by design: no sound, no vibration, no status-bar notification.
+    return;
+  }
   void playClip("water", 0.35);
   vibrate([100, 60, 100]);
   notifyWater("💧 یادآور نوشیدن آب", "وقت نوشیدن ۱ لیوان آب است! (۷۰٪ حجم عضله آب است)");
@@ -419,8 +425,9 @@ function tickWater(): void {
   const now = Date.now();
 
   if (nextAt > 0 && nextAt <= now) {
-    // The deadline passed while the app was closed or backgrounded.
-    fireWaterReminder(now + totalSec * 1000);
+    // The deadline passed while the app was closed or backgrounded. `waterAlert`
+    // stays silent inside the sleep window; the next deadline is pushed to 09:00.
+    fireWaterReminder(adjustTimestampForWaterQuietHours(now + totalSec * 1000));
     waterTickListener?.(totalSec, totalSec);
     return;
   }
@@ -447,7 +454,8 @@ export function startNewWaterReminderCycle(minutes?: number): void {
     240,
     Math.max(15, Math.round(minutes ?? diet.waterReminderMinutes ?? 60)),
   );
-  const nextAt = Date.now() + mins * 60_000;
+  // A deadline inside 00:00–09:00 is pushed to 09:00 so the phone stays silent.
+  const nextAt = adjustTimestampForWaterQuietHours(Date.now() + mins * 60_000);
 
   diet.waterReminderEnabled = true;
   diet.waterReminderMinutes = mins;
@@ -494,17 +502,19 @@ export function restoreWaterReminderOnBoot(): void {
 
   if (nextAt <= 0) {
     // Enabled by an older build that had no deadline: start from now once.
-    const fresh = now + totalSec * 1000;
+    const fresh = adjustTimestampForWaterQuietHours(now + totalSec * 1000);
     writeWaterNextAt(fresh);
     persist(0);
     void scheduleWaterNotificationAt(fresh);
   } else if (nextAt <= now) {
-    // Expired while the app was closed: alert once, then continue.
-    fireWaterReminder(now + totalSec * 1000);
+    // Expired while the app was closed: alert once (unless asleep), then continue.
+    fireWaterReminder(adjustTimestampForWaterQuietHours(now + totalSec * 1000));
   } else {
-    // Still in the future: keep the exact deadline, re-arm the OS alarm.
-    writeWaterNextAt(nextAt);
-    void scheduleWaterNotificationAt(nextAt);
+    // Still in the future: keep the exact deadline (unless it would ring during
+    // the sleep window) and re-arm the OS alarm.
+    const safeNextAt = adjustTimestampForWaterQuietHours(nextAt);
+    writeWaterNextAt(safeNextAt);
+    void scheduleWaterNotificationAt(safeNextAt);
   }
 
   ensureWaterLoopRunning();

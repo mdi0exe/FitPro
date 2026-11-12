@@ -2,6 +2,7 @@
 import type { AppStateData, DailyActivity, TabId } from "../types";
 import { saveState, setFlushHook } from "./api";
 import { fa, isoToday } from "./fa";
+import { ensureDailySwappedExercisesReset } from "./workoutTools";
 
 let state: AppStateData | null = null;
 let activeTab: TabId = "workout";
@@ -113,13 +114,22 @@ export async function flushNow(): Promise<void> {
 export function ensureDailyDietReset(): boolean {
   const current = getState();
   const today = isoToday();
-  if (current.diet.lastResetDate === today) return false;
-  current.diet.lastResetDate = today;
-  for (const item of current.diet.items) item.done = false;
-  current.diet.waterGlasses = 0;
-  // `waterReminderNextAt` is deliberately untouched: the reminder cycle has to
-  // survive midnight (and app restarts) instead of starting over.
-  return true;
+  let changed = false;
+
+  if (current.diet.lastResetDate !== today) {
+    current.diet.lastResetDate = today;
+    for (const item of current.diet.items) item.done = false;
+    current.diet.waterGlasses = 0;
+    // `waterReminderNextAt` is deliberately untouched: the reminder cycle has to
+    // survive midnight (and app restarts) instead of starting over.
+    changed = true;
+  }
+
+  // A "machine is busy" swap is a one-day override, so a new calendar day puts
+  // every substituted movement back on the programme.
+  if (ensureDailySwappedExercisesReset()) changed = true;
+
+  return changed;
 }
 
 // Backend commands (overload / log weight / reset) read the JSON file directly,

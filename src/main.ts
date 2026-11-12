@@ -182,3 +182,17 @@ document.addEventListener("visibilitychange", () => {
     /* state not ready yet */
   }
 });
+
+// A late session can run past midnight with the app still in the foreground, so
+// the calendar is re-checked every minute: the nutrition checklist and any
+// "machine is busy" swap reset without needing a restart.
+window.setInterval(() => {
+  try {
+    if (ensureDailyDietReset()) {
+      persist(0);
+      requestRender();
+    }
+  } catch {
+    /* state not ready yet */
+  }
+}, 60_000);

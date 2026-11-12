@@ -4,6 +4,7 @@ import { icons } from "../lib/icons";
 import { clock, fa, faDate, isoToday } from "../lib/fa";
 import { getState, persist, requestRender, syncWaterChecklist, WATER_GOAL } from "../lib/store";
 import { ensureNotificationPermission } from "../lib/notify";
+import { isWaterQuietHours, WATER_QUIET_LABEL } from "../lib/quietHours";
 import {
   beep,
   getWaterRemainingSeconds,
@@ -324,19 +325,33 @@ function waterTrackerCard(): HTMLElement {
   if (enabled) {
     // Read the remaining time from the persisted deadline — never from a local
     // counter, otherwise a re-render or restart would look like a reset.
+    const countdownText = (remainingSec: number) =>
+      isWaterQuietHours()
+        ? `🌙 در حالت خواب — یادآور بعدی: ${fa(clock(remainingSec))}`
+        : `یادآوری بعدی: ${fa(clock(remainingSec))}`;
+
     const countdown = el(
       "p",
       "mt-2 text-center text-[11px] font-bold tabular-nums text-cyan-300",
-      `یادآوری بعدی: ${fa(clock(getWaterRemainingSeconds()))}`,
+      countdownText(getWaterRemainingSeconds()),
     );
     onWaterTimerTick((remainingSec) => {
-      countdown.textContent = `یادآوری بعدی: ${fa(clock(remainingSec))}`;
+      countdown.textContent = countdownText(remainingSec);
     });
     card.append(countdown);
   } else {
     // Release the listener held by the previous render.
     onWaterTimerTick(null);
   }
+
+  // Sleep window: the reminder never makes a sound between midnight and 09:00.
+  card.append(
+    el(
+      "p",
+      "mt-2 rounded-xl border border-slate-800 bg-slate-950/60 px-2.5 py-2 text-center text-[10px] leading-5 text-slate-400",
+      `${WATER_QUIET_LABEL} — یادآور آب در این بازه کاملاً بی‌صدا است و سررسید بعدی به ساعت ۹ صبح منتقل می‌شود.`,
+    ),
+  );
 
   return card;
 }
@@ -376,7 +391,12 @@ function toggleWaterReminder(): void {
       toast("اجازه اعلان داده نشد؛ یادآور فقط داخل برنامه نمایش داده می‌شود.", "info");
     }
   });
-  toast(`یادآور آب هر ${fa(state.diet.waterReminderMinutes)} دقیقه روشن شد.`, "info");
+  toast(
+    isWaterQuietHours()
+      ? "یادآور آب روشن شد؛ چون الان در بازه خواب هستیم، اولین یادآور ساعت ۹ صبح است 🌙"
+      : `یادآور آب هر ${fa(state.diet.waterReminderMinutes)} دقیقه روشن شد.`,
+    "info",
+  );
   requestRender();
 }
 

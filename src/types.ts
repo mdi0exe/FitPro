@@ -42,6 +42,12 @@ export interface Exercise {
   targetWeight: number;
   bodyweight: boolean;
   logs: SetLog[];
+  /** ISO date of the "machine is busy" swap; resets automatically next day. */
+  swappedDate?: string | null;
+  originalName?: string | null;
+  originalQuery?: string | null;
+  originalGifUrl?: string | null;
+  originalTip?: string | null;
 }
 
 export interface WorkoutDay {

@@ -133,6 +133,11 @@ fn exercise(
         target_weight,
         bodyweight: target_weight <= 0.0,
         logs: Vec::new(),
+        swapped_date: None,
+        original_name: None,
+        original_query: None,
+        original_gif_url: None,
+        original_tip: None,
     };
     exercise.sync_logs();
     exercise

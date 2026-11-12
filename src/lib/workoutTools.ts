@@ -10,8 +10,6 @@ import type { Exercise, Readiness, WorkoutDay } from "../types";
 import { openModal, toast } from "../components/ui";
 import { beep, softTap, vibrate } from "./timer";
 
-const EXERCISE_GIFS = defaultGifs.exercises as Record<string, string>;
-
 // ---------------------------------------------------------------------------
 // #1. Screen Wake Lock
 // ---------------------------------------------------------------------------
@@ -85,174 +83,287 @@ export function installWakeLockLifecycle(): void {
 }
 
 // ---------------------------------------------------------------------------
-// #2. Busy machine → swap exercise
+// #2. Busy machine → swap exercise (one-day override, auto-reset tomorrow)
 // ---------------------------------------------------------------------------
 
-interface SwapSpec {
+interface AltSpec {
   name: string;
   query: string;
-  /** Reuse a verified GIF from another exercise in the programme. */
-  gifId?: string;
+  gifUrl: string;
   tip: string;
 }
 
-const SWAPS: Record<string, [SwapSpec, SwapSpec]> = {
-  d1e1: [
-    { name: "پرس سینه دستگاه (نشسته)", query: "Chest Press Machine gif", gifId: "d1e3", tip: "شانه را به نشیمنگاه بچسبان و آرنج را در بالا قفل نکن" },
-    { name: "فلای سینه دستگاه (Pec Deck)", query: "Pec Deck Fly gif", gifId: "d3e3", tip: "حرکت را آرام با کشش کامل سینه انجام بده" },
-  ],
-  d1e2: [
-    { name: "زیربغل قایقی سیم‌کش", query: "Seated Cable Row gif", gifId: "d1e4", tip: "کمر صاف؛ در انتها کتف‌ها را به هم نزدیک کن" },
-    { name: "زیربغل سیم‌کش دست برعکس", query: "Reverse Lat Pulldown gif", gifId: "d3e2", tip: "میله را تا بالای سینه بکش و سینه را بالا نگه دار" },
-  ],
-  d1e3: [
-    { name: "پرس بالا سینه دمبل", query: "Incline Dumbbell Press gif", gifId: "d1e1", tip: "زاویه نیمکت ۳۰ تا ۴۵ درجه، کنترل کامل در پایین" },
-    { name: "فلای سینه دستگاه (Pec Deck)", query: "Pec Deck Fly gif", gifId: "d3e3", tip: "آرنج کمی خم و ثابت؛ فقط سینه کار کند" },
-  ],
-  d1e4: [
-    { name: "زیربغل سیم‌کش از جلو", query: "Lat Pulldown gif", gifId: "d1e2", tip: "سینه بالا، میله به بالای سینه" },
-    { name: "زیربغل تی‌بار دستگاه", query: "Lever T-bar Row gif", gifId: "d3e4", tip: "تنه را ثابت نگه دار و از بازوها بکش" },
-  ],
-  d1e5: [
-    { name: "فلای معکوس دستگاه (پشت سرشانه)", query: "Rear Delt Machine Fly gif", gifId: "d3e5", tip: "دست‌ها را باز و کمی پایین‌تر از شانه نگه دار" },
-    { name: "پرس سرشانه دمبل (نشسته)", query: "Dumbbell Shoulder Press gif", gifId: "d3e1", tip: "دمبل‌ها را تا کشش کامل پایین بیاور، کمر قوس نگیرد" },
-  ],
-  d1e6: [
-    { name: "جلوبازو لاری دستگاه", query: "Lever Preacher Curl gif", gifId: "d3e6", tip: "بازو را کامل روی پد بگذار و از تاب دادن جلوگیری کن" },
-    { name: "جلوبازو دمبل نشسته", query: "Seated Dumbbell Curl gif", tip: "آرنج ثابت کنار تنه؛ در پایین کامل باز کن" },
-  ],
-  d1e7: [
-    { name: "پشت بازو دستگاه دیپ", query: "Lever Triceps Dip gif", gifId: "d3e7", tip: "تنه را کمی جلو نگه دار تا فشار روی پشت بازو بماند" },
-    { name: "پشت بازو سیم‌کش تک‌دست", query: "Single Arm Triceps Pushdown gif", tip: "آرنج را کنار تنه قفل کن و فقط ساعد حرکت کند" },
-  ],
-  d2e1: [
-    { name: "هاگ پا دستگاه", query: "Sled Hack Squat gif", gifId: "d4e2", tip: "پاشنه‌ها را روی صفحه فشار بده و کمر را به پشتی بچسبان" },
-    { name: "اسکات با دستگاه اسمیت", query: "Smith Machine Squat gif", gifId: "d2e2", tip: "پاها به عرض شانه؛ تا زاویه ۹۰ درجه پایین برو" },
-  ],
-  d2e2: [
-    { name: "پرس پا دستگاه", query: "Leg Press gif", gifId: "d2e1", tip: "زانو را در بالا قفل نکن و کمر از پشتی جدا نشود" },
-    { name: "لانج دمبل درجا", query: "Dumbbell Lunge gif", gifId: "d4e3", tip: "زانوی عقب را تا نزدیک زمین پایین بیاور، تنه صاف" },
-  ],
-  d2e3: [
-    { name: "لانج دمبل درجا", query: "Dumbbell Lunge gif", gifId: "d4e3", tip: "قدم بلند بردار تا زانوی جلو از پنجه رد نشود" },
-    { name: "هاگ پا دستگاه", query: "Sled Hack Squat gif", gifId: "d4e2", tip: "دامنه حرکت را کامل کن و در پایین مکث کن" },
-  ],
-  d2e4: [
-    { name: "پشت پا نشسته دستگاه", query: "Seated Leg Curl gif", gifId: "d4e4", tip: "پنجه‌ها را بالا بکش و در انتها یک ثانیه نگه دار" },
-    { name: "ددلیفت رومانیایی دمبل", query: "Dumbbell Romanian Deadlift gif", gifId: "d4e1", tip: "لگن را عقب ببر، کمر صاف و کشش در پشت پا" },
-  ],
-  d2e5: [
-    { name: "ساق پا ایستاده دستگاه", query: "Standing Calf Raise gif", gifId: "d4e5", tip: "در بالا یک ثانیه مکث کن و آرام پایین بیا" },
-    { name: "پرس پا دستگاه (ساق)", query: "Leg Press Calf Raise gif", gifId: "d2e1", tip: "فقط مچ را حرکت بده، زانو را قفل نگه دار" },
-  ],
-  d2e6: [
-    { name: "زیرشکم روی میز شیب‌دار", query: "Incline Reverse Crunch gif", tip: "با شکم بالا بیا نه با تاب دادن پا" },
-    { name: "پلانک شکم", query: "Plank gif", tip: "بدن یک خط صاف؛ شکم و باسن را منقبض نگه دار" },
-  ],
-  d3e1: [
-    { name: "نشر جانب با دمبل", query: "Dumbbell Lateral Raise gif", gifId: "d1e5", tip: "آرنج کمی خم؛ تا ارتفاع شانه و بدون تاب دادن" },
-    { name: "فلای معکوس دستگاه", query: "Rear Delt Machine Fly gif", gifId: "d3e5", tip: "حرکت را با کنترل و دامنه کامل انجام بده" },
-  ],
-  d3e2: [
-    { name: "زیربغل سیم‌کش از جلو", query: "Lat Pulldown gif", gifId: "d1e2", tip: "دست بازتر = تمرکز بیشتر روی زیربغل" },
-    { name: "زیربغل قایقی سیم‌کش", query: "Seated Cable Row gif", gifId: "d1e4", tip: "در انتهای حرکت یک ثانیه کتف‌ها را نگه دار" },
-  ],
-  d3e3: [
-    { name: "پرس سینه دستگاه", query: "Chest Press Machine gif", gifId: "d1e3", tip: "پاها را محکم روی زمین بگذار و آرنج را قفل نکن" },
-    { name: "پرس بالا سینه دمبل", query: "Incline Dumbbell Press gif", gifId: "d1e1", tip: "دامنه کامل و کنترل‌شده، بدون کوبیدن دمبل‌ها" },
-  ],
-  d3e4: [
-    { name: "زیربغل قایقی سیم‌کش", query: "Seated Cable Row gif", gifId: "d1e4", tip: "تنه را ثابت نگه دار و از بازوها بکش" },
-    { name: "زیربغل سیم‌کش از جلو", query: "Lat Pulldown gif", gifId: "d1e2", tip: "سینه بالا و نگاه به بالا، بدون تاب دادن تنه" },
-  ],
-  d3e5: [
-    { name: "نشر جانب با دمبل", query: "Dumbbell Lateral Raise gif", gifId: "d1e5", tip: "حرکت را آرام؛ سرشانه میانی را هدف بگیر" },
-    { name: "پرس سرشانه دمبل", query: "Dumbbell Shoulder Press gif", gifId: "d3e1", tip: "مسیر دمبل کمی جلوتر از گوش باشد" },
-  ],
-  d3e6: [
-    { name: "جلوبازو با هالتر EZ", query: "Z-Bar Curl gif", gifId: "d1e6", tip: "آرنج ثابت و دامنه کامل، بدون تاب دادن کمر" },
-    { name: "جلوبازو دمبل تک‌دست", query: "Single Arm Dumbbell Curl gif", tip: "در پایین کامل باز کن و در بالا یک ثانیه نگه دار" },
-  ],
-  d3e7: [
-    { name: "پشت بازو سیم‌کش با طناب", query: "Rope Pushdown gif", gifId: "d1e7", tip: "در انتها طناب را از هم باز کن و پشت بازو را بفشار" },
-    { name: "پشت بازو سیم‌کش تک‌دست", query: "Single Arm Triceps Pushdown gif", tip: "آرنج ثابت؛ فقط ساعد حرکت کند" },
-  ],
-  d4e1: [
-    { name: "پشت پا خوابیده دستگاه", query: "Lying Leg Curl gif", gifId: "d2e4", tip: "لگن را روی دستگاه بچسبان و کامل جمع کن" },
-    { name: "پشت پا نشسته دستگاه", query: "Seated Leg Curl gif", gifId: "d4e4", tip: "پنجه‌ها بالا؛ در انتها مکث کوتاه" },
-  ],
-  d4e2: [
-    { name: "پرس پا دستگاه", query: "Leg Press gif", gifId: "d2e1", tip: "پاها را به عرض شانه و کمر را چسبیده نگه دار" },
-    { name: "اسکات با دستگاه اسمیت", query: "Smith Machine Squat gif", gifId: "d2e2", tip: "پایین رفتن کنترل‌شده تا زاویه ۹۰ درجه" },
-  ],
-  d4e3: [
-    { name: "اسکات با دستگاه اسمیت", query: "Smith Machine Squat gif", gifId: "d2e2", tip: "پاشنه‌ها روی زمین؛ زانو هم‌جهت پنجه" },
-    { name: "پرس پا دستگاه", query: "Leg Press gif", gifId: "d2e1", tip: "دامنه کامل و بدون قفل کردن زانو" },
-  ],
-  d4e4: [
-    { name: "پشت پا خوابیده دستگاه", query: "Lying Leg Curl gif", gifId: "d2e4", tip: "کمر را به دستگاه بچسبان تا لگن بلند نشود" },
-    { name: "ددلیفت رومانیایی دمبل", query: "Dumbbell Romanian Deadlift gif", gifId: "d4e1", tip: "کشش را در پشت پا حس کن، کمر گرد نشود" },
-  ],
-  d4e5: [
-    { name: "ساق پا نشسته دستگاه", query: "Seated Calf Raise gif", gifId: "d2e5", tip: "دامنه کامل: کشش در پایین، انقباض در بالا" },
-    { name: "پرس پا دستگاه (ساق)", query: "Leg Press Calf Raise gif", gifId: "d2e1", tip: "فقط مچ حرکت کند و مکث بالا را حذف نکن" },
-  ],
-  d4e6: [
-    { name: "ساعد دمبل روی زانو", query: "Dumbbell Wrist Curl gif", tip: "ساعد را ثابت نگه دار و مچ را کامل باز و بسته کن" },
-    { name: "ساعد هالتر ایستاده (پشت مچ)", query: "Standing Wrist Extension gif", tip: "وزنه سبک؛ حرکت را آرام و کامل انجام بده" },
-  ],
+const ALTERNATIVE_MOVES: Record<string, AltSpec> = {
+  // Day 1
+  d1e1: {
+    name: "پرس بالا سینه هالتر (یا اسمیت)",
+    query: "Incline Barbell Bench Press gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Incline-Barbell-Bench-Press.gif",
+    tip: "میله را تا بالای ترقوه پایین بیاورید و آرنج‌ها زاویه ۴۵ درجه داشته باشند",
+  },
+  d1e2: {
+    name: "بارفیکس دست باز (یا زیربغل دمبل تک‌خم)",
+    query: "Dumbbell Row gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Row.gif",
+    tip: "دمبل را به سمت مفصل ران بکشید تا زیربغل کاملاً منقبض شود",
+  },
+  d1e3: {
+    name: "پرس سینه دمبل روی میز صاف",
+    query: "Dumbbell Bench Press gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Press.gif",
+    tip: "دمبل‌ها را با کنترل تا کنار سینه پایین بیاورید و در بالا قفل نکنید",
+  },
+  d1e4: {
+    name: "زیربغل هالتر خم (Barbell Row)",
+    query: "Barbell Bent Over Row gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Barbell-Bent-Over-Row.gif",
+    tip: "کمر کاملاً صاف و تنه ۴۵ درجه، هالتر را به سمت ناف بکشید",
+  },
+  d1e5: {
+    name: "نشر جانب سیم‌کش (تک‌دست)",
+    query: "Cable Lateral Raise gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Cable-Lateral-Raise.gif",
+    tip: "تنش دائمی سیم‌کش فشار فوق‌العاده‌ای به سرشانه میانی وارد می‌کند",
+  },
+  d1e6: {
+    name: "جلوبازو دمبل متناوب (ایستاده)",
+    query: "Dumbbell Curl gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Curl.gif",
+    tip: "مچ دست را در بالا بچرخانید و آرنج را کنار بدن ثابت نگه دارید",
+  },
+  d1e7: {
+    name: "پشت بازو سیم‌کش با دسته صاف (یا دمبل جفت دست)",
+    query: "Pushdown gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Pushdown.gif",
+    tip: "آرنج‌ها چسبیده به پهلو، فقط ساعد حرکت کند",
+  },
+  // Day 2
+  d2e1: {
+    name: "هاگ اسکات دستگاه (یا اسکات هالتر)",
+    query: "Sled Hack Squat gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Sled-Hack-Squat.gif",
+    tip: "کمر کاملاً چسبیده به پشتی، فشار از پاشنه پا",
+  },
+  d2e2: {
+    name: "گابلت اسکات با دمبل (Goblet Squat)",
+    query: "Dumbbell Goblet Squat gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/06/Dumbbell-Goblet-Squat.gif",
+    tip: "دمبل را نزدیک سینه نگه دارید و سینه را صاف بالا نگه دارید",
+  },
+  d2e3: {
+    name: "لانگز بلغاری با دمبل (تک پا روی نیمکت)",
+    query: "Dumbbell Bulgarian Split Squat gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/05/Dumbbell-Bulgarian-Split-Squat.gif",
+    tip: "فشار عالی روی چهارسر ران بدون نیاز به دستگاه جلوپا",
+  },
+  d2e4: {
+    name: "ددلیفت رومانیایی با دمبل (پشت پا)",
+    query: "Dumbbell Romanian Deadlift gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Romanian-Deadlift.gif",
+    tip: "باسن را به عقب بدهید تا کشش کامل در همسترینگ حس شود",
+  },
+  d2e5: {
+    name: "ساق پا ایستاده با دمبل (روی پله)",
+    query: "Dumbbell Calf Raise gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Calf-Raise.gif",
+    tip: "مکث ۱ ثانیه‌ای در بالاترین نقطه روی پنجه پا",
+  },
+  d2e6: {
+    name: "کرانچ شکم روی زمین (یا سیم‌کش)",
+    query: "Crunch gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2015/11/Crunch.gif",
+    tip: "بازدم کامل در بالا و تمرکز روی انقباض عضلات شکم",
+  },
+  // Day 3
+  d3e1: {
+    name: "پرس سرشانه دستگاه (یا هالتر از جلو)",
+    query: "Lever Shoulder Press gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/04/Lever-Shoulder-Press.gif",
+    tip: "کمر را به پشتی بچسبانید و وزنه را با کنترل پایین بیاورید",
+  },
+  d3e2: {
+    name: "پول‌اور سیم‌کش ایستاده (زیربغل)",
+    query: "Rope Straight Arm Pulldown gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/05/Rope-Straight-Arm-Pulldown.gif",
+    tip: "دست‌ها تقریباً صاف، تمرکز کامل روی کشش زیربغل",
+  },
+  d3e3: {
+    name: "فلای سینه با دمبل روی میز صاف (یا کراس‌اور)",
+    query: "Dumbbell Fly gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Fly.gif",
+    tip: "آرنج‌ها کمی خمیده، کشش کنترل‌شده در قفسه سینه",
+  },
+  d3e4: {
+    name: "زیربغل دمبل جفت خم (روی میز شیب‌دار)",
+    query: "Chest Supported Dumbbell Row gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Chest-Supported-Dumbbell-Row.gif",
+    tip: "سینه روی میز شیب‌دار، کتف‌ها را در بالا به هم نزدیک کنید",
+  },
+  d3e5: {
+    name: "نشر خم دمبل (پشت سرشانه) یا فیس‌پول سیم‌کش",
+    query: "Face Pull gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Face-Pull.gif",
+    tip: "طناب را به سمت پیشانی بکشید و آرنج‌ها را بالا نگه دارید",
+  },
+  d3e6: {
+    name: "جلوبازو تمرکزی با دمبل (نشسته)",
+    query: "Concentration Curl gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Concentration-Curl.gif",
+    tip: "پشت بازو را به داخل ران تکیه دهید تا هیچ تقلبی نباشد",
+  },
+  d3e7: {
+    name: "پشت بازو هالتر خوابیده (Skull Crusher)",
+    query: "Barbell Triceps Extension gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Barbell-Triceps-Extension.gif",
+    tip: "میله را تا بالای پیشانی پایین ببرید و آرنج‌ها باز نشوند",
+  },
+  // Day 4
+  d4e1: {
+    name: "ددلیفت رومانیایی با هالتر",
+    query: "Barbell Romanian Deadlift gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Barbell-Romanian-Deadlift.gif",
+    tip: "میله چسبیده به پا حرکت کند و کمر کاملاً صاف باشد",
+  },
+  d4e2: {
+    name: "پرس پا دستگاه (پا باز و بالا)",
+    query: "Leg Press gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2015/11/Leg-Press.gif",
+    tip: "قرار دادن پاها کمی بالاتر فشار را روی همسترینگ و باسن بیشتر می‌کند",
+  },
+  d4e3: {
+    name: "اسکات بلغاری با دمبل",
+    query: "Dumbbell Bulgarian Split Squat gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/05/Dumbbell-Bulgarian-Split-Squat.gif",
+    tip: "تنه کمی متمایل به جلو برای درگیری بیشتر باسن و پا",
+  },
+  d4e4: {
+    name: "پشت پا دستگاه خوابیده (یا دمبل بین پا)",
+    query: "Leg Curl gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Leg-Curl.gif",
+    tip: "لگن از روی تشک بلند نشود و پایین بردن با کنترل باشد",
+  },
+  d4e5: {
+    name: "ساق پا دستگاه نشسته",
+    query: "Lever Seated Calf Raise gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/06/Lever-Seated-Calf-Raise.gif",
+    tip: "دامنه حرکتی کامل از پایین‌ترین تا بالاترین نقطه",
+  },
+  d4e6: {
+    name: "ساعد با دمبل (یا هالتر از پشت)",
+    query: "Dumbbell Wrist Curl gif",
+    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Wrist-Curl.gif",
+    tip: "مچ را کامل باز و جمع کنید تا ساعد به سوزش بیفتد",
+  },
 };
 
-/** Original specs captured the first time an exercise is swapped. */
-const originalSpecs = new Map<string, Pick<Exercise, "name" | "query" | "gifUrl" | "tip">>();
+/** Bundled demo GIFs, used when the original movement had none stored. */
+const EXERCISE_GIFS = defaultGifs.exercises as Record<string, string>;
 
-function applySpec(exercise: Exercise, spec: SwapSpec): void {
-  exercise.name = spec.name;
-  exercise.query = spec.query;
-  exercise.tip = spec.tip;
-  // `""` = deliberately no demo yet (normalize keeps it empty); the film button
-  // still opens the GIF search for the new movement.
-  exercise.gifUrl = spec.gifId ? (EXERCISE_GIFS[spec.gifId] ?? "") : "";
+/**
+ * GIF to show once the programmed movement is back.
+ *
+ * `""` means the user cleared it on purpose and must stay cleared; `null` /
+ * `undefined` means the save predates the bundled demos, so the default is used
+ * (mirrors what `normalize` does on the Rust side).
+ */
+function originalGifFor(exercise: Exercise): string | null {
+  if (typeof exercise.originalGifUrl === "string") return exercise.originalGifUrl;
+  return EXERCISE_GIFS[exercise.id] ?? null;
 }
 
-/** Cycles original → alternative 1 → alternative 2 → original. */
+/** True when the movement on screen is today's substitute, not the programme. */
+export function isExerciseSwapped(exercise: Exercise): boolean {
+  return Boolean(exercise.swappedDate && exercise.originalName);
+}
+
+/** Swaps a busy machine for its alternative and remembers the original fields. */
 export function swapBusyExercise(exercise: Exercise): void {
-  const pair = SWAPS[exercise.id];
-  if (!pair) {
-    toast("برای این حرکت جایگزین تعریف نشده.", "info");
+  if (isExerciseSwapped(exercise)) {
+    restoreOriginalExercise(exercise);
     return;
   }
 
-  if (!originalSpecs.has(exercise.id)) {
-    originalSpecs.set(exercise.id, {
-      name: exercise.name,
-      query: exercise.query,
-      gifUrl: exercise.gifUrl,
-      tip: exercise.tip,
-    });
-  }
+  const alt = ALTERNATIVE_MOVES[exercise.id];
 
-  const index = pair.findIndex((spec) => spec.name === exercise.name);
-  if (index === -1) {
-    applySpec(exercise, pair[0]);
-  } else if (index === 0) {
-    applySpec(exercise, pair[1]);
+  // Save the programmed movement first: this is what "back to original" and the
+  // automatic next-day reset restore.
+  exercise.originalName = exercise.name;
+  exercise.originalQuery = exercise.query;
+  exercise.originalGifUrl = exercise.gifUrl ?? null;
+  exercise.originalTip = exercise.tip;
+  exercise.swappedDate = isoToday();
+
+  if (alt) {
+    exercise.name = alt.name;
+    exercise.query = alt.query;
+    exercise.gifUrl = alt.gifUrl;
+    exercise.tip = alt.tip;
   } else {
-    const original = originalSpecs.get(exercise.id);
-    if (original) {
-      exercise.name = original.name;
-      exercise.query = original.query;
-      exercise.tip = original.tip;
-      exercise.gifUrl = original.gifUrl;
-    } else {
-      applySpec(exercise, pair[0]);
-    }
+    // Custom exercises have no curated alternative: rename so the card is honest.
+    exercise.name = exercise.name.includes("دستگاه")
+      ? exercise.name.replace("دستگاه", "دمبل / هالتر (جایگزین)")
+      : `${exercise.name} (حرکت جایگزین)`;
   }
 
   softTap();
   persist(0);
-  toast(`حرکت عوض شد: «${exercise.name}» 🔄`);
+  toast(`حرکت امروز جایگزین شد: «${exercise.name}» (فردا خودکار به حرکت اصلی برمی‌گردد) 🔄`);
   requestRender();
+}
+
+/** Manual restore: puts the programmed movement back right away. */
+export function restoreOriginalExercise(exercise: Exercise): void {
+  if (!exercise.originalName) return;
+  exercise.name = exercise.originalName;
+  if (exercise.originalQuery) exercise.query = exercise.originalQuery;
+  exercise.gifUrl = originalGifFor(exercise);
+  if (exercise.originalTip !== undefined && exercise.originalTip !== null) {
+    exercise.tip = exercise.originalTip;
+  }
+  exercise.swappedDate = null;
+  exercise.originalName = null;
+  exercise.originalQuery = null;
+  exercise.originalGifUrl = null;
+  exercise.originalTip = null;
+
+  softTap();
+  persist(0);
+  toast(`به حرکت اصلی برگشت: «${exercise.name}» ↩️`);
+  requestRender();
+}
+
+/**
+ * Restores every exercise that was swapped on an earlier calendar day.
+ * Returns `true` when something changed so the caller can persist + re-render.
+ */
+export function ensureDailySwappedExercisesReset(): boolean {
+  let state;
+  try {
+    state = getState();
+  } catch {
+    return false;
+  }
+  const today = isoToday();
+  let changed = false;
+
+  for (const day of state.days) {
+    for (const exercise of day.exercises) {
+      if (!exercise.swappedDate || exercise.swappedDate === today) continue;
+      if (exercise.originalName) exercise.name = exercise.originalName;
+      if (exercise.originalQuery) exercise.query = exercise.originalQuery;
+      exercise.gifUrl = originalGifFor(exercise);
+      if (exercise.originalTip !== undefined && exercise.originalTip !== null) {
+        exercise.tip = exercise.originalTip;
+      }
+      exercise.swappedDate = null;
+      exercise.originalName = null;
+      exercise.originalQuery = null;
+      exercise.originalGifUrl = null;
+      exercise.originalTip = null;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 // ---------------------------------------------------------------------------
