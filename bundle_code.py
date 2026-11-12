@@ -331,6 +331,11 @@ def build_bundle(root: Path, files: list[SourceFile], notes: list[str]) -> str:
     add("     status bar (src/lib/notify.ts, channel fitpro-alerts, High).")
     add(" Calendar: activityHistory snapshots (DailyActivity) drive a Sat-Fri week")
     add("     view in src/components/weeklyActivity.ts, shown on two tabs.")
+    add(" Uni tab: src/views/uni.ts holds the Tabriz shuttle tables, next-bus radar")
+    add("     and repeating bus/food/gym alarms (uniReminders in state).")
+    add(" Gym tools: src/lib/workoutTools.ts (wake lock, 26 lift swaps, plate")
+    add("     calculator, PR, finish tonnage, streak, deload, readiness).")
+    add(" Photos/backup: src/components/progressPhotos.ts (base64 album + JSON).")
     add("")
 
     # ------------------------------------------------------------------ tree

@@ -196,12 +196,19 @@ await wait(500);
 check("Android back closes the modal", (await modalCount()) === 0);
 
 // -------------------------------------------- 8. back returns to workout
-const navTo = async (index) => {
+/** Click a bottom-nav tab by its label (indices shift when tabs are added). */
+const navTo = async (label) => {
   const buttons = await page.$$("#nav-slot nav button");
-  await buttons[index].click();
+  for (const button of buttons) {
+    if ((await button.evaluate((node) => node.textContent ?? "")).includes(label)) {
+      await button.click();
+      return;
+    }
+  }
+  throw new Error(`nav tab not found: ${label}`);
 };
 
-await navTo(2);
+await navTo("تغذیه");
 await wait(500);
 check(
   "tab switch works",
@@ -216,7 +223,7 @@ check(
 );
 
 // ------------------------------------------------------ 9. profile edit
-await navTo(3);
+await navTo("مربی");
 await wait(500);
 const nameInput = await page.$('main input[type="text"]');
 await nameInput.click({ clickCount: 3 });

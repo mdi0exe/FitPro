@@ -102,6 +102,30 @@ export interface DailyActivity {
   bodyWeight?: number | null;
 }
 
+export interface PersonalRecord {
+  weight: number;
+  reps: number;
+  date: string;
+}
+
+export interface ProgressPhoto {
+  id: string;
+  date: string;
+  weight: number;
+  dataUrl: string;
+  note?: string;
+}
+
+export interface UniReminders {
+  thursdayFoodEnabled: boolean;
+  thursdayFoodTime: string;
+  gymReminderEnabled: boolean;
+  gymReminderTime: string;
+  activeBusAlarms: string[];
+}
+
+export type Readiness = "high" | "normal" | "low";
+
 export interface AppStateData {
   version: number;
   profile: UserProfile;
@@ -115,6 +139,11 @@ export interface AppStateData {
   restSeconds: number;
   /** Derived per-day snapshots for the weekly calendar (newest first). */
   activityHistory: DailyActivity[];
+  deloadActive: boolean;
+  readiness: Readiness;
+  personalRecords: Record<string, PersonalRecord>;
+  progressPhotos: ProgressPhoto[];
+  uniReminders: UniReminders;
 }
 
-export type TabId = "workout" | "progress" | "nutrition" | "coach";
+export type TabId = "workout" | "progress" | "nutrition" | "uni" | "coach";

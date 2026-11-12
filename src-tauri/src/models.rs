@@ -275,6 +275,85 @@ pub struct DailyActivity {
     pub body_weight: Option<f32>,
 }
 
+/// Best lift for one exercise (Epley 1RM is compared, raw values are stored).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalRecord {
+    pub weight: f32,
+    pub reps: u32,
+    pub date: String,
+}
+
+/// A compressed body photo stored inline (base64 JPEG data URL).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProgressPhoto {
+    pub id: String,
+    pub date: String,
+    pub weight: f32,
+    pub data_url: String,
+    #[serde(default)]
+    pub note: String,
+}
+
+/// Reminders for the university shuttle / cafeteria schedule.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UniReminders {
+    #[serde(default = "default_true")]
+    pub thursday_food_enabled: bool,
+    #[serde(default = "default_thursday_time")]
+    pub thursday_food_time: String,
+    #[serde(default)]
+    pub gym_reminder_enabled: bool,
+    #[serde(default = "default_gym_time")]
+    pub gym_reminder_time: String,
+    #[serde(default)]
+    pub active_bus_alarms: Vec<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_thursday_time() -> String {
+    "12:00".to_string()
+}
+
+fn default_gym_time() -> String {
+    "16:30".to_string()
+}
+
+impl Default for UniReminders {
+    fn default() -> Self {
+        Self {
+            thursday_food_enabled: true,
+            thursday_food_time: default_thursday_time(),
+            gym_reminder_enabled: false,
+            gym_reminder_time: default_gym_time(),
+            active_bus_alarms: Vec::new(),
+        }
+    }
+}
+
+/// `HH:MM` on a 24-hour clock.
+fn is_hhmm(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 5 || bytes[2] != b':' {
+        return false;
+    }
+    let digits_ok = bytes
+        .iter()
+        .enumerate()
+        .all(|(index, byte)| index == 2 || byte.is_ascii_digit());
+    if !digits_ok {
+        return false;
+    }
+    let hour = value[0..2].parse::<u32>().unwrap_or(99);
+    let minute = value[3..5].parse::<u32>().unwrap_or(99);
+    hour < 24 && minute < 60
+}
+
 // ---------------------------------------------------------------------------
 // Root state
 // ---------------------------------------------------------------------------
@@ -298,6 +377,20 @@ pub struct AppStateData {
     /// `serde(default)` keeps every older saved file loading unchanged.
     #[serde(default)]
     pub activity_history: Vec<DailyActivity>,
+    /// Deload week is on (weights were lowered for recovery).
+    #[serde(default)]
+    pub deload_active: bool,
+    /// "high" | "normal" | "low"
+    #[serde(default)]
+    pub readiness: String,
+    /// Best lift per exercise id.
+    #[serde(default)]
+    pub personal_records: std::collections::HashMap<String, PersonalRecord>,
+    /// Before/after album (newest first).
+    #[serde(default)]
+    pub progress_photos: Vec<ProgressPhoto>,
+    #[serde(default)]
+    pub uni_reminders: UniReminders,
 }
 
 impl AppStateData {
@@ -311,6 +404,27 @@ impl AppStateData {
             entry.water_glasses = entry.water_glasses.min(30);
             entry.diet_total = entry.diet_total.min(20);
             entry.diet_done = entry.diet_done.min(entry.diet_total.max(5));
+        }
+
+        if !matches!(self.readiness.as_str(), "high" | "normal" | "low") {
+            self.readiness = "normal".to_string();
+        }
+        self.progress_photos
+            .retain(|photo| !photo.data_url.is_empty() && photo.data_url.len() <= 900_000);
+        self.progress_photos.sort_by(|a, b| b.date.cmp(&a.date));
+        self.progress_photos.truncate(24);
+
+        self.uni_reminders
+            .active_bus_alarms
+            .retain(|key| !key.is_empty());
+        self.uni_reminders.active_bus_alarms.sort();
+        self.uni_reminders.active_bus_alarms.dedup();
+        self.uni_reminders.active_bus_alarms.truncate(64);
+        if !is_hhmm(&self.uni_reminders.thursday_food_time) {
+            self.uni_reminders.thursday_food_time = default_thursday_time();
+        }
+        if !is_hhmm(&self.uni_reminders.gym_reminder_time) {
+            self.uni_reminders.gym_reminder_time = default_gym_time();
         }
 
         if self.days.is_empty() {
@@ -619,6 +733,11 @@ mod tests {
             active_day: 0,
             rest_seconds: DEFAULT_REST_SECONDS,
             activity_history: Vec::new(),
+            deload_active: false,
+            readiness: String::new(),
+            personal_records: std::collections::HashMap::new(),
+            progress_photos: Vec::new(),
+            uni_reminders: UniReminders::default(),
         };
         for index in 0..80 {
             state.push_milestone("2026-01-01", format!("event {index}"), "system");
@@ -714,6 +833,57 @@ mod tests {
         state.diet.water_reminder_next_at = 1_900_000_000_000;
         state.normalize();
         assert_eq!(state.diet.water_reminder_next_at, 1_900_000_000_000);
+    }
+
+    #[test]
+    fn legacy_state_defaults_new_gym_fields() {
+        let mut value = serde_json::to_value(crate::storage::seed()).unwrap();
+        for key in [
+            "deloadActive",
+            "readiness",
+            "personalRecords",
+            "progressPhotos",
+            "uniReminders",
+        ] {
+            value.as_object_mut().unwrap().remove(key);
+        }
+        let mut state: AppStateData = serde_json::from_value(value).unwrap();
+
+        assert!(!state.deload_active);
+        assert!(state.readiness.is_empty());
+        assert!(state.personal_records.is_empty());
+        assert!(state.progress_photos.is_empty());
+        assert!(state.uni_reminders.thursday_food_enabled);
+
+        state.normalize();
+        assert_eq!(state.readiness, "normal");
+        assert_eq!(state.uni_reminders.thursday_food_time, "12:00");
+    }
+
+    #[test]
+    fn uni_reminders_and_photos_are_sanitised() {
+        let mut state = crate::storage::seed();
+        state.uni_reminders.active_bus_alarms =
+            vec!["b".into(), "a".into(), "a".into(), "".into()];
+        state.uni_reminders.thursday_food_time = "99:99".into();
+        state.uni_reminders.gym_reminder_time = "nope".into();
+        state.progress_photos = vec![ProgressPhoto {
+            id: "1".into(),
+            date: "2026-01-01".into(),
+            weight: 65.0,
+            data_url: String::new(),
+            note: String::new(),
+        }];
+
+        state.normalize();
+
+        assert_eq!(
+            state.uni_reminders.active_bus_alarms,
+            vec!["a".to_string(), "b".to_string()]
+        );
+        assert_eq!(state.uni_reminders.thursday_food_time, "12:00");
+        assert_eq!(state.uni_reminders.gym_reminder_time, "16:30");
+        assert!(state.progress_photos.is_empty());
     }
 
     #[test]

@@ -436,5 +436,16 @@ export function createSeedState(): AppStateData {
     activeDay: 0,
     restSeconds: 90,
     activityHistory: [],
+    deloadActive: false,
+    readiness: "normal",
+    personalRecords: {},
+    progressPhotos: [],
+    uniReminders: {
+      thursdayFoodEnabled: true,
+      thursdayFoodTime: "12:00",
+      gymReminderEnabled: false,
+      gymReminderTime: "16:30",
+      activeBusAlarms: [],
+    },
   };
 }

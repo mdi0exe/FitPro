@@ -7,6 +7,7 @@ import { getState, requestRender, setState } from "../lib/store";
 import type { Milestone, WeightEntry } from "../types";
 import { progressBar, sectionTitle, toast } from "../components/ui";
 import { renderWeeklyActivityCard } from "../components/weeklyActivity";
+import { renderProgressPhotosCard } from "../components/progressPhotos";
 
 export function renderProgress(): HTMLElement {
   const state = getState();
@@ -17,6 +18,7 @@ export function renderProgress(): HTMLElement {
   view.append(weightLogger());
   view.append(chartCard(state.weightHistory));
   view.append(statsGrid());
+  view.append(renderProgressPhotosCard());
   view.append(milestonesCard(state.milestones));
 
   return view;

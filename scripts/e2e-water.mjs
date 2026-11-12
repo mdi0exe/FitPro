@@ -28,7 +28,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const reloadApp = async () => {
   await page.reload({ waitUntil: "domcontentloaded", timeout: 15000 });
   await page.waitForFunction(
-    () => document.querySelectorAll("#nav-slot nav button").length === 4,
+    () => document.querySelectorAll("#nav-slot nav button").length >= 5,
     { timeout: 10000 },
   );
 };

@@ -159,3 +159,56 @@ export async function cancelScheduledWaterNotification(): Promise<void> {
     /* nothing scheduled */
   }
 }
+
+/** One repeating slot: `weekday` uses the plugin's 1=Sunday … 7=Saturday. */
+export interface RepeatingSlot {
+  hour: number;
+  minute: number;
+  weekday?: number;
+}
+
+/**
+ * Registers a repeating weekly (or daily when `weekday` is omitted) alarm.
+ * Returns `true` when the OS accepted it.
+ */
+export async function scheduleRepeatingNotification(
+  id: number,
+  title: string,
+  body: string,
+  slot: RepeatingSlot,
+): Promise<boolean> {
+  if (!isTauri() || !(await canPost())) return false;
+
+  try {
+    await ensureChannel();
+    await cancel([id]).catch(() => undefined);
+    sendNotification({
+      id,
+      channelId: CHANNEL_ID,
+      title,
+      body,
+      schedule: Schedule.interval(
+        {
+          hour: slot.hour,
+          minute: slot.minute,
+          ...(slot.weekday === undefined ? {} : { weekday: slot.weekday }),
+        },
+        true,
+      ),
+    });
+    return true;
+  } catch (error) {
+    console.warn("repeating notification unavailable", error);
+    return false;
+  }
+}
+
+/** Cancels a batch of pending alarms (bus times use one id per weekday). */
+export async function cancelNotifications(ids: number[]): Promise<void> {
+  if (!isTauri() || ids.length === 0) return;
+  try {
+    await cancel(ids);
+  } catch {
+    /* nothing scheduled */
+  }
+}

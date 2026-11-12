@@ -42,9 +42,14 @@ page.on("request", (req) => {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-await page.goto(URL, { waitUntil: "networkidle2" });
+// `networkidle2` can hang on lazy images; wait for the app shell instead.
+await page.goto(URL, { waitUntil: "domcontentloaded" });
 await page.evaluate(() => localStorage.clear());
-await page.reload({ waitUntil: "networkidle2" });
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForFunction(
+  () => document.querySelectorAll("#nav-slot nav button").length >= 5,
+  { timeout: 10000 },
+);
 await wait(700);
 
 // Instrument Web Audio + vibration before the first user gesture.
@@ -114,7 +119,12 @@ await page.evaluate(() => {
 
 // First real gesture unlocks audio and warms all four clips.
 const nav = await page.$$("#nav-slot nav button");
-await nav[3].click();
+for (const button of nav) {
+  if ((await button.evaluate((node) => node.textContent ?? "")).includes("مربی")) {
+    await button.click();
+    break;
+  }
+}
 await wait(1000);
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 await wait(400);
@@ -167,7 +177,11 @@ check("water alert uses light vibration", vibrates.some((p) => JSON.stringify(p)
 // simulated before the app ever unlocks audio.
 const fallbackPage = await browser.newPage();
 fallbackPage.on("pageerror", (err) => errors.push(`[fallback] ${err.message}`));
-await fallbackPage.goto(URL, { waitUntil: "networkidle2" });
+await fallbackPage.goto(URL, { waitUntil: "domcontentloaded" });
+await fallbackPage.waitForFunction(
+  () => document.querySelectorAll("#nav-slot nav button").length >= 5,
+  { timeout: 10000 },
+);
 await fallbackPage.evaluate(() => {
   window.__mediaFallback = [];
   window.AudioContext.prototype.decodeAudioData = function () {
@@ -181,7 +195,12 @@ await fallbackPage.evaluate(() => {
   };
 });
 const fNav = await fallbackPage.$$("#nav-slot nav button");
-await fNav[3].click();
+for (const button of fNav) {
+  if ((await button.evaluate((node) => node.textContent ?? "")).includes("مربی")) {
+    await button.click();
+    break;
+  }
+}
 await wait(900);
 await fallbackPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 await wait(400);

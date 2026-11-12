@@ -24,6 +24,34 @@ export function normalizeState(input: AppStateData): AppStateData {
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 90);
   if (state.days.length === 0) return createSeedState();
+
+  // Gym tools + uni tab fields (added after the first release).
+  const seed = createSeedState();
+  state.deloadActive = Boolean(state.deloadActive);
+  if (!["high", "normal", "low"].includes(state.readiness)) state.readiness = "normal";
+  state.personalRecords =
+    state.personalRecords && typeof state.personalRecords === "object"
+      ? state.personalRecords
+      : {};
+  state.progressPhotos = Array.isArray(state.progressPhotos)
+    ? state.progressPhotos
+        .filter((photo) => photo && photo.dataUrl && photo.dataUrl.length <= 900_000)
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 24)
+    : [];
+
+  const reminders = state.uniReminders ?? seed.uniReminders;
+  const hhmm = (value: unknown, fallback: string) =>
+    typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : fallback;
+  state.uniReminders = {
+    thursdayFoodEnabled: reminders.thursdayFoodEnabled !== false,
+    thursdayFoodTime: hhmm(reminders.thursdayFoodTime, "12:00"),
+    gymReminderEnabled: Boolean(reminders.gymReminderEnabled),
+    gymReminderTime: hhmm(reminders.gymReminderTime, "16:30"),
+    activeBusAlarms: Array.isArray(reminders.activeBusAlarms)
+      ? [...new Set(reminders.activeBusAlarms.filter((key) => typeof key === "string" && key))].slice(0, 64)
+      : [],
+  };
   state.activeDay = Math.min(Math.max(0, state.activeDay ?? 0), state.days.length - 1);
   if (!state.restSeconds || state.restSeconds < 15 || state.restSeconds > 600) {
     state.restSeconds = 90;

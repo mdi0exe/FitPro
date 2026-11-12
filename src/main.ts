@@ -16,6 +16,8 @@ import {
   setRenderHook,
 } from "./lib/store";
 import { mountRestTimer } from "./components/restTimer";
+import { installWakeLockLifecycle } from "./lib/workoutTools";
+import { renderUni } from "./views/uni";
 import { renderHeader, renderNav } from "./components/shell";
 import { toast } from "./components/ui";
 import { renderWorkout } from "./views/workout";
@@ -66,6 +68,8 @@ function currentView(): HTMLElement {
       return renderProgress();
     case "nutrition":
       return renderNutrition();
+    case "uni":
+      return renderUni();
     case "coach":
       return renderCoach();
     case "workout":
@@ -121,6 +125,8 @@ async function boot(): Promise<void> {
     buildShell();
     mountRestTimer();
     installLifecycleFlush();
+    // Keep the screen awake while training (re-acquired on resume).
+    installWakeLockLifecycle();
     setRenderHook(() => renderView(true));
 
     // Android back: close the open overlay first, otherwise return to the

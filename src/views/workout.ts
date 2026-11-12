@@ -20,6 +20,14 @@ import { openExerciseEditor, type ExerciseDraft } from "../components/exerciseEd
 import { startRest } from "../components/restTimer";
 import { openValuePicker, stepper } from "../components/stepper";
 import { refreshWeeklyActivityCard, renderWeeklyActivityCard } from "../components/weeklyActivity";
+import {
+  checkAndUpdatePR,
+  openPlateCalculatorModal,
+  openWorkoutFinishModal,
+  personalRecordFor,
+  renderReadinessAndToolsBar,
+  swapBusyExercise,
+} from "../lib/workoutTools";
 import { syncLogs } from "../lib/localBackend";
 
 const OVERLOAD_CYCLE_DAYS = 14;
@@ -35,10 +43,18 @@ export function renderWorkout(): HTMLElement {
   view.append(dayStrip());
   if (!day) return view;
 
+  view.append(renderReadinessAndToolsBar());
   view.append(waterBar());
   view.append(overloadBanner());
   view.append(warmupCard(day));
   view.append(daySummary(day));
+  view.append(
+    btn(
+      "btn-ghost w-full border-emerald-500/25 text-xs text-emerald-300",
+      "🏁 ثبت پایان تمرین امروز",
+      () => openWorkoutFinishModal(day),
+    ),
+  );
 
   day.exercises.forEach((exercise, index) => {
     view.append(exerciseCard(day, exercise, index));
@@ -507,6 +523,10 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
   const doneChip = el("span", "chip", `${fa(exercise.logs.filter((l) => l.done).length)}/${fa(exercise.logs.length)}`);
   doneChip.setAttribute("data-ex-count", exercise.id);
   chips.append(doneChip);
+  const record = personalRecordFor(exercise.id);
+  if (record) {
+    chips.append(el("span", "chip chip-amber", `🏆 ${faNum(record.weight, 1)}`));
+  }
   info.append(chips);
 
   const actions = el("div", "flex flex-col gap-1");
@@ -530,6 +550,23 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
 
   header.append(badge, info, actions);
   card.append(header);
+
+  const tools = el("div", "grid grid-cols-2 gap-1.5");
+  tools.append(
+    btn(
+      "rounded-xl border border-slate-800 bg-slate-950 px-2 py-1.5 text-[10px] font-bold text-slate-300 transition active:scale-95",
+      "🔄 دستگاه شلوغه؟",
+      () => swapBusyExercise(exercise),
+      { "aria-label": "حرکت جایگزین" },
+    ),
+    btn(
+      "rounded-xl border border-slate-800 bg-slate-950 px-2 py-1.5 text-[10px] font-bold text-slate-300 transition active:scale-95",
+      "🏋️ صفحه‌های هالتر",
+      () => openPlateCalculatorModal(exercise.targetWeight || 40),
+      { "aria-label": "ماشین‌حساب صفحه‌های هالتر" },
+    ),
+  );
+  card.append(tools);
 
   if (exercise.gifUrl) {
     // Demos are square with a white background: contain (not cover) so the
@@ -651,6 +688,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
   check.innerHTML = svgIcon(icons.check, "h-4 w-4").outerHTML;
 
   check.addEventListener("click", () => {
+    const wasComplete = dayTotal(day) > 0 && dayDone(day) === dayTotal(day);
     log.done = !log.done;
     persist(0);
 
@@ -665,6 +703,12 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     }`;
 
     if (log.done) {
+      // Record the PR before the audio cue; a re-render puts the 🏆 chip up.
+      if (checkAndUpdatePR(exercise, log.weight, log.reps)) {
+        persist(0);
+        requestRender();
+      }
+
       // One clip per tap: the final set plays the brighter "chord" instead of
       // the regular bell, so the two real MP3s never overlap.
       const allDone =
@@ -674,6 +718,11 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
       startRest();
     }
     refreshProgress(day, exercise);
+
+    // Celebrate once, on the tick that finishes the whole day.
+    if (!wasComplete && dayTotal(day) > 0 && dayDone(day) === dayTotal(day)) {
+      openWorkoutFinishModal(day);
+    }
   });
 
   row.append(label, weight.element, reps.element, check);

@@ -511,6 +511,11 @@ pub fn seed() -> AppStateData {
         active_day: 0,
         rest_seconds: DEFAULT_REST_SECONDS,
         activity_history: Vec::new(),
+        deload_active: false,
+        readiness: "normal".to_string(),
+        personal_records: std::collections::HashMap::new(),
+        progress_photos: Vec::new(),
+        uni_reminders: crate::models::UniReminders::default(),
     };
     state.normalize();
     state

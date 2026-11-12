@@ -8,6 +8,7 @@ import { alarm, waterAlert } from "../lib/timer";
 import { getState, persist, requestRender, setState } from "../lib/store";
 import type { AppStateData } from "../types";
 import { confirmDialog, sectionTitle, toast } from "../components/ui";
+import { renderBackupRestoreCard } from "../components/progressPhotos";
 
 export function renderCoach(): HTMLElement {
   const view = el("div", "space-y-3 animate-fade-up");
@@ -44,6 +45,7 @@ export function renderCoach(): HTMLElement {
 
   view.append(overloadCard());
   view.append(settingsCard());
+  view.append(renderBackupRestoreCard());
 
   return view;
 }

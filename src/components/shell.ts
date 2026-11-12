@@ -12,6 +12,7 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: "workout", label: "تمرین", icon: icons.dumbbell },
   { id: "progress", label: "پیشرفت", icon: icons.chart },
   { id: "nutrition", label: "تغذیه", icon: icons.salad },
+  { id: "uni", label: "دانشگاه", icon: icons.bus },
   { id: "coach", label: "مربی", icon: icons.sparkles },
 ];
 

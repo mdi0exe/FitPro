@@ -35,7 +35,7 @@ const state = () =>
 const reloadApp = async () => {
   await page.reload({ waitUntil: "domcontentloaded", timeout: 15000 });
   await page.waitForFunction(
-    () => document.querySelectorAll("#nav-slot nav button").length === 4,
+    () => document.querySelectorAll("#nav-slot nav button").length >= 5,
     { timeout: 10000 },
   );
 };
@@ -46,10 +46,17 @@ const calendarText = () =>
     return (card?.textContent ?? "").replace(/\s+/g, " ");
   });
 
-const navTo = async (index) => {
+/** Click a bottom-nav tab by its label (indices shift when tabs are added). */
+const navTo = async (label) => {
   const buttons = await page.$$("#nav-slot nav button");
-  await buttons[index].click();
-  await wait(600);
+  for (const button of buttons) {
+    if ((await button.evaluate((node) => node.textContent ?? "")).includes(label)) {
+      await button.click();
+      await wait(600);
+      return;
+    }
+  }
+  throw new Error(`nav tab not found: ${label}`);
 };
 
 await page.goto(URL, { waitUntil: "domcontentloaded" });
@@ -109,7 +116,7 @@ check(
 check("calendar card refreshes in place", (await calendarText()).includes("روز ۱"));
 
 // ------------------------------------------------------- water + diet
-await navTo(2);
+await navTo("تغذیه");
 for (const handle of await page.$$("main button")) {
   if ((await handle.evaluate((n) => (n.textContent ?? "").trim())).includes("لیوان آب خوردم")) {
     await handle.click();
@@ -120,7 +127,7 @@ await wait(500);
 saved = await state();
 check("water lands in today's snapshot", saved.activityHistory?.[0]?.waterGlasses === 1, String(saved.activityHistory?.[0]?.waterGlasses));
 
-await navTo(1);
+await navTo("پیشرفت");
 check("progress tab shows the water count", (await calendarText()).includes("۱ لیوان"));
 
 // ------------------------------------------------ selecting another day
@@ -144,7 +151,7 @@ check("back-to-today restores the workout", (await calendarText()).includes("ر�
 // ------------------------------------------------------- persistence
 await reloadApp();
 await wait(600);
-await navTo(1);
+await navTo("پیشرفت");
 const afterReload = await calendarText();
 check("calendar survives a reload", afterReload.includes("روز ۱") && afterReload.includes("۱ لیوان"));
 
@@ -161,7 +168,7 @@ await page.evaluate(() => {
   window.Notification = FakeNotification;
 });
 
-await navTo(3);
+await navTo("مربی");
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 await wait(400);
 const clickedNotify = await page.evaluate(() => {
