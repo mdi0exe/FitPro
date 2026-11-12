@@ -25,6 +25,7 @@ on:
       - "tailwind.config.js"
       - "postcss.config.js"
       - "scripts/gen-icons.mjs"
+      - "scripts/gen-android-icons.mjs"
       - "scripts/patch-android-manifest.mjs"
       - "src-tauri/icons/**"
       - "public/**"
@@ -36,6 +37,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - "scripts/gen-icons.mjs"
+      - "scripts/gen-android-icons.mjs"
       - "scripts/patch-android-manifest.mjs"
       - "src-tauri/icons/**"
       - "public/**"
@@ -227,13 +229,20 @@ jobs:
           grep -n "uses-permission" src-tauri/gen/android/app/src/main/AndroidManifest.xml
 
       # `tauri android init` scaffolds the project with Tauri's default launcher
-      # icons. The CLI rasterises the committed SVG (pure Rust, no browser needed
-      # on the Linux runner) into every density, adaptive foreground and mipmap.
-      - name: Generate and apply app icons to Android project
+      # icons. The committed Android set is built by `scripts/gen-android-icons.mjs`
+      # instead of `tauri icon`: the CLI blows the artwork up to the full 108dp
+      # adaptive canvas, which Android then crops to the 72dp mask, so the crest
+      # looked zoomed in / cut off on real phones. The script also copies the
+      # assets into the generated project, so it works on a fresh checkout.
+      - name: Apply launcher icons to the Android project
         run: |
           set -euo pipefail
-          npx tauri icon src-tauri/icons/icon.svg
-          ls -1 src-tauri/gen/android/app/src/main/res | head -n 12
+          node scripts/gen-android-icons.mjs
+          echo "--- generated res ---"
+          ls -1 src-tauri/gen/android/app/src/main/res | head -n 14
+          echo "--- adaptive icon ---"
+          cat src-tauri/gen/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          test -f src-tauri/gen/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png
 
       # ---------------------------------------------------------------------
       # Build

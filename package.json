@@ -13,7 +13,9 @@
     "tauri:dev": "tauri dev",
     "tauri:android": "tauri android dev",
     "tauri:build": "tauri build",
-    "android:manifest": "node scripts/patch-android-manifest.mjs"
+    "android:manifest": "node scripts/patch-android-manifest.mjs",
+    "android:icons": "node scripts/gen-android-icons.mjs",
+    "icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",
