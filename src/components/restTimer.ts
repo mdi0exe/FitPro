@@ -51,7 +51,7 @@ export function mountRestTimer(): void {
 
   const labels = el("div", "min-w-0 flex-1");
   caption = el("p", "text-[10px] font-medium text-emerald-300/90", "استراحت بین ست‌ها");
-  timeLabel = el("p", "font-mono text-xl font-extrabold leading-tight text-slate-50", "۱:۳۰");
+  timeLabel = el("p", "font-vazir text-2xl font-extrabold leading-tight tabular-nums text-slate-50", "۱:۳۰");
   labels.append(caption, timeLabel);
 
   const actions = el("div", "flex shrink-0 items-center gap-1");

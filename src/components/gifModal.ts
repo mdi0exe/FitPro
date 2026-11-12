@@ -27,6 +27,7 @@ export function openGifModal(options: GifModalOptions): void {
       img.src = url;
       img.alt = options.title;
       img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
       img.addEventListener("error", () => {
         preview.innerHTML = "";
         preview.append(

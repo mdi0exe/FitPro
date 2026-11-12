@@ -1,7 +1,7 @@
 /** Workout tab: day switcher, warm-up card, overload banner and set logger. */
 import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { daysBetween, fa, faDate, faNum, faReps, firstNumber, isoToday, parseNum } from "../lib/fa";
+import { daysBetween, fa, faDate, faNum, faReps, firstNumber, isoToday } from "../lib/fa";
 import { beep, cardioTimer, vibrate } from "../lib/timer";
 import { applyProgressiveOverload } from "../lib/api";
 import {
@@ -16,6 +16,7 @@ import { confirmDialog, openModal, progressBar, toast } from "../components/ui";
 import { openGifModal } from "../components/gifModal";
 import { openExerciseEditor, type ExerciseDraft } from "../components/exerciseEditor";
 import { startRest } from "../components/restTimer";
+import { openValuePicker, stepper } from "../components/stepper";
 import { syncLogs } from "../lib/localBackend";
 
 const OVERLOAD_CYCLE_DAYS = 14;
@@ -237,6 +238,12 @@ function warmupCard(day: WorkoutDay): HTMLElement {
         openGifModal({
           title: item.text,
           query: item.query,
+          gifUrl: item.gifUrl,
+          onSaveUrl: (url) => {
+            item.gifUrl = url;
+            persist(0);
+            requestRender();
+          },
         }),
     );
 
@@ -291,7 +298,7 @@ function cardioTimerBlock(): HTMLElement {
     </svg>`;
   const timeText = el(
     "span",
-    "absolute inset-0 flex items-center justify-center font-mono text-[11px] font-extrabold text-slate-100",
+    "absolute inset-0 flex items-center justify-center font-vazir text-[13px] font-black tabular-nums leading-none text-slate-50",
     "۵:۰۰",
   );
   ringWrap.append(timeText);
@@ -472,10 +479,13 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
   card.append(header);
 
   if (exercise.gifUrl) {
-    const img = el("img", "h-40 w-full rounded-2xl border border-slate-800 bg-slate-950 object-cover");
+    // Demos are square with a white background: contain (not cover) so the
+    // athlete is never cropped, and no-referrer so the host serves the file.
+    const img = el("img", "h-44 w-full rounded-2xl border border-slate-800 bg-white p-1 object-contain");
     img.src = exercise.gifUrl;
     img.alt = exercise.name;
     img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
     img.addEventListener("error", () => img.remove());
     card.append(img);
   }
@@ -490,15 +500,12 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
   }
 
   const rows = el("div", "space-y-2");
-  const columnHeader = el(
-    "div",
-    "grid grid-cols-[2.6rem_1fr_1fr_2.75rem] items-center gap-1.5 px-2 text-[9px] text-slate-500",
-  );
+  const columnHeader = el("div", "flex items-center gap-1.5 px-2 text-[9px] text-slate-500");
   columnHeader.append(
-    el("span", "", "ست"),
-    el("span", "text-center", "وزنه (kg)"),
-    el("span", "text-center", "تکرار"),
-    el("span", "text-center", "انجام"),
+    el("span", "w-9 shrink-0", "ست"),
+    el("span", "flex-1 text-center", "وزنه (kg)"),
+    el("span", "flex-1 text-center", "تکرار"),
+    el("span", "w-9 shrink-0 text-center", "انجام"),
   );
   rows.append(columnHeader);
   exercise.logs.forEach((log) => rows.append(setRow(day, exercise, log)));
@@ -510,53 +517,77 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
 function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
   const row = el(
     "div",
-    `grid grid-cols-[2.6rem_1fr_1fr_2.75rem] items-center gap-1.5 rounded-xl border px-2 py-1.5 transition ${
-      log.done
-        ? "border-emerald-500/40 bg-emerald-500/10"
-        : "border-slate-800 bg-slate-950/40"
+    `flex items-center gap-1.5 rounded-xl border px-1.5 py-1.5 transition ${
+      log.done ? "border-emerald-500/40 bg-emerald-500/10" : "border-slate-800 bg-slate-950/40"
     }`,
   );
   row.setAttribute("data-row", `${exercise.id}-${log.index}`);
 
-  row.append(
-    el("span", `text-[11px] font-bold ${log.done ? "text-emerald-300" : "text-slate-400"}`, `ست ${fa(log.index)}`),
+  const label = el(
+    "span",
+    `w-9 shrink-0 text-[11px] font-bold ${log.done ? "text-emerald-300" : "text-slate-400"}`,
+    `ست ${fa(log.index)}`,
   );
 
-  const weightInput = el("input", "field field-sm");
-  // text + inputmode (not type="number") so Persian/Arabic digits survive
-  weightInput.type = "text";
-  weightInput.inputMode = "decimal";
-  weightInput.autocomplete = "off";
-  weightInput.placeholder = "kg";
-  weightInput.value = log.weight ? faNum(log.weight, 1) : "";
-  weightInput.setAttribute("aria-label", `وزنه ست ${log.index}`);
+  // No <input> anywhere: the gym keyboard is the enemy.
+  const weight = stepper({
+    value: log.weight,
+    step: 2.5,
+    min: 0,
+    ariaLabel: `وزنه ست ${log.index}`,
+    onChange: (value) => {
+      log.weight = value;
+      persist();
+    },
+    onOpenPicker: (current, setValue) =>
+      openValuePicker({
+        title: `وزنه ست ${fa(log.index)}`,
+        subtitle: exercise.name,
+        value: current,
+        unit: "کیلوگرم",
+        format: (value) => faNum(value, 1),
+        deltas: [-5, -2.5, -1.25, 1.25, 2.5, 5],
+        presets: [0, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 30, 35, 40, 50, 60, 70, 80, 100],
+        onChange: (value) => {
+          log.weight = value;
+          setValue(value);
+          persist();
+        },
+        onApplyAll: (value) => applyToAllSets(exercise, "weight", value),
+      }),
+  });
 
-  const repsInput = el("input", "field field-sm");
-  repsInput.type = "text";
-  repsInput.inputMode = "numeric";
-  repsInput.autocomplete = "off";
-  repsInput.placeholder = "تکرار";
-  repsInput.value = log.reps ? fa(String(log.reps)) : "";
-  repsInput.setAttribute("aria-label", `تکرار ست ${log.index}`);
-
-  // Accepts Persian/Arabic-Indic digits typed on an Android Persian keyboard.
-  const readInputs = () => {
-    log.weight = Math.max(0, parseNum(weightInput.value));
-    log.reps = Math.max(0, Math.round(parseNum(repsInput.value)));
-  };
-
-  const commit = () => {
-    readInputs();
-    persist();
-  };
-  weightInput.addEventListener("change", commit);
-  repsInput.addEventListener("change", commit);
-  weightInput.addEventListener("blur", commit);
-  repsInput.addEventListener("blur", commit);
+  const reps = stepper({
+    value: log.reps,
+    step: 1,
+    min: 1,
+    ariaLabel: `تکرار ست ${log.index}`,
+    onChange: (value) => {
+      log.reps = value;
+      persist();
+    },
+    onOpenPicker: (current, setValue) =>
+      openValuePicker({
+        title: `تکرار ست ${fa(log.index)}`,
+        subtitle: exercise.name,
+        value: current,
+        unit: "تکرار",
+        min: 1,
+        format: (value) => fa(value),
+        deltas: [-2, -1, 1, 2],
+        presets: [6, 8, 10, 12, 15, 20, 25],
+        onChange: (value) => {
+          log.reps = value;
+          setValue(value);
+          persist();
+        },
+        onApplyAll: (value) => applyToAllSets(exercise, "reps", value),
+      }),
+  });
 
   const check = el(
     "button",
-    `flex h-9 w-9 items-center justify-center rounded-xl border transition active:scale-90 ${
+    `flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition active:scale-90 ${
       log.done
         ? "border-emerald-400 bg-emerald-400 text-slate-950"
         : "border-slate-700 bg-slate-900 text-slate-500"
@@ -567,15 +598,17 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
   check.innerHTML = svgIcon(icons.check, "h-4 w-4").outerHTML;
 
   check.addEventListener("click", () => {
-    readInputs();
     log.done = !log.done;
     persist(0);
 
-    row.className = `grid grid-cols-[2.6rem_1fr_1fr_2.75rem] items-center gap-1.5 rounded-xl border px-2 py-1.5 transition ${
+    row.className = `flex items-center gap-1.5 rounded-xl border px-1.5 py-1.5 transition ${
       log.done ? "border-emerald-500/40 bg-emerald-500/10" : "border-slate-800 bg-slate-950/40"
     }`;
-    check.className = `flex h-9 w-9 items-center justify-center rounded-xl border transition active:scale-90 ${
+    check.className = `flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition active:scale-90 ${
       log.done ? "border-emerald-400 bg-emerald-400 text-slate-950" : "border-slate-700 bg-slate-900 text-slate-500"
+    }`;
+    label.className = `w-9 shrink-0 text-[11px] font-bold ${
+      log.done ? "text-emerald-300" : "text-slate-400"
     }`;
 
     if (log.done) {
@@ -586,8 +619,23 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     refreshProgress(day, exercise);
   });
 
-  row.append(weightInput, repsInput, check);
+  row.append(label, weight.element, reps.element, check);
   return row;
+}
+
+/** One tap sets the same weight (or reps) for every set of the exercise. */
+function applyToAllSets(exercise: Exercise, field: "weight" | "reps", value: number): void {
+  for (const log of exercise.logs) {
+    if (field === "weight") log.weight = value;
+    else log.reps = value;
+  }
+  persist(0);
+  toast(
+    field === "weight"
+      ? `وزنه ${faNum(value, 1)} کیلوگرم برای همه ست‌ها اعمال شد.`
+      : `تکرار ${fa(value)} برای همه ست‌ها اعمال شد.`,
+  );
+  requestRender();
 }
 
 /** Targeted DOM updates so the inputs keep focus and the page does not jump. */

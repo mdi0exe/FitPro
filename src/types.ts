@@ -20,6 +20,8 @@ export interface WarmupItem {
   text: string;
   query: string;
   done: boolean;
+  /** Direct .gif demo; `null` = not set yet, `""` = deliberately removed. */
+  gifUrl?: string | null;
 }
 
 export interface SetLog {

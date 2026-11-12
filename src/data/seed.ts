@@ -24,6 +24,8 @@ const w = (id: string, text: string, query: string): WarmupItem => ({
   text,
   query,
   done: false,
+  // Filled from default-gifs.json by normalizeState()/normalize().
+  gifUrl: null,
 });
 
 function ex(

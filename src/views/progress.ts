@@ -1,7 +1,7 @@
 /** Progress tab: body-weight tracking, chart, stats and milestones. */
 import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { daysBetween, fa, faDate, faNum, faRelative, faSigned, isoToday, parseNum } from "../lib/fa";
+import { daysBetween, fa, faDate, faNum, faRelative, faSigned, isoToday } from "../lib/fa";
 import { logBodyWeight } from "../lib/api";
 import { getState, requestRender, setState } from "../lib/store";
 import type { Milestone, WeightEntry } from "../types";
@@ -106,32 +106,44 @@ function weightLogger(): HTMLElement {
     ),
   );
 
-  const form = el("div", "mt-3 flex items-center gap-2");
-  const input = el("input", "field flex-1");
-  input.type = "text";
-  input.inputMode = "decimal";
-  input.autocomplete = "off";
-  input.placeholder = "مثلاً ۶۶٫۵";
-  input.value = faNum(getState().profile.currentWeight, 1);
+  let draft = Math.round(getState().profile.currentWeight * 10) / 10;
 
-  const submit = btn("btn-primary shrink-0 px-5", "ثبت وزن", () => void submitWeight(input));
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") void submitWeight(input);
+  const display = el(
+    "p",
+    "mt-3 text-center text-4xl font-black leading-none tabular-nums text-slate-50",
+    faNum(draft, 1),
+  );
+  card.append(display, el("p", "mt-1 text-center text-[10px] text-slate-500", "کیلوگرم"));
+
+  const bump = (delta: number) => {
+    draft = Math.min(300, Math.max(30, Math.round((draft + delta) * 10) / 10));
+    display.textContent = faNum(draft, 1);
+  };
+
+  // No keyboard: six one-tap steps around the current weight.
+  const steps = el("div", "mt-3 flex flex-wrap gap-2");
+  [-1, -0.5, -0.1, 0.1, 0.5, 1].forEach((delta) => {
+    steps.append(
+      btn(
+        `flex-1 basis-[28%] rounded-xl border py-2 text-xs font-bold transition active:scale-95 ${
+          delta > 0
+            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+            : "border-slate-700 bg-slate-900/70 text-slate-300"
+        }`,
+        `\u200E${delta > 0 ? "+" : "−"}${faNum(Math.abs(delta), 1)}`,
+        () => bump(delta),
+      ),
+    );
   });
+  card.append(steps);
 
-  form.append(input, submit);
-  card.append(form);
+  card.append(btn("btn-primary mt-2 w-full", "ثبت وزن امروز", () => void submitWeight(draft)));
   return card;
 }
 
-async function submitWeight(input: HTMLInputElement): Promise<void> {
-  const raw = parseNum(input.value);
-  if (raw <= 0) {
-    toast("یک عدد معتبر وارد کن.", "error");
-    return;
-  }
+async function submitWeight(weight: number): Promise<void> {
   try {
-    const next = await logBodyWeight(raw);
+    const next = await logBodyWeight(weight);
     setState(next);
     toast("وزن ثبت شد. مسیر ۶۵ → ۷۵ ادامه دارد! 📈");
     requestRender();

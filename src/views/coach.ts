@@ -181,27 +181,44 @@ function settingsCard(): HTMLElement {
   card.append(sectionTitle("تنظیمات", el("span", "chip", storageMode() === "native" ? "ذخیره بومی" : "مرورگر")));
   card.append(profileEditor(state));
 
-  const restRow = el("div", "space-y-1");
+  const restRow = el("div", "space-y-2");
   restRow.append(
-    el("label", "label", "مدت استراحت بین ست‌ها (ثانیه)"),
+    el("label", "label", "مدت استراحت بین ست‌ها"),
     el("p", "text-[10px] leading-5 text-slate-500", "پیشنهاد: ۹۰ ثانیه برای هایپرتروفی، ۱۲۰ ثانیه برای حرکات سنگین پایین‌تنه."),
   );
-  const restForm = el("div", "mt-1 flex items-center gap-2");
-  const restInput = el("input", "field flex-1");
-  restInput.type = "text";
-  restInput.inputMode = "numeric";
-  restInput.autocomplete = "off";
-  restInput.value = fa(state.restSeconds);
-  restForm.append(
-    restInput,
-    btn("btn-primary shrink-0 px-4", "ذخیره", () => {
-      const value = Math.min(300, Math.max(30, Math.round(parseNum(restInput.value)) || 90));
-      state.restSeconds = value;
-      persist(0);
-      toast(`استراحت روی ${fa(value)} ثانیه تنظیم شد.`);
-    }),
+
+  const setRest = (seconds: number) => {
+    const value = Math.min(300, Math.max(30, seconds));
+    state.restSeconds = value;
+    persist(0);
+    toast(`استراحت روی ${fa(value)} ثانیه تنظیم شد.`);
+    requestRender();
+  };
+
+  // Preset chips instead of a number input — one tap, saved immediately.
+  const restChips = el("div", "flex flex-wrap gap-2");
+  [60, 90, 120, 150, 180].forEach((seconds) => {
+    const active = state.restSeconds === seconds;
+    restChips.append(
+      btn(
+        `flex-1 basis-[28%] rounded-xl border px-2 py-2 text-xs font-bold transition active:scale-95 ${
+          active
+            ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-300"
+            : "border-slate-800 bg-slate-900/60 text-slate-300"
+        }`,
+        `${fa(seconds)} ثانیه`,
+        () => setRest(seconds),
+      ),
+    );
+  });
+  restRow.append(restChips);
+
+  const restAdjust = el("div", "flex gap-2");
+  restAdjust.append(
+    btn("btn-ghost flex-1 py-2 text-xs", "\u200E−۱۵ ثانیه", () => setRest(state.restSeconds - 15)),
+    btn("btn-ghost flex-1 py-2 text-xs", "\u200E+۱۵ ثانیه", () => setRest(state.restSeconds + 15)),
   );
-  restRow.append(restForm);
+  restRow.append(restAdjust);
   card.append(restRow);
 
   const divider = el("div", "divider");

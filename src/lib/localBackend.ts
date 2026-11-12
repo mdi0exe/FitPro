@@ -7,6 +7,7 @@
  */
 import type { AppStateData, Exercise, Milestone, SetLog } from "../types";
 import { createSeedState, localIso } from "../data/seed";
+import defaultGifs from "../data/default-gifs.json";
 import { en, fa, firstNumber } from "./fa";
 
 const STORAGE_KEY = "persian-hypertrophy::state::v1";
@@ -21,11 +22,23 @@ export function normalizeState(input: AppStateData): AppStateData {
   if (!state.restSeconds || state.restSeconds < 15 || state.restSeconds > 600) {
     state.restSeconds = 90;
   }
+  const exerciseGifs = defaultGifs.exercises as Record<string, string>;
+  const warmupGifs = defaultGifs.warmups as Record<string, string>;
+
   for (const day of state.days) {
+    for (const warmup of day.warmups ?? []) {
+      // null/undefined = never set, "" = the user removed it on purpose.
+      if (warmup.gifUrl == null) {
+        warmup.gifUrl = warmupGifs[`${day.id}:${warmup.id}`] ?? null;
+      }
+    }
     for (const exercise of day.exercises) {
       exercise.sets = Math.min(12, Math.max(1, exercise.sets || 1));
       // Same rule as models.rs: keep prescriptions in ASCII digits.
       exercise.reps = en(exercise.reps ?? "");
+      if (exercise.gifUrl == null) {
+        exercise.gifUrl = exerciseGifs[exercise.id] ?? null;
+      }
       exercise.logs = syncLogs(exercise);
     }
   }

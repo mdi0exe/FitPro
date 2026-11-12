@@ -61,6 +61,9 @@ pub struct WarmupItem {
     pub query: String,
     #[serde(default)]
     pub done: bool,
+    /// Direct `.gif` demo. `None` = never set, `Some("")` = removed by the user.
+    #[serde(default)]
+    pub gif_url: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -226,12 +229,25 @@ impl AppStateData {
         if self.profile.target_weight <= 0.0 {
             self.profile.target_weight = 75.0;
         }
+        let gifs = default_gifs();
         for day in self.days.iter_mut() {
+            let day_id = day.id.clone();
+            for warmup in day.warmups.iter_mut() {
+                if warmup.gif_url.is_none() {
+                    warmup.gif_url = gifs
+                        .warmups
+                        .get(&format!("{day_id}:{}", warmup.id))
+                        .cloned();
+                }
+            }
             for exercise in day.exercises.iter_mut() {
                 exercise.sets = exercise.sets.clamp(1, 12);
                 // Users on a Persian/Android keyboard may type "۱۰-۱۲"; keep the
                 // stored prescription in ASCII digits so increment_reps works.
                 exercise.reps = to_ascii_digits(&exercise.reps);
+                if exercise.gif_url.is_none() {
+                    exercise.gif_url = gifs.exercises.get(&exercise.id).cloned();
+                }
                 exercise.sync_logs();
             }
         }
@@ -373,6 +389,25 @@ pub fn parse_first_number(reps: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
+/// Animated demos shipped with the programme (`src/data/default-gifs.json`).
+///
+/// The same JSON is imported by the frontend, so the two layers cannot drift.
+/// Warm-up ids repeat across days, hence the `"<day-id>:<warmup-id>"` key.
+const DEFAULT_GIFS_JSON: &str = include_str!("../../src/data/default-gifs.json");
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct DefaultGifs {
+    #[serde(default)]
+    exercises: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    warmups: std::collections::HashMap<String, String>,
+}
+
+fn default_gifs() -> &'static DefaultGifs {
+    static CACHE: std::sync::OnceLock<DefaultGifs> = std::sync::OnceLock::new();
+    CACHE.get_or_init(|| serde_json::from_str(DEFAULT_GIFS_JSON).unwrap_or_default())
+}
+
 /// Converts Persian (`۰-۹`) and Arabic-Indic (`٠-٩`) digits to ASCII digits.
 ///
 /// Android keyboards in Persian mode type those glyphs, and every numeric
@@ -470,6 +505,21 @@ mod tests {
         let unique: std::collections::HashSet<&str> =
             state.milestones.iter().map(|m| m.id.as_str()).collect();
         assert_eq!(unique.len(), state.milestones.len());
+    }
+
+    #[test]
+    fn normalize_injects_default_gifs() {
+        let mut state = crate::storage::seed();
+        state.days[0].exercises[0].gif_url = None;
+        state.days[0].warmups[0].gif_url = None;
+        state.normalize();
+
+        assert!(state.days[0].exercises[0].gif_url.is_some());
+        assert!(state.days[0].warmups[0].gif_url.is_some());
+        // An explicitly cleared gif (empty string) must stay cleared.
+        state.days[0].exercises[1].gif_url = Some(String::new());
+        state.normalize();
+        assert_eq!(state.days[0].exercises[1].gif_url.as_deref(), Some(""));
     }
 
     #[test]

@@ -1,5 +1,5 @@
 /**
- * End-to-end checks for the nine review fixes (browser / localStorage backend).
+ * End-to-end checks for the review fixes + the keyboard-free input layer.
  *
  * Usage: node scripts/e2e-fixes.mjs
  */
@@ -50,49 +50,109 @@ await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: "networkidle2" });
 await wait(700);
 
-// ---------------------------------------------------------------- 1. digits
-const rowInputs = await page.$$("[data-row] input");
-await rowInputs[0].click({ clickCount: 3 });
-await rowInputs[0].type("۲۰٫۵");
-await rowInputs[1].click({ clickCount: 3 });
-await rowInputs[1].type("۱۲");
-const checkButton = await page.$("[data-row] button");
-await checkButton.click();
-await wait(500);
+// ------------------------------------------------ 1. steppers, no keyboard
+const inputs = await page.$$("[data-row] input");
+check("set rows have no <input> (no keyboard)", inputs.length === 0, `${inputs.length} inputs`);
+
+const plusButtons = await page.$$('[data-row] button[aria-label="افزایش"]');
+await plusButtons[0].click(); // weight 12.5 → 15
+await plusButtons[0].click(); // → 17.5
+await plusButtons[1].click(); // reps 8 → 9
+await wait(700); // persist() is debounced by 350ms
 
 let saved = await state();
 const firstLog = saved.days[0].exercises[0].logs[0];
 check(
-  "Persian digits parsed in set logger",
-  firstLog.weight === 20.5 && firstLog.reps === 12 && firstLog.done === true,
+  "steppers update weight (2.5) and reps (1)",
+  firstLog.weight === 17.5 && firstLog.reps === 9,
   JSON.stringify(firstLog),
 );
 
-// skip the rest timer
+const displayText = await page.$eval(
+  '[data-row] button[aria-label^="وزنه ست"]',
+  (node) => node.textContent.trim(),
+);
+check("stepper shows Persian digits", /[۰-۹]/.test(displayText), displayText);
+
+// ------------------------------------------------------- 2. quick picker
+const openers = await page.$$('[data-row] button[aria-label^="وزنه ست"]');
+await openers[0].click();
+await wait(400);
+const overlay = await page.$("#overlay-root");
+const modalCount = () =>
+  page.evaluate(() => document.querySelectorAll("#overlay-root > div:not(#rest-timer)").length);
+check("weight picker opens", (await modalCount()) === 1);
+
+await clickByText("۴۰", overlay);
+await wait(200);
+const applied = await clickByText("اعمال برای همه ست‌های این حرکت", overlay);
+check("apply-to-all button present", applied);
+await wait(400);
+await page.keyboard.press("Escape");
+await wait(300);
+
+saved = await state();
+const weights = saved.days[0].exercises[0].logs.map((log) => log.weight);
+check("apply-to-all writes every set", weights.every((w) => w === 40), weights.join(","));
+
+// ---------------------------------------------- 3. check a set + rest timer
+const checkButton = await page.$('[data-row] button[aria-label="تکمیل ست"]');
+await checkButton.click();
+await wait(500);
+const timerVisible = await page.evaluate(() => {
+  const node = document.getElementById("rest-timer");
+  return !!node && !node.classList.contains("hidden");
+});
+check("rest timer starts after a set", timerVisible);
+
+const timerText = await page.$eval("#rest-timer p:nth-of-type(2)", (node) => node.textContent.trim());
+check("rest timer shows Persian clock", /[۰-۹]/.test(timerText) && timerText.includes(":"), timerText);
+
 await clickByText("رد کردن");
 await wait(300);
 
-// --------------------------------------------------------- 2. restart day
+// ------------------------------------------------------------- 4. gifs
+saved = await state();
+check(
+  "exercise gifs injected",
+  (saved.days[0].exercises[0].gifUrl ?? "").includes("fitnessprogramer.com"),
+  saved.days[0].exercises[0].gifUrl,
+);
+check(
+  "warm-up gifs injected",
+  (saved.days[0].warmups[0].gifUrl ?? "").includes(".gif"),
+  saved.days[0].warmups[0].gifUrl,
+);
+
+const imgSrc = await page.$eval("[data-exercise] img", (node) => node.src).catch(() => "");
+check("exercise card renders the gif", imgSrc.includes("fitnessprogramer.com"), imgSrc);
+const referrer = await page.$eval("[data-exercise] img", (node) => node.referrerPolicy).catch(() => "");
+check("gif uses no-referrer", referrer === "no-referrer", referrer);
+
+// ------------------------------------------------------- 5. restart day
 const restart = await page.$('button[aria-label="شروع مجدد این روز"]');
 check("restart-day button appears after progress", restart !== null);
 if (restart) {
+  // The sticky header covers the top of the viewport after scrolling.
+  await restart.evaluate((node) => node.scrollIntoView({ block: "center" }));
+  await wait(300);
   await restart.click();
   await wait(400);
-  const overlay = await page.$("#overlay-root");
-  await clickByText("شروع مجدد", overlay);
-  await wait(500);
+  check("restart dialog opens", (await modalCount()) === 1, `${await modalCount()} overlay(s)`);
+  const confirmed = await clickByText("شروع مجدد", await page.$("#overlay-root"));
+  check("restart dialog confirms", confirmed);
+  await wait(600);
   saved = await state();
   check(
-    "restart clears set ticks but keeps weights",
+    "restart clears ticks but keeps weights",
     saved.days[0].exercises[0].logs.every((log) => log.done === false) &&
-      saved.days[0].exercises[0].logs[0].weight === 20.5,
+      saved.days[0].exercises[0].logs[0].weight === 40,
     JSON.stringify(saved.days[0].exercises[0].logs[0]),
   );
 }
 
-// ------------------------------------------------- 3. warm-ups reset by overload
-const warmupCheck = await page.$$("main button");
-for (const handle of warmupCheck) {
+// ------------------------------------- 6. warm-ups reset by overload
+for (const handle of await page.$$("main button")) {
   const label = await handle.evaluate((node) => node.getAttribute("aria-label") ?? "");
   if (label === "انجام شد") {
     await handle.click();
@@ -101,13 +161,11 @@ for (const handle of warmupCheck) {
 }
 await wait(300);
 saved = await state();
-const warmupWasChecked = saved.days[0].warmups.some((w) => w.done);
-check("warm-up checkbox toggles", warmupWasChecked);
+check("warm-up checkbox toggles", saved.days[0].warmups.some((w) => w.done));
 
 await clickByText("اعمال افزایش وزنه");
 await wait(400);
-const overlay2 = await page.$("#overlay-root");
-await clickByText("اعمال افزایش", overlay2);
+await clickByText("اعمال افزایش", await page.$("#overlay-root"));
 await wait(700);
 saved = await state();
 check(
@@ -116,13 +174,10 @@ check(
   `overloadCount=${saved.overloadCount}`,
 );
 
-// -------------------------------------------------------- 4. milestone ids
 const ids = saved.milestones.map((m) => m.id);
 check("milestone ids are unique", new Set(ids).size === ids.length, ids.join(","));
 
-// ----------------------------------------------------- 5. back closes a modal
-// The floating rest timer can cover the card's action buttons; dismiss it first
-// and invoke the button directly (this check is about the modal/history wiring).
+// ------------------------------------------------- 7. back closes a modal
 await page.evaluate(() => {
   const skip = Array.from(document.querySelectorAll("#rest-timer button")).find((button) =>
     (button.textContent ?? "").includes("رد کردن"),
@@ -134,21 +189,13 @@ await wait(250);
 const gifButton = await page.$("[data-exercise] .btn-icon");
 await gifButton.evaluate((node) => node.click());
 await wait(400);
-const modalsOpen = () =>
-  page.evaluate(() => document.querySelectorAll("#overlay-root > div:not(#rest-timer)").length);
-const opened = await modalsOpen();
-const overlayDebug = await page.evaluate(() =>
-  Array.from(document.getElementById("overlay-root").children).map(
-    (node) => `${node.tagName}.${node.className.split(" ").slice(0, 3).join(".")}`,
-  ),
-);
-check("gif modal opens", opened === 1, `children=[${overlayDebug.join(" | ")}]`);
+check("gif modal opens", (await modalCount()) === 1);
 
 await page.evaluate(() => history.back());
 await wait(500);
-check("Android back closes the modal", (await modalsOpen()) === 0);
+check("Android back closes the modal", (await modalCount()) === 0);
 
-// ------------------------------------------------- 6. back returns to workout
+// -------------------------------------------- 8. back returns to workout
 const navTo = async (index) => {
   const buttons = await page.$$("#nav-slot nav button");
   await buttons[index].click();
@@ -156,15 +203,19 @@ const navTo = async (index) => {
 
 await navTo(2);
 await wait(500);
-const onNutrition = await page.evaluate(() => !document.querySelector("[data-day-count]"));
-check("tab switch works", onNutrition);
+check(
+  "tab switch works",
+  await page.evaluate(() => !document.querySelector("[data-day-count]")),
+);
 
 await page.evaluate(() => history.back());
 await wait(500);
-const backOnWorkout = await page.evaluate(() => !!document.querySelector("[data-day-count]"));
-check("Android back returns to the workout tab", backOnWorkout);
+check(
+  "Android back returns to the workout tab",
+  await page.evaluate(() => !!document.querySelector("[data-day-count]")),
+);
 
-// ------------------------------------------------------------ 7. profile edit
+// ------------------------------------------------------ 9. profile edit
 await navTo(3);
 await wait(500);
 const nameInput = await page.$('main input[type="text"]');
@@ -178,7 +229,7 @@ check("profile name saved", saved.profile.name === "علی", saved.profile.name)
 const greeting = await page.$eval("header h1", (node) => node.textContent.trim());
 check("header greets the new name", greeting.includes("علی"), greeting);
 
-// -------------------------------------------------------------- 8. no errors
+// ------------------------------------------------------------ 10. errors
 console.log("\n--- runtime errors ---");
 console.log(errors.length ? errors.join("\n") : "none");
 

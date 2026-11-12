@@ -2,7 +2,7 @@
 import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { pushTab } from "../lib/navigation";
-import { fa, faDate, faNum, faSigned, isoToday, parseNum } from "../lib/fa";
+import { fa, faDate, faNum, faSigned, isoToday } from "../lib/fa";
 import { logBodyWeight } from "../lib/api";
 import { getActiveTab, getState, requestRender, setActiveTab, setState } from "../lib/store";
 import type { TabId } from "../types";
@@ -107,26 +107,34 @@ export function openWeightSheet(): void {
     ),
   );
 
-  const input = el("input", "field text-lg");
-  input.type = "text";
-  input.inputMode = "decimal";
-  input.autocomplete = "off";
-  input.value = faNum(state.profile.currentWeight, 1);
+  let draft = Math.round(state.profile.currentWeight * 10) / 10;
 
-  const label = el("div", "space-y-1");
-  label.append(el("label", "label", "وزن امروز (کیلوگرم)"), input);
-  body.append(label);
+  const display = el(
+    "p",
+    "text-center text-4xl font-black leading-none tabular-nums text-slate-50",
+    faNum(draft, 1),
+  );
+  const displayWrap = el("div", "rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4");
+  displayWrap.append(display, el("p", "mt-1 text-center text-[10px] text-slate-500", "کیلوگرم"));
+  body.append(displayWrap);
 
-  const quick = el("div", "grid grid-cols-3 gap-2");
-  [-0.5, +0.5, +1].forEach((delta) => {
+  const bump = (delta: number) => {
+    draft = Math.min(300, Math.max(30, Math.round((draft + delta) * 10) / 10));
+    display.textContent = faNum(draft, 1);
+  };
+
+  // Six one-tap steps instead of a keyboard.
+  const quick = el("div", "flex flex-wrap gap-2");
+  [-1, -0.5, -0.1, 0.1, 0.5, 1].forEach((delta) => {
     quick.append(
       btn(
-        "btn-ghost py-2 text-xs",
+        `flex-1 basis-[28%] rounded-xl border py-2 text-xs font-bold transition active:scale-95 ${
+          delta > 0
+            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+            : "border-slate-700 bg-slate-900/70 text-slate-300"
+        }`,
         faSigned(delta),
-        () => {
-          const current = parseNum(input.value) || state.profile.currentWeight;
-          input.value = String(Math.round((current + delta) * 10) / 10);
-        },
+        () => bump(delta),
       ),
     );
   });
@@ -147,7 +155,7 @@ export function openWeightSheet(): void {
   }
 
   const footer = el("div", "grid grid-cols-2 gap-2");
-  const save = btn("btn-primary", "ثبت وزن", () => void submit(input.value, handle.close));
+  const save = btn("btn-primary", "ثبت وزن", () => void submit(draft, handle.close));
   footer.append(save, btn("btn-ghost", "بستن", () => handle.close()));
 
   const handle = openModal({
@@ -158,8 +166,7 @@ export function openWeightSheet(): void {
   });
 }
 
-async function submit(raw: string, close: () => void): Promise<void> {
-  const value = parseNum(raw);
+async function submit(value: number, close: () => void): Promise<void> {
   if (value <= 0) {
     toast("یک عدد معتبر وارد کن.", "error");
     return;

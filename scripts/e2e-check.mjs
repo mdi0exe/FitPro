@@ -55,7 +55,7 @@ const before = await weightChips();
 check("seed weights rendered", before.length > 0, before.slice(0, 3).join(" | "));
 
 // --- 2. log a set ----------------------------------------------------------
-const setButtons = await page.$$("[data-row] button");
+const setButtons = await page.$$('[data-row] button[aria-label="تکمیل ست"]');
 await setButtons[0].click();
 await wait(500);
 const timerVisible = await page.evaluate(() => {
