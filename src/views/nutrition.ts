@@ -6,9 +6,9 @@ import { getState, persist, requestRender, syncWaterChecklist, WATER_GOAL } from
 import {
   beep,
   requestNotificationPermission,
+  softTap,
   startWaterReminder,
   stopWaterReminder,
-  vibrate,
   waterReminder,
 } from "../lib/timer";
 import { progressBar, sectionTitle, toast } from "../components/ui";
@@ -116,8 +116,7 @@ function checklist(): HTMLElement {
       item.done = !item.done;
       persist(0);
       if (item.done) {
-        beep(1, 760, 0.08);
-        vibrate(30);
+        softTap();
       }
       const nowDone = state.diet.items.filter((i) => i.done).length;
       if (nowDone === state.diet.items.length) {
@@ -349,8 +348,7 @@ function setWaterGlasses(value: number): void {
 
   if (next >= WATER_GOAL && previous < WATER_GOAL) {
     toast("💧 ۸ لیوان کامل شد! هیدراته ماندن = پمپ بهتر و ریکاوری سریع‌تر.", "ok");
-    beep(2, 980, 0.12);
-    vibrate([80, 60, 80]);
+    beep(2, 1320, 0.12);
   }
   requestRender();
 }

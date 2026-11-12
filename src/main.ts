@@ -4,7 +4,7 @@ import "./styles.css";
 import { loadState } from "./lib/api";
 import { clear, el, escapeHtml, preserveScroll } from "./lib/dom";
 import { installNavigation } from "./lib/navigation";
-import { notifyWater, startWaterReminder, unlockAudio, waterReminder } from "./lib/timer";
+import { startWaterReminder, unlockAudio, waterAlert, waterReminder } from "./lib/timer";
 import {
   ensureDailyDietReset,
   getActiveTab,
@@ -138,7 +138,8 @@ async function boot(): Promise<void> {
 
     // Water reminder: fire, then re-arm while the toggle is on.
     waterReminder.onDone = () => {
-      notifyWater("💧 وقت نوشیدن آب است", "یک لیوان آب بخور؛ ۷۰٪ حجم عضله آب است.");
+      // Soft droplet chime + light buzz + system notification (never the gym alarm).
+      waterAlert();
       toast("💧 وقت نوشیدن ۱ لیوان آب است! (۷۰٪ حجم عضله آب است)", "info");
       const state = getState();
       if (state.diet.waterReminderEnabled) {

@@ -2,7 +2,7 @@
 import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { daysBetween, fa, faDate, faNum, faReps, firstNumber, isoToday } from "../lib/fa";
-import { beep, cardioTimer, vibrate } from "../lib/timer";
+import { alarm, beep, cardioTimer, chord, softTap, vibrate } from "../lib/timer";
 import { applyProgressiveOverload } from "../lib/api";
 import {
   getState,
@@ -89,8 +89,9 @@ function waterBar(): HTMLElement {
         persist(0);
         if (state.diet.waterGlasses === WATER_GOAL) {
           toast("💧 ۸ لیوان کامل شد! پمپ و ریکاوری بهتر.", "ok");
-          beep(2, 980, 0.12);
-          vibrate([80, 60, 80]);
+          beep(2, 1320, 0.12);
+        } else {
+          softTap();
         }
         requestRender();
       },
@@ -209,8 +210,8 @@ async function runOverload(): Promise<void> {
     const next = await applyProgressiveOverload();
     setState(next);
     toast("چرخه افزایش وزنه اعمال شد. سنگین‌تر بزن! 💪");
-    beep(2, 990, 0.12);
-    vibrate([60, 60, 60]);
+    beep(3, 1480, 0.15);
+    vibrate([200, 80, 200, 80, 300]);
     requestRender();
   } catch (error) {
     toast(error instanceof Error ? error.message : "اعمال افزایش وزنه ناموفق بود.", "error");
@@ -301,8 +302,7 @@ function warmupCard(day: WorkoutDay): HTMLElement {
       item.done = !item.done;
       persist(0);
       if (item.done) {
-        beep(1, 720, 0.08);
-        vibrate(30);
+        softTap();
       }
       const nowDone = day.warmups.filter((w) => w.done).length;
       titles.querySelector("p:last-child")!.textContent = `${fa(nowDone)} از ${fa(total)} مرحله انجام شد`;
@@ -386,8 +386,7 @@ function cardioTimerBlock(): HTMLElement {
 
   cardioTimer.onTick = () => paintCardio();
   cardioTimer.onDone = () => {
-    beep(3, 900, 0.14);
-    vibrate([200, 100, 200]);
+    alarm();
     toast("۵ دقیقه هوازی تمام شد. حالا گرم کردن پویا! 🔥");
     paintCardio();
   };
@@ -662,8 +661,8 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     }`;
 
     if (log.done) {
-      beep(1, 1040, 0.1);
-      vibrate(40);
+      beep(2, 1320, 0.12);
+      vibrate([100, 50, 150]);
       startRest();
     }
     refreshProgress(day, exercise);
@@ -715,6 +714,7 @@ function refreshProgress(day: WorkoutDay, exercise: Exercise): void {
 
   if (exercise.logs.length > 0 && done === exercise.logs.length) {
     toast(`حرکت «${exercise.name}» کامل شد ✅`, "ok");
+    chord();
   }
 }
 

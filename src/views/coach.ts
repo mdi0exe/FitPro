@@ -3,6 +3,7 @@ import { btn, clamp, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { fa, faNum, parseNum } from "../lib/fa";
 import { resetToDefaults, storageMode } from "../lib/api";
+import { alarm, waterAlert } from "../lib/timer";
 import { getState, persist, requestRender, setState } from "../lib/store";
 import type { AppStateData } from "../types";
 import { confirmDialog, sectionTitle, toast } from "../components/ui";
@@ -223,6 +224,23 @@ function settingsCard(): HTMLElement {
 
   const divider = el("div", "divider");
   card.append(divider);
+
+  // Sound check: lets the user verify volume in the gym before relying on it.
+  const soundTests = el("div", "space-y-2");
+  soundTests.append(
+    el("label", "label", "تست صدا و لرزش"),
+    btn("btn-ghost w-full py-2 text-xs", "🔊 تست صدای هشدار استراحت (بلند)", () => {
+      alarm();
+      toast("تست صدای هشدار باشگاه و ویبره قوی انجام شد 💪");
+    }),
+    btn("btn-ghost w-full py-2 text-xs", "💧 تست یادآور آب (ملایم)", () => {
+      waterAlert();
+      toast("تست صدای ملایم و نوتیفیکیشن آب انجام شد 💧");
+    }),
+  );
+  card.append(soundTests);
+
+  card.append(el("div", "divider"));
 
   const info = el("div", "space-y-1 text-[10px] leading-5 text-slate-500");
   info.append(

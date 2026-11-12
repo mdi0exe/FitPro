@@ -7,7 +7,7 @@
 import { btn, el, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { clock, fa } from "../lib/fa";
-import { alarm, restTimer, vibrate } from "../lib/timer";
+import { alarm, restTimer } from "../lib/timer";
 import { getState } from "../lib/store";
 
 const RADIUS = 20;
@@ -89,7 +89,6 @@ export function mountRestTimer(): void {
     }
     if (timeLabel) timeLabel.textContent = "برو!";
     alarm();
-    vibrate([200, 100, 200]);
     hideHandle = window.setTimeout(() => stopRest(), 3200);
   };
 
