@@ -4,10 +4,11 @@ import "./styles.css";
 import { loadState } from "./lib/api";
 import { clear, el, escapeHtml, preserveScroll } from "./lib/dom";
 import { installNavigation } from "./lib/navigation";
-import { unlockAudio } from "./lib/timer";
+import { notifyWater, startWaterReminder, unlockAudio, waterReminder } from "./lib/timer";
 import {
   ensureDailyDietReset,
   getActiveTab,
+  getState,
   initState,
   installLifecycleFlush,
   persist,
@@ -134,6 +135,21 @@ async function boot(): Promise<void> {
     });
 
     renderView();
+
+    // Water reminder: fire, then re-arm while the toggle is on.
+    waterReminder.onDone = () => {
+      notifyWater("💧 وقت نوشیدن آب است", "یک لیوان آب بخور؛ ۷۰٪ حجم عضله آب است.");
+      toast("💧 وقت نوشیدن ۱ لیوان آب است! (۷۰٪ حجم عضله آب است)", "info");
+      const state = getState();
+      if (state.diet.waterReminderEnabled) {
+        waterReminder.reset(state.diet.waterReminderMinutes * 60);
+        waterReminder.start();
+      }
+    };
+
+    if (getState().diet.waterReminderEnabled) {
+      startWaterReminder(getState().diet.waterReminderMinutes);
+    }
 
     // Android requires a user gesture before audio playback is allowed.
     const unlock = () => {

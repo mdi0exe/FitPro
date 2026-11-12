@@ -174,3 +174,43 @@ export function vibrate(pattern: number | number[] = [200, 100, 200]): void {
 
 export const restTimer = new CountdownTimer(90);
 export const cardioTimer = new CountdownTimer(300);
+export const waterReminder = new CountdownTimer(60 * 60);
+
+/** Arms (or re-arms) the repeating water reminder. */
+export function startWaterReminder(minutes: number): void {
+  const safe = Math.min(240, Math.max(15, Math.round(minutes)));
+  waterReminder.reset(safe * 60);
+  waterReminder.start();
+}
+
+export function stopWaterReminder(): void {
+  waterReminder.pause();
+  waterReminder.reset(waterReminder.total);
+}
+
+/**
+ * System notification when the user granted permission, plus an in-app beep and
+ * vibration — the WebView on Android may not support Notification at all.
+ */
+export function notifyWater(title: string, body: string): void {
+  try {
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
+  } catch (error) {
+    console.warn("notification unavailable", error);
+  }
+  beep(2, 880, 0.14);
+  vibrate([150, 80, 150]);
+}
+
+/** Asks for notification permission (no-op when unsupported/denied). */
+export function requestNotificationPermission(): void {
+  try {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      void Notification.requestPermission();
+    }
+  } catch {
+    /* unsupported — the in-app toast still works */
+  }
+}

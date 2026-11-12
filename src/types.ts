@@ -68,6 +68,10 @@ export interface DietItem {
 export interface DietState {
   items: DietItem[];
   lastResetDate: string;
+  /** Glasses of water drunk today. */
+  waterGlasses: number;
+  waterReminderEnabled: boolean;
+  waterReminderMinutes: number;
 }
 
 export type MilestoneKind = "overload" | "weight" | "system" | "goal";

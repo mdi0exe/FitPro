@@ -103,11 +103,15 @@ check("exercise name saved", title.includes("تست"), title);
 const navButtons = await page.$$("#nav-slot nav button");
 await navButtons[2].click();
 await wait(500);
-const dietRows = await page.$$("[data-x], main button");
-await clickByText("main button", "تخم‌مرغ");
-await wait(400);
-const dietPercent = await page.$eval("main .card span.text-sm", (n) => n.textContent.trim()).catch(() => "");
-check("nutrition item toggles", dietPercent.includes("٪") || dietPercent.length > 0, dietPercent);
+const dietToggled = await clickByText("main button", "صبحانه سلف");
+await wait(500);
+const dietDone = await page.evaluate(
+  () =>
+    JSON.parse(localStorage.getItem("persian-hypertrophy::state::v1")).diet.items.filter(
+      (item) => item.done,
+    ).length,
+);
+check("nutrition item toggles", dietToggled && dietDone === 1, `${dietDone} done`);
 
 // --- 6. persistence -------------------------------------------------------
 const stored = await page.evaluate(() => {

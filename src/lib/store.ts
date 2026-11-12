@@ -110,6 +110,7 @@ export function ensureDailyDietReset(): boolean {
   if (current.diet.lastResetDate === today) return false;
   current.diet.lastResetDate = today;
   for (const item of current.diet.items) item.done = false;
+  current.diet.waterGlasses = 0;
   return true;
 }
 
@@ -117,6 +118,20 @@ export function ensureDailyDietReset(): boolean {
 // so they must flush any debounced change first — otherwise Rust sees stale data
 // and the late timer would then overwrite the fresh file.
 setFlushHook(flushNow);
+
+/** Daily water goal (glasses). */
+export const WATER_GOAL = 8;
+
+/**
+ * Keeps the "drink 8-10 glasses" checklist row in sync with the water counter.
+ * Called whenever `waterGlasses` changes.
+ */
+export function syncWaterChecklist(): void {
+  const current = getState();
+  const item = current.diet.items.find((entry) => entry.id === "diet-4");
+  if (!item) return;
+  item.done = current.diet.waterGlasses >= WATER_GOAL;
+}
 
 /** Flush pending writes when the app is backgrounded (Android included). */
 export function installLifecycleFlush(): void {

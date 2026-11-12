@@ -10,6 +10,8 @@ import {
   persist,
   requestRender,
   setState,
+  syncWaterChecklist,
+  WATER_GOAL,
 } from "../lib/store";
 import type { Exercise, SetLog, WorkoutDay } from "../types";
 import { confirmDialog, openModal, progressBar, toast } from "../components/ui";
@@ -32,6 +34,7 @@ export function renderWorkout(): HTMLElement {
   view.append(dayStrip());
   if (!day) return view;
 
+  view.append(waterBar());
   view.append(overloadBanner());
   view.append(warmupCard(day));
   view.append(daySummary(day));
@@ -49,6 +52,53 @@ export function renderWorkout(): HTMLElement {
   );
 
   return view;
+}
+
+/** Compact water counter so you can log glasses mid-workout. */
+function waterBar(): HTMLElement {
+  const state = getState();
+  const glasses = state.diet.waterGlasses;
+  const reachedGoal = glasses >= WATER_GOAL;
+
+  const row = el(
+    "div",
+    `flex items-center gap-2 rounded-2xl border px-3 py-2 ${
+      reachedGoal ? "border-emerald-500/30 bg-emerald-500/10" : "border-cyan-500/20 bg-cyan-500/5"
+    }`,
+  );
+
+  const drop = el("span", reachedGoal ? "text-emerald-300" : "text-cyan-300");
+  drop.append(svgIcon(icons.drop, "h-4 w-4"));
+
+  row.append(
+    drop,
+    el(
+      "span",
+      "min-w-0 flex-1 text-[11px] font-bold text-slate-200",
+      `آب امروز: ${fa(glasses)} از ${fa(WATER_GOAL)} لیوان`,
+    ),
+  );
+
+  row.append(
+    btn(
+      "shrink-0 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-[10px] font-bold text-cyan-200 transition active:scale-95",
+      "💧 ‎+۱ لیوان",
+      () => {
+        state.diet.waterGlasses = Math.min(20, state.diet.waterGlasses + 1);
+        syncWaterChecklist();
+        persist(0);
+        if (state.diet.waterGlasses === WATER_GOAL) {
+          toast("💧 ۸ لیوان کامل شد! پمپ و ریکاوری بهتر.", "ok");
+          beep(2, 980, 0.12);
+          vibrate([80, 60, 80]);
+        }
+        requestRender();
+      },
+      { "aria-label": "افزودن یک لیوان آب" },
+    ),
+  );
+
+  return row;
 }
 
 // ---------------------------------------------------------------------------

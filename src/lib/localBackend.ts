@@ -22,6 +22,23 @@ export function normalizeState(input: AppStateData): AppStateData {
   if (!state.restSeconds || state.restSeconds < 15 || state.restSeconds > 600) {
     state.restSeconds = 90;
   }
+  // Same migration as models.rs: old installs carry the 6-item grocery list.
+  const seedDiet = createSeedState().diet;
+  if (!state.diet) {
+    state.diet = seedDiet;
+  } else {
+    const items = state.diet.items;
+    if (!Array.isArray(items) || items.length !== 5 || items.some((item) => item.text.includes("تخم‌مرغ"))) {
+      state.diet.items = seedDiet.items;
+    }
+    state.diet.waterGlasses = Math.min(20, Math.max(0, state.diet.waterGlasses ?? 0));
+    state.diet.waterReminderEnabled = Boolean(state.diet.waterReminderEnabled);
+    const minutes = state.diet.waterReminderMinutes;
+    if (!minutes || minutes < 15 || minutes > 240) {
+      state.diet.waterReminderMinutes = 60;
+    }
+  }
+
   const exerciseGifs = defaultGifs.exercises as Record<string, string>;
   const warmupGifs = defaultGifs.warmups as Record<string, string>;
 

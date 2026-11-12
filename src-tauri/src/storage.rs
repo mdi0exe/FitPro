@@ -11,8 +11,8 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
 use crate::models::{
-    AppStateData, DietItem, DietState, Exercise, Milestone, UserProfile, WarmupItem, WeightEntry,
-    WorkoutDay, DEFAULT_REST_SECONDS, STATE_VERSION,
+    default_diet_items, default_water_interval, AppStateData, DietState, Exercise, Milestone,
+    UserProfile, WarmupItem, WeightEntry, WorkoutDay, DEFAULT_REST_SECONDS, STATE_VERSION,
 };
 use crate::timeutil;
 
@@ -478,45 +478,12 @@ fn seed_days() -> Vec<WorkoutDay> {
 }
 
 fn seed_diet() -> DietState {
-    let items = vec![
-        (
-            "۳ تا ۴ عدد تخم‌مرغ کامل (ارزان‌ترین بمب پروتئین)",
-            "حدود ۲۰ گرم پروتئین با کیفیت بالا و کولین",
-        ),
-        (
-            "وعده کامل سلف دانشگاه (با برنج و نان اضافه)",
-            "کربوهیدرات کافی برای پر شدن ذخایر گلیکوژن",
-        ),
-        (
-            "۲ عدد سیب‌زمینی آب‌پز بعد از تمرین",
-            "کربوهیدرات سریع برای ریکاوری و بازسازی عضله",
-        ),
-        (
-            "۱ مشت بادام‌زمینی فله‌ای (بمب کالری ارزان)",
-            "حدود ۲۵۰ کالری و چربی مفید؛ کلید افزایش وزن",
-        ),
-        (
-            "۱ کاسه عدسی یا خوراک سویا",
-            "پروتئین گیاهی ارزان همراه با فیبر",
-        ),
-        (
-            "حداقل ۷ الی ۸ ساعت خواب شبانه (ترشح هورمون رشد)",
-            "بیشترین ترشح هورمون رشد در خواب عمیق اتفاق می‌افتد",
-        ),
-    ];
-
     DietState {
-        items: items
-            .into_iter()
-            .enumerate()
-            .map(|(index, (text, hint))| DietItem {
-                id: format!("diet-{}", index + 1),
-                text: text.to_string(),
-                hint: hint.to_string(),
-                done: false,
-            })
-            .collect(),
+        items: default_diet_items(),
         last_reset_date: timeutil::today_iso(),
+        water_glasses: 0,
+        water_reminder_enabled: false,
+        water_reminder_minutes: default_water_interval(),
     }
 }
 

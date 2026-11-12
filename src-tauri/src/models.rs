@@ -43,7 +43,7 @@ impl Default for UserProfile {
             current_weight: 65.0,
             target_weight: 75.0,
             goal: "افزایش حجم خشک (Lean Bulk)".to_string(),
-            training_window: "۴ عصر تا ۷ شب".to_string(),
+            training_window: "۱٫۵ ساعت قبل از شام سلف".to_string(),
         }
     }
 }
@@ -181,6 +181,55 @@ pub struct DietState {
     pub items: Vec<DietItem>,
     /// ISO date of the last daily reset.
     pub last_reset_date: String,
+    /// Glasses of water drunk today (0-20).
+    #[serde(default)]
+    pub water_glasses: u32,
+    /// Smart reminder toggle.
+    #[serde(default)]
+    pub water_reminder_enabled: bool,
+    /// Reminder interval in minutes.
+    #[serde(default = "default_water_interval")]
+    pub water_reminder_minutes: u32,
+}
+
+/// Default smart-reminder interval (minutes).
+pub fn default_water_interval() -> u32 {
+    60
+}
+
+/// The 3-meal university cafeteria plan (no snacks, no extra groceries).
+pub fn default_diet_items() -> Vec<DietItem> {
+    [
+        (
+            "صبحانه سلف: املت دانشگاه + نان کامل",
+            "حدود ۱۲ گرم پروتئین و انرژی صبحگاهی",
+        ),
+        (
+            "ناهار سلف آزاد: چلو جوجه کباب یا چلو مرغ کامل تا آخر برنج",
+            "حدود ۴۵ گرم پروتئین و کربوهیدرات کافی برای پر شدن ذخایر گلیکوژن",
+        ),
+        (
+            "شام سلف آزاد (بلافاصله بعد از باشگاه): خوراک مرغ، چلو جوجه یا برگر",
+            "حدود ۴۰ گرم پروتئین — به عنوان وعده ریکاوری بعد تمرین!",
+        ),
+        (
+            "نوشیدن حداقل ۸ تا ۱۰ لیوان آب در طول روز و در باشگاه",
+            "۷۰٪ حجم عضله آب است! هیدراته ماندن برای پمپ عضلانی و ریکاوری حیاتی است",
+        ),
+        (
+            "خواب شبانه ۷ تا ۸ ساعت برای ترشح هورمون رشد",
+            "بیشترین ترشح هورمون رشد و عضله‌سازی در خواب عمیق اتفاق می‌افتد",
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, (text, hint))| DietItem {
+        id: format!("diet-{}", index + 1),
+        text: text.to_string(),
+        hint: hint.to_string(),
+        done: false,
+    })
+    .collect()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -229,6 +278,22 @@ impl AppStateData {
         if self.profile.target_weight <= 0.0 {
             self.profile.target_weight = 75.0;
         }
+        // Older installs carry the 6-item grocery list; swap it for the 3-meal
+        // cafeteria plan without asking the user to reset anything.
+        let legacy_diet = self.diet.items.len() != 5
+            || self
+                .diet
+                .items
+                .iter()
+                .any(|item| item.text.contains("تخم‌مرغ"));
+        if legacy_diet {
+            self.diet.items = default_diet_items();
+        }
+        self.diet.water_glasses = self.diet.water_glasses.min(20);
+        if self.diet.water_reminder_minutes < 15 || self.diet.water_reminder_minutes > 240 {
+            self.diet.water_reminder_minutes = default_water_interval();
+        }
+
         let gifs = default_gifs();
         for day in self.days.iter_mut() {
             let day_id = day.id.clone();
@@ -492,6 +557,9 @@ mod tests {
             diet: DietState {
                 items: Vec::new(),
                 last_reset_date: String::new(),
+                water_glasses: 0,
+                water_reminder_enabled: false,
+                water_reminder_minutes: default_water_interval(),
             },
             milestones: Vec::new(),
             last_overload_date: String::new(),
@@ -520,6 +588,23 @@ mod tests {
         state.days[0].exercises[1].gif_url = Some(String::new());
         state.normalize();
         assert_eq!(state.days[0].exercises[1].gif_url.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn legacy_diet_is_migrated_to_cafeteria_plan() {
+        let mut state = crate::storage::seed();
+        state.diet.items = vec![DietItem {
+            id: "diet-1".to_string(),
+            text: "۳ تا ۴ عدد تخم‌مرغ کامل (ارزان‌ترین بمب پروتئین)".to_string(),
+            hint: String::new(),
+            done: true,
+        }];
+        state.normalize();
+
+        assert_eq!(state.diet.items.len(), 5);
+        assert!(state.diet.items[0].text.contains("صبحانه سلف"));
+        assert!(state.diet.items.iter().all(|item| !item.done));
+        assert_eq!(state.diet.water_reminder_minutes, 60);
     }
 
     #[test]
