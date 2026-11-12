@@ -421,6 +421,7 @@ export function createSeedState(): AppStateData {
       waterGlasses: 0,
       waterReminderEnabled: false,
       waterReminderMinutes: 60,
+      waterReminderNextAt: 0,
     },
     milestones: [
       {

@@ -484,6 +484,7 @@ fn seed_diet() -> DietState {
         water_glasses: 0,
         water_reminder_enabled: false,
         water_reminder_minutes: default_water_interval(),
+        water_reminder_next_at: 0,
     }
 }
 

@@ -7,7 +7,9 @@
  */
 import {
   Importance,
+  Schedule,
   Visibility,
+  cancel,
   createChannel,
   isPermissionGranted,
   requestPermission,
@@ -88,13 +90,22 @@ async function canPost(): Promise<boolean> {
  * Never prompts: call `ensureNotificationPermission()` from a user gesture
  * (the water-reminder toggle or the settings test button) first.
  */
-export async function pushSystemNotification(title: string, body: string): Promise<void> {
+export async function pushSystemNotification(
+  title: string,
+  body: string,
+  id?: number,
+): Promise<void> {
   if (!(await canPost())) return;
 
   if (isTauri()) {
     try {
       await ensureChannel();
-      sendNotification({ title, body, channelId: CHANNEL_ID });
+      sendNotification({
+        title,
+        body,
+        channelId: CHANNEL_ID,
+        ...(id === undefined ? {} : { id }),
+      });
       return;
     } catch (error) {
       console.warn("native notification failed", error);
@@ -102,8 +113,49 @@ export async function pushSystemNotification(title: string, body: string): Promi
   }
 
   try {
-    new Notification(title, { body });
+    // `tag` gives the same replace-instead-of-duplicate behaviour as `id`.
+    new Notification(title, { body, tag: id === undefined ? undefined : `fitpro-${id}` });
   } catch {
     /* unsupported browser — the in-app toast still shows */
+  }
+}
+
+/** Fixed id so an immediate alert replaces its scheduled twin. */
+export const WATER_NOTIFICATION_ID = 7701;
+
+/**
+ * Registers a native OS alarm at `nextAtMs`.
+ *
+ * This is what keeps the reminder working while the app is closed: the deadline
+ * is handed to Android's AlarmManager instead of a JS timer.
+ */
+export async function scheduleWaterNotificationAt(nextAtMs: number): Promise<void> {
+  if (!isTauri() || !Number.isFinite(nextAtMs) || nextAtMs <= Date.now() + 1000) return;
+  // Never prompt here — scheduling also runs on boot.
+  if (!(await canPost())) return;
+
+  try {
+    await ensureChannel();
+    await cancel([WATER_NOTIFICATION_ID]).catch(() => undefined);
+    sendNotification({
+      id: WATER_NOTIFICATION_ID,
+      channelId: CHANNEL_ID,
+      title: "💧 وقت نوشیدن آب است!",
+      body: "۱ لیوان آب بنوش (۷۰٪ حجم عضله آب است و برای ریکاوری حیاتی است).",
+      // `allowWhileIdle` keeps Doze from swallowing the alarm.
+      schedule: Schedule.at(new Date(nextAtMs), false, true),
+    });
+  } catch (error) {
+    console.warn("scheduled notification unavailable", error);
+  }
+}
+
+/** Drops the pending OS alarm (reminder disabled or already fired). */
+export async function cancelScheduledWaterNotification(): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    await cancel([WATER_NOTIFICATION_ID]);
+  } catch {
+    /* nothing scheduled */
   }
 }

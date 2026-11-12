@@ -72,6 +72,11 @@ export interface DietState {
   waterGlasses: number;
   waterReminderEnabled: boolean;
   waterReminderMinutes: number;
+  /**
+   * Unix timestamp (ms) of the next reminder; `0` when no deadline is set.
+   * Persisted so closing the app resumes the same countdown.
+   */
+  waterReminderNextAt: number;
 }
 
 export type MilestoneKind = "overload" | "weight" | "system" | "goal";

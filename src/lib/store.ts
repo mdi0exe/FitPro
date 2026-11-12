@@ -117,6 +117,8 @@ export function ensureDailyDietReset(): boolean {
   current.diet.lastResetDate = today;
   for (const item of current.diet.items) item.done = false;
   current.diet.waterGlasses = 0;
+  // `waterReminderNextAt` is deliberately untouched: the reminder cycle has to
+  // survive midnight (and app restarts) instead of starting over.
   return true;
 }
 

@@ -161,6 +161,92 @@ await wait(900);
 saved = await state();
 check("new day resets the water counter", saved.diet.waterGlasses === 0, String(saved.diet.waterGlasses));
 
+// ------------------------------- 6. persistent reminder across restarts
+const goNutrition = async () => {
+  const nav = await page.$$("#nav-slot nav button");
+  await nav[2].click();
+  await wait(600);
+};
+
+/** Seconds left, parsed from the Persian countdown text. */
+const countdownSeconds = () =>
+  page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll("p")).find((p) =>
+      (p.textContent ?? "").includes("یادآوری بعدی"),
+    );
+    const text = (node?.textContent ?? "").replace(/[۰-۹]/g, (d) =>
+      String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)),
+    );
+    const match = /(\d+):(\d+)/.exec(text);
+    return match ? Number(match[1]) * 60 + Number(match[2]) : -1;
+  });
+
+await goNutrition();
+saved = await state();
+const deadline1 = saved.diet.waterReminderNextAt;
+check("reminder stores an absolute deadline", deadline1 > Date.now(), `${deadline1} vs ${Date.now()}`);
+check(
+  "deadline is ~45 minutes ahead",
+  deadline1 > Date.now() + 43 * 60_000 && deadline1 <= Date.now() + 45 * 60_000,
+  String(Math.round((deadline1 - Date.now()) / 60_000)),
+);
+
+const before = await countdownSeconds();
+check("countdown reflects the deadline", before > 43 * 60 && before <= 45 * 60, `${before}s`);
+
+await reloadApp();
+await wait(900);
+await goNutrition();
+saved = await state();
+const deadline2 = saved.diet.waterReminderNextAt;
+check("deadline survives a restart unchanged", deadline2 === deadline1, `${deadline1} -> ${deadline2}`);
+
+const after = await countdownSeconds();
+check("countdown resumes instead of resetting", after > 0 && after <= before, `${before}s -> ${after}s`);
+
+// Expired while the app was closed: the next boot must fire once and advance.
+await page.evaluate(() => {
+  const raw = JSON.parse(localStorage.getItem("persian-hypertrophy::state::v1"));
+  raw.diet.waterReminderEnabled = true;
+  raw.diet.waterReminderNextAt = Date.now() - 5_000;
+  localStorage.setItem("persian-hypertrophy::state::v1", JSON.stringify(raw));
+  localStorage.setItem("persian-hypertrophy::water-next-at", String(Date.now() - 5_000));
+
+  const original = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (key, value) {
+    if (key === "persian-hypertrophy::state::v1") return;
+    return original.call(this, key, value);
+  };
+});
+await reloadApp();
+await wait(1400);
+saved = await state();
+check(
+  "expired reminder advances to the next cycle",
+  saved.diet.waterReminderNextAt > Date.now(),
+  `${saved.diet.waterReminderNextAt} vs ${Date.now()}`,
+);
+
+// A new calendar day must not touch the reminder deadline.
+const deadlineBeforeMidnight = saved.diet.waterReminderNextAt;
+await page.evaluate(() => {
+  const raw = JSON.parse(localStorage.getItem("persian-hypertrophy::state::v1"));
+  raw.diet.lastResetDate = "2020-01-01";
+  raw.diet.waterGlasses = 4;
+  localStorage.setItem("persian-hypertrophy::state::v1", JSON.stringify(raw));
+
+  const original = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (key, value) {
+    if (key === "persian-hypertrophy::state::v1") return;
+    return original.call(this, key, value);
+  };
+});
+await reloadApp();
+await wait(900);
+saved = await state();
+check("new day keeps the reminder deadline", saved.diet.waterReminderNextAt === deadlineBeforeMidnight, `${deadlineBeforeMidnight} -> ${saved.diet.waterReminderNextAt}`);
+check("new day still clears the glasses", saved.diet.waterGlasses === 0, String(saved.diet.waterGlasses));
+
 console.log("\n--- runtime errors ---");
 console.log(errors.length ? errors.join("\n") : "none");
 

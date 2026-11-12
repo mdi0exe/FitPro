@@ -43,6 +43,12 @@ export function normalizeState(input: AppStateData): AppStateData {
     if (!minutes || minutes < 15 || minutes > 240) {
       state.diet.waterReminderMinutes = 60;
     }
+    // Same rule as models.rs: a disabled reminder keeps no deadline.
+    const nextAt = Number(state.diet.waterReminderNextAt);
+    state.diet.waterReminderNextAt =
+      !state.diet.waterReminderEnabled || !Number.isFinite(nextAt) || nextAt < 0
+        ? 0
+        : Math.trunc(nextAt);
   }
 
   const exerciseGifs = defaultGifs.exercises as Record<string, string>;

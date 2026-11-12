@@ -103,7 +103,13 @@ export class CountdownTimer {
 // (or Web Audio is throttled), an HTMLAudioElement fallback still routes the
 // same file through the hardware media channel. No oscillators, no WAV synth.
 
-import { pushSystemNotification } from "./notify";
+import { getState, persist } from "./store";
+import {
+  WATER_NOTIFICATION_ID,
+  cancelScheduledWaterNotification,
+  pushSystemNotification,
+  scheduleWaterNotificationAt,
+} from "./notify";
 
 type SoundKey = "alarm" | "success" | "water" | "tap";
 
@@ -292,26 +298,214 @@ export function vibrate(pattern: number | number[] = [200, 100, 200]): void {
 
 export const restTimer = new CountdownTimer(90);
 export const cardioTimer = new CountdownTimer(300);
-export const waterReminder = new CountdownTimer(60 * 60);
 
-/** Arms (or re-arms) the repeating water reminder. */
-export function startWaterReminder(minutes: number): void {
-  const safe = Math.min(240, Math.max(15, Math.round(minutes)));
-  waterReminder.reset(safe * 60);
-  waterReminder.start();
+/** Water notification (shared id so an alert replaces its scheduled twin). */
+export function notifyWater(title: string, body: string): void {
+  void pushSystemNotification(title, body, WATER_NOTIFICATION_ID);
 }
 
+// ---------------------------------------------------------------------------
+// Persistent water reminder
+// ---------------------------------------------------------------------------
+// The deadline lives in `diet.waterReminderNextAt`, which is written to
+// gym_state.json (or localStorage in the browser), so closing the app pauses the
+// countdown instead of restarting it. A native OS alarm is registered for the
+// same instant, which keeps the reminder working while the app is closed.
+
+const WATER_MIRROR_KEY = "persian-hypertrophy::water-next-at";
+
+/** State first, synchronous localStorage mirror as the crash-safe fallback. */
+function readWaterNextAt(): number {
+  try {
+    const fromState = getState().diet.waterReminderNextAt;
+    if (Number.isFinite(fromState) && fromState > 0) return fromState;
+  } catch {
+    /* state not ready yet */
+  }
+  try {
+    const parsed = Number(window.localStorage.getItem(WATER_MIRROR_KEY) ?? "0");
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeWaterNextAt(nextAt: number): void {
+  const value = Number.isFinite(nextAt) && nextAt > 0 ? Math.trunc(nextAt) : 0;
+  try {
+    getState().diet.waterReminderNextAt = value;
+  } catch {
+    /* state not ready */
+  }
+  // Written synchronously: survives a kill before the debounced save lands.
+  try {
+    if (value > 0) window.localStorage.setItem(WATER_MIRROR_KEY, String(value));
+    else window.localStorage.removeItem(WATER_MIRROR_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** Interval in seconds, clamped to the same 15..240 minutes as the UI. */
+export function getWaterIntervalSeconds(): number {
+  try {
+    const minutes = getState().diet.waterReminderMinutes || 60;
+    return Math.min(240, Math.max(15, Math.round(minutes))) * 60;
+  } catch {
+    return 3600;
+  }
+}
+
+/** Seconds until the next reminder, derived from the persisted deadline. */
+export function getWaterRemainingSeconds(): number {
+  try {
+    if (!getState().diet.waterReminderEnabled) return 0;
+  } catch {
+    return 0;
+  }
+  const nextAt = readWaterNextAt();
+  if (nextAt <= 0) return getWaterIntervalSeconds();
+  return Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
+}
+
+let waterTickListener: ((remainingSec: number, totalSec: number) => void) | null = null;
+
+/**
+ * Single-slot tick listener: the nutrition card re-registers on every render,
+ * so a growing set of listeners would leak detached nodes.
+ */
+export function onWaterTimerTick(
+  listener: ((remainingSec: number, totalSec: number) => void) | null,
+): void {
+  waterTickListener = listener;
+}
+
+let waterLoop: number | null = null;
+
+function stopWaterLoop(): void {
+  if (waterLoop !== null) {
+    window.clearInterval(waterLoop);
+    waterLoop = null;
+  }
+}
+
+/** Alerts once, then advances the deadline to the next full interval. */
+function fireWaterReminder(advancedTo: number): void {
+  writeWaterNextAt(advancedTo);
+  persist(0);
+  void (async () => {
+    // Drop the pending OS alarm first so the alert is not duplicated, then
+    // register the next one.
+    await cancelScheduledWaterNotification();
+    waterAlert();
+    await scheduleWaterNotificationAt(advancedTo);
+  })();
+}
+
+function tickWater(): void {
+  let diet;
+  try {
+    diet = getState().diet;
+  } catch {
+    return;
+  }
+  if (!diet.waterReminderEnabled) {
+    stopWaterLoop();
+    return;
+  }
+
+  const totalSec = getWaterIntervalSeconds();
+  const nextAt = readWaterNextAt();
+  const now = Date.now();
+
+  if (nextAt > 0 && nextAt <= now) {
+    // The deadline passed while the app was closed or backgrounded.
+    fireWaterReminder(now + totalSec * 1000);
+    waterTickListener?.(totalSec, totalSec);
+    return;
+  }
+
+  waterTickListener?.(Math.max(0, Math.ceil((nextAt - now) / 1000)), totalSec);
+}
+
+function ensureWaterLoopRunning(): void {
+  stopWaterLoop();
+  tickWater();
+  waterLoop = window.setInterval(tickWater, 1000);
+}
+
+/** Starts a brand-new cycle. Only called from an explicit user action. */
+export function startNewWaterReminderCycle(minutes?: number): void {
+  let diet;
+  try {
+    diet = getState().diet;
+  } catch {
+    return;
+  }
+
+  const mins = Math.min(
+    240,
+    Math.max(15, Math.round(minutes ?? diet.waterReminderMinutes ?? 60)),
+  );
+  const nextAt = Date.now() + mins * 60_000;
+
+  diet.waterReminderEnabled = true;
+  diet.waterReminderMinutes = mins;
+  writeWaterNextAt(nextAt);
+  persist(0);
+  void scheduleWaterNotificationAt(nextAt);
+  ensureWaterLoopRunning();
+}
+
+/** Turns the reminder off and clears the deadline plus any pending OS alarm. */
 export function stopWaterReminder(): void {
-  waterReminder.pause();
-  waterReminder.reset(waterReminder.total);
+  stopWaterLoop();
+  try {
+    const diet = getState().diet;
+    diet.waterReminderEnabled = false;
+    writeWaterNextAt(0);
+    persist(0);
+  } catch {
+    /* state not ready */
+  }
+  void cancelScheduledWaterNotification();
 }
 
 /**
- * System notification when the user granted permission, plus an in-app beep and
- * vibration — the WebView on Android may not support Notification at all.
+ * Resumes the countdown from the saved deadline without resetting it.
+ * Call on boot and whenever the app becomes visible again.
  */
-export function notifyWater(title: string, body: string): void {
-  // Native status-bar notification on Android, Web Notification in a browser.
-  // No sound/vibration here: the caller decides (waterAlert stays soft).
-  void pushSystemNotification(title, body);
+export function restoreWaterReminderOnBoot(): void {
+  let diet;
+  try {
+    diet = getState().diet;
+  } catch {
+    return;
+  }
+
+  if (!diet.waterReminderEnabled) {
+    stopWaterLoop();
+    return;
+  }
+
+  const totalSec = getWaterIntervalSeconds();
+  const now = Date.now();
+  const nextAt = readWaterNextAt();
+
+  if (nextAt <= 0) {
+    // Enabled by an older build that had no deadline: start from now once.
+    const fresh = now + totalSec * 1000;
+    writeWaterNextAt(fresh);
+    persist(0);
+    void scheduleWaterNotificationAt(fresh);
+  } else if (nextAt <= now) {
+    // Expired while the app was closed: alert once, then continue.
+    fireWaterReminder(now + totalSec * 1000);
+  } else {
+    // Still in the future: keep the exact deadline, re-arm the OS alarm.
+    writeWaterNextAt(nextAt);
+    void scheduleWaterNotificationAt(nextAt);
+  }
+
+  ensureWaterLoopRunning();
 }

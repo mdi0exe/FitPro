@@ -190,6 +190,10 @@ pub struct DietState {
     /// Reminder interval in minutes.
     #[serde(default = "default_water_interval")]
     pub water_reminder_minutes: u32,
+    /// Unix timestamp (ms) of the next reminder. 0 = no deadline yet.
+    /// Persisted so closing the app never restarts the countdown.
+    #[serde(default)]
+    pub water_reminder_next_at: i64,
 }
 
 /// Default smart-reminder interval (minutes).
@@ -335,6 +339,10 @@ impl AppStateData {
         self.diet.water_glasses = self.diet.water_glasses.min(20);
         if self.diet.water_reminder_minutes < 15 || self.diet.water_reminder_minutes > 240 {
             self.diet.water_reminder_minutes = default_water_interval();
+        }
+        // A disabled reminder carries no deadline; a negative one is junk.
+        if !self.diet.water_reminder_enabled || self.diet.water_reminder_next_at < 0 {
+            self.diet.water_reminder_next_at = 0;
         }
 
         let gifs = default_gifs();
@@ -603,6 +611,7 @@ mod tests {
                 water_glasses: 0,
                 water_reminder_enabled: false,
                 water_reminder_minutes: default_water_interval(),
+                water_reminder_next_at: 0,
             },
             milestones: Vec::new(),
             last_overload_date: String::new(),
@@ -676,6 +685,35 @@ mod tests {
             .activity_history
             .windows(2)
             .all(|pair| pair[0].date >= pair[1].date));
+    }
+
+    #[test]
+    fn legacy_diet_without_next_at_loads() {
+        // Saves written before the persistent timer have no waterReminderNextAt.
+        let mut value = serde_json::to_value(crate::storage::seed()).unwrap();
+        value["diet"]
+            .as_object_mut()
+            .unwrap()
+            .remove("waterReminderNextAt");
+        let mut state: AppStateData = serde_json::from_value(value).unwrap();
+
+        assert_eq!(state.diet.water_reminder_next_at, 0);
+        state.normalize();
+        assert_eq!(state.diet.water_reminder_next_at, 0);
+    }
+
+    #[test]
+    fn disabled_reminder_drops_stale_deadline() {
+        let mut state = crate::storage::seed();
+        state.diet.water_reminder_enabled = false;
+        state.diet.water_reminder_next_at = 1_900_000_000_000;
+        state.normalize();
+        assert_eq!(state.diet.water_reminder_next_at, 0);
+
+        state.diet.water_reminder_enabled = true;
+        state.diet.water_reminder_next_at = 1_900_000_000_000;
+        state.normalize();
+        assert_eq!(state.diet.water_reminder_next_at, 1_900_000_000_000);
     }
 
     #[test]

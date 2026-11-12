@@ -6,10 +6,11 @@ import { getState, persist, requestRender, syncWaterChecklist, WATER_GOAL } from
 import { ensureNotificationPermission } from "../lib/notify";
 import {
   beep,
+  getWaterRemainingSeconds,
+  onWaterTimerTick,
   softTap,
-  startWaterReminder,
+  startNewWaterReminderCycle,
   stopWaterReminder,
-  waterReminder,
 } from "../lib/timer";
 import { progressBar, sectionTitle, toast } from "../components/ui";
 
@@ -321,15 +322,20 @@ function waterTrackerCard(): HTMLElement {
   card.append(intervals);
 
   if (enabled) {
+    // Read the remaining time from the persisted deadline — never from a local
+    // counter, otherwise a re-render or restart would look like a reset.
     const countdown = el(
       "p",
       "mt-2 text-center text-[11px] font-bold tabular-nums text-cyan-300",
-      `یادآوری بعدی: ${fa(clock(waterReminder.remaining))}`,
+      `یادآوری بعدی: ${fa(clock(getWaterRemainingSeconds()))}`,
     );
-    waterReminder.onTick = () => {
-      countdown.textContent = `یادآوری بعدی: ${fa(clock(waterReminder.remaining))}`;
-    };
+    onWaterTimerTick((remainingSec) => {
+      countdown.textContent = `یادآوری بعدی: ${fa(clock(remainingSec))}`;
+    });
     card.append(countdown);
+  } else {
+    // Release the listener held by the previous render.
+    onWaterTimerTick(null);
   }
 
   return card;
@@ -355,31 +361,34 @@ function setWaterGlasses(value: number): void {
 
 function toggleWaterReminder(): void {
   const state = getState();
-  state.diet.waterReminderEnabled = !state.diet.waterReminderEnabled;
-  persist(0);
 
   if (state.diet.waterReminderEnabled) {
-    startWaterReminder(state.diet.waterReminderMinutes);
-    // Ask for the OS permission while we still have the tap (Android 13+).
-    void ensureNotificationPermission().then((granted) => {
-      if (!granted) {
-        toast("اجازه اعلان داده نشد؛ یادآور فقط داخل برنامه نمایش داده می‌شود.", "info");
-      }
-    });
-    toast(`یادآور آب هر ${fa(state.diet.waterReminderMinutes)} دقیقه روشن شد.`, "info");
-  } else {
     stopWaterReminder();
     toast("یادآور آب خاموش شد.", "info");
+    requestRender();
+    return;
   }
+
+  startNewWaterReminderCycle(state.diet.waterReminderMinutes);
+  // Ask for the OS permission while we still have the tap (Android 13+).
+  void ensureNotificationPermission().then((granted) => {
+    if (!granted) {
+      toast("اجازه اعلان داده نشد؛ یادآور فقط داخل برنامه نمایش داده می‌شود.", "info");
+    }
+  });
+  toast(`یادآور آب هر ${fa(state.diet.waterReminderMinutes)} دقیقه روشن شد.`, "info");
   requestRender();
 }
 
 function setWaterInterval(minutes: number): void {
   const state = getState();
   state.diet.waterReminderMinutes = minutes;
-  persist(0);
+
   if (state.diet.waterReminderEnabled) {
-    startWaterReminder(minutes);
+    // An explicit interval change is a deliberate restart of the cycle.
+    startNewWaterReminderCycle(minutes);
+  } else {
+    persist(0);
   }
   toast(`فاصله یادآوری روی ${fa(minutes)} دقیقه تنظیم شد.`, "info");
   requestRender();

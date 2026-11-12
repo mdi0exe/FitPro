@@ -4,11 +4,10 @@ import "./styles.css";
 import { loadState } from "./lib/api";
 import { clear, el, escapeHtml, preserveScroll } from "./lib/dom";
 import { installNavigation } from "./lib/navigation";
-import { startWaterReminder, unlockAudio, waterAlert, waterReminder } from "./lib/timer";
+import { restoreWaterReminderOnBoot, unlockAudio } from "./lib/timer";
 import {
   ensureDailyDietReset,
   getActiveTab,
-  getState,
   initState,
   installLifecycleFlush,
   persist,
@@ -136,21 +135,15 @@ async function boot(): Promise<void> {
 
     renderView();
 
-    // Water reminder: fire, then re-arm while the toggle is on.
-    waterReminder.onDone = () => {
-      // Soft droplet chime + light buzz + system notification (never the gym alarm).
-      waterAlert();
-      toast("💧 وقت نوشیدن ۱ لیوان آب است! (۷۰٪ حجم عضله آب است)", "info");
-      const state = getState();
-      if (state.diet.waterReminderEnabled) {
-        waterReminder.reset(state.diet.waterReminderMinutes * 60);
-        waterReminder.start();
-      }
-    };
+    // Resume the water reminder from its persisted deadline. This never resets
+    // the countdown: closing the app only pauses it.
+    restoreWaterReminderOnBoot();
 
-    if (getState().diet.waterReminderEnabled) {
-      startWaterReminder(getState().diet.waterReminderMinutes);
-    }
+    // Coming back from the background can be hours later — recompute the
+    // remaining time (and fire once if the deadline passed meanwhile).
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") restoreWaterReminderOnBoot();
+    });
 
     // Android requires a user gesture before audio playback is allowed.
     const unlock = () => {
