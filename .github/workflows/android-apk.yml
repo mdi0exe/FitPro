@@ -25,6 +25,7 @@ on:
       - "tailwind.config.js"
       - "postcss.config.js"
       - "scripts/gen-icons.mjs"
+      - "scripts/patch-android-manifest.mjs"
       - "src-tauri/icons/**"
       - "public/**"
       - ".github/workflows/android-apk.yml"
@@ -35,6 +36,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - "scripts/gen-icons.mjs"
+      - "scripts/patch-android-manifest.mjs"
       - "src-tauri/icons/**"
       - "public/**"
       - ".github/workflows/android-apk.yml"
@@ -213,6 +215,17 @@ jobs:
           echo "--- generated project ---"
           ls -1 src-tauri/gen/android
 
+      # `src-tauri/gen/android` is regenerated on every run, so the exact-alarm
+      # permissions are injected after init instead of editing a git-ignored file.
+      # The notification plugin only calls `setExactAndAllowWhileIdle` when
+      # `canScheduleExactAlarms()` is true, so without these Android falls back to
+      # an inexact alarm that Doze can delay by minutes.
+      - name: Add exact-alarm permissions to the Android manifest
+        run: |
+          set -euo pipefail
+          node scripts/patch-android-manifest.mjs
+          grep -n "uses-permission" src-tauri/gen/android/app/src/main/AndroidManifest.xml
+
       # `tauri android init` scaffolds the project with Tauri's default launcher
       # icons. The CLI rasterises the committed SVG (pure Rust, no browser needed
       # on the Linux runner) into every density, adaptive foreground and mipmap.
@@ -275,6 +288,25 @@ jobs:
 
           (cd artifacts && sha256sum ./*.apk | tee SHA256SUMS.txt)
           ls -lh artifacts
+
+      # Proves the permissions survived manifest merging into the packaged APK.
+      - name: Verify permissions inside the APK
+        run: |
+          set -euo pipefail
+          AAPT2=$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -name aapt2 -type f 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -z "${AAPT2}" ]; then
+            echo "::warning::aapt2 not found — skipping the packaged permission check"
+            exit 0
+          fi
+          PERMS=$("${AAPT2}" dump permissions artifacts/*.apk)
+          printf '%s\n' "${PERMS}"
+          for perm in POST_NOTIFICATIONS SCHEDULE_EXACT_ALARM USE_EXACT_ALARM WAKE_LOCK; do
+            if ! printf '%s' "${PERMS}" | grep -q "${perm}"; then
+              echo "::error::${perm} is missing from the packaged APK"
+              exit 1
+            fi
+          done
+          echo "All required permissions are packaged in the APK."
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

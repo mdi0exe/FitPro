@@ -108,6 +108,8 @@ npm run tauri:build            # بسته نهایی دسکتاپ
 - **چرا لازم بود:** `new Notification(...)` داخل WebView اندروید کار نمی‌کند. پلاگین اعلان را از طریق `NotificationManager` سیستم‌عامل در نوار اعلان و صفحه قفل نمایش می‌دهد. روی اندروید ۱۳+ مجوز `POST_NOTIFICATIONS` لازم است که خود پلاگین در مانیفست اعلام می‌کند و در زمان اجرا با دیالوگ سیستمی گرفته می‌شود.
 - **کانال:** `src/lib/notify.ts` یک کانال با شناسه `fitpro-alerts` و اهمیت `High` می‌سازد تا اعلان به‌صورت heads-up بالای صفحه ظاهر شود. `pushSystemNotification()` هیچ‌وقت خودش مجوز نمی‌پرسد؛ درخواست مجوز فقط از یک لمس کاربر انجام می‌شود (کلید یادآور آب یا دکمه تست).
 - **اتصال‌ها:** `waterAlert()` → اعلان «💧 وقت نوشیدن آب است!»، پایان تایمر استراحت → «💪 استراحت تمام شد!». دکمه «🔔 تست نوتیفیکیشن در نوار اعلان» در تنظیمات تب مربی هم مجوز را می‌گیرد و یک اعلان آزمایشی می‌فرستد.
+- **آلارم دقیق (Exact Alarm):** `scripts/patch-android-manifest.mjs` بعد از هر `tauri android init` چهار مجوز `POST_NOTIFICATIONS`، `SCHEDULE_EXACT_ALARM`، `USE_EXACT_ALARM` و `WAKE_LOCK` را به `AndroidManifest.xml` اضافه می‌کند (پوشه `gen/android` در گیت نیست و هر بار از نو ساخته می‌شود، پس ویرایش دستی بی‌فایده است). پلاگین اعلان فقط وقتی `canScheduleExactAlarms()` صادق باشد `setExactAndAllowWhileIdle` را صدا می‌زند؛ بدون این مجوزها اندروید به آلارم غیردقیق برمی‌گردد و Doze می‌تواند آن را چند دقیقه عقب بیندازد. CI بعد از بیلد با `aapt2 dump permissions` وجود هر چهار مجوز را داخل خود APK بررسی می‌کند و در صورت نبود، بیلد را fail می‌کند.
+  - نکته Play Store: `USE_EXACT_ALARM` مخصوص اپ‌های ساعت/تقویم است و برای انتشار در Play ممکن است رد شود؛ برای همین APK که با آرتیفکت گیت‌هاب نصب می‌شود مشکلی ندارد. اگر روزی خواستی در Play منتشر کنی، آن خط را حذف کن و `SCHEDULE_EXACT_ALARM` را نگه دار (کاربر باید از تنظیمات «آلارم و یادآور» را اجازه بدهد).
 - **یادآور پایدار:** زمان دقیق یادآور بعدی در `diet.waterReminderNextAt` (میلی‌ثانیه) ذخیره می‌شود — هم در `gym_state.json` و هم به‌صورت آینه‌ی همگام در `localStorage` (`persian-hypertrophy::water-next-at`). با بستن برنامه شمارنده **صفر نمی‌شود**؛ در `restoreWaterReminderOnBoot()` (هنگام بوت و هر بار `visibilitychange` → visible) زمان باقی‌مانده از همان Timestamp محاسبه می‌شود.
 - **اعلان زمان‌بندی‌شده:** برای همان لحظه یک آلارم بومی با `Schedule.at(date, false, true)` در سیستم‌عامل ثبت می‌شود (`allowWhileIdle` تا Doze آن را نخورد)، پس حتی با بسته بودن برنامه هم نوتیفیکیشن می‌رسد. با شناسه ثابت `7701` از اعلان تکراری جلوگیری می‌شود.
 - **اگر زمان یادآور در مدت بسته بودن رسیده باشد:** به محض باز شدن برنامه یک بار هشدار داده می‌شود و چرخه از «حالا» به بعد ادامه پیدا می‌کند (نه از صفر).
@@ -170,6 +172,7 @@ adb install -r app-universal-debug.apk
 
 ```bash
 node scripts/gen-icons.mjs       # رندر SVG با Edge + تمام آیکون‌ها (PNG/ICO/ICNS/mipmap)
+node scripts/patch-android-manifest.mjs  # افزودن مجوزهای آلارم دقیق به مانیفست تولیدشده
 node scripts/serve-dist.mjs      # سرور استاتیک dist روی 127.0.0.1:4400
 node scripts/verify-ui.mjs       # اسکرین‌شات هر تب با Edge headless + گزارش خطاها
 node scripts/e2e-check.mjs       # تست عملکردی: ثبت ست، تایمر، افزایش وزنه، ویرایش، ذخیره‌سازی
