@@ -7,6 +7,7 @@
 import { btn, el, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { clock, fa } from "../lib/fa";
+import { pushSystemNotification } from "../lib/notify";
 import { alarm, restTimer } from "../lib/timer";
 import { getState } from "../lib/store";
 
@@ -89,6 +90,8 @@ export function mountRestTimer(): void {
     }
     if (timeLabel) timeLabel.textContent = "برو!";
     alarm();
+    // Reach the user even when the screen is off or another app is open.
+    void pushSystemNotification("💪 استراحت تمام شد!", "وقت اجرای ست بعدی است.");
     hideHandle = window.setTimeout(() => stopRest(), 3200);
   };
 

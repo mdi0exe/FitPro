@@ -434,5 +434,6 @@ export function createSeedState(): AppStateData {
     overloadCount: 0,
     activeDay: 0,
     restSeconds: 90,
+    activityHistory: [],
   };
 }

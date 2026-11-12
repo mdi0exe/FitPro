@@ -23,6 +23,15 @@ page.on("console", (msg) => {
 });
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Reload + wait for the app shell (avoids networkidle2 with lazy images). */
+const reloadApp = async () => {
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 15000 });
+  await page.waitForFunction(
+    () => document.querySelectorAll("#nav-slot nav button").length === 4,
+    { timeout: 10000 },
+  );
+};
 const checks = [];
 const check = (name, ok, detail = "") => {
   checks.push({ name, ok });
@@ -52,7 +61,7 @@ const goToNutrition = async () => {
 
 await page.goto(URL, { waitUntil: "networkidle2" });
 await page.evaluate(() => localStorage.clear());
-await page.reload({ waitUntil: "networkidle2" });
+await reloadApp();
 await wait(700);
 await goToNutrition();
 
@@ -122,7 +131,7 @@ await page.evaluate(() => {
   ];
   localStorage.setItem("persian-hypertrophy::state::v1", JSON.stringify(raw));
 });
-await page.reload({ waitUntil: "networkidle2" });
+await reloadApp();
 await wait(800);
 saved = await state();
 check(
@@ -147,7 +156,7 @@ await page.evaluate(() => {
     return original.call(this, key, value);
   };
 });
-await page.reload({ waitUntil: "networkidle2" });
+await reloadApp();
 await wait(900);
 saved = await state();
 check("new day resets the water counter", saved.diet.waterGlasses === 0, String(saved.diet.waterGlasses));

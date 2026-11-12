@@ -1,7 +1,7 @@
 /** Application state container + debounced persistence. */
-import type { AppStateData, TabId } from "../types";
+import type { AppStateData, DailyActivity, TabId } from "../types";
 import { saveState, setFlushHook } from "./api";
-import { isoToday } from "./fa";
+import { fa, isoToday } from "./fa";
 
 let state: AppStateData | null = null;
 let activeTab: TabId = "workout";
@@ -27,6 +27,9 @@ export function setState(next: AppStateData): void {
   // the pending debounce prevents an older snapshot from overwriting it.
   cancelPendingSave();
   state = next;
+  // Keep the weekly calendar in step with data that came from Rust (e.g. a new
+  // body weight) and save the derived snapshot when it actually changed.
+  if (syncTodayActivity()) persist(0);
   emit();
 }
 
@@ -73,6 +76,9 @@ export function requestRender(): void {
 
 /** Debounced write-through to Rust (or localStorage). */
 export function persist(delay = 350): void {
+  // Every user action funnels through here, so this is the one place that has
+  // to keep today's calendar entry truthful.
+  syncTodayActivity();
   if (saveTimer !== null) window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
     saveTimer = null;
@@ -131,6 +137,89 @@ export function syncWaterChecklist(): void {
   const item = current.diet.items.find((entry) => entry.id === "diet-4");
   if (!item) return;
   item.done = current.diet.waterGlasses >= WATER_GOAL;
+}
+
+/**
+ * Rebuilds today's entry in `activityHistory` from the live workout/diet state.
+ *
+ * The app has no per-set timestamps, so "what happened today" is derived from
+ * the ticks that are currently set: the active day (or the first day with any
+ * progress) supplies the workout, and diet/water/weight are copied as-is.
+ * Past entries are never touched. Returns `true` when today's entry changed.
+ */
+export function syncTodayActivity(): boolean {
+  if (!state) return false;
+  const current = state;
+  const today = isoToday();
+
+  if (!Array.isArray(current.activityHistory)) current.activityHistory = [];
+
+  const activeDayObj = current.days[current.activeDay];
+  const workedDays = current.days.filter(
+    (day) =>
+      day.exercises.some((exercise) => exercise.logs.some((log) => log.done)) ||
+      day.warmups.some((warmup) => warmup.done),
+  );
+  const targetDay =
+    workedDays.find((day) => day.id === activeDayObj?.id) ?? workedDays[0] ?? activeDayObj;
+
+  const completedExercises: string[] = [];
+  let setsDone = 0;
+  let warmupsDone = 0;
+
+  for (const day of workedDays) {
+    warmupsDone += day.warmups.filter((warmup) => warmup.done).length;
+    for (const exercise of day.exercises) {
+      const doneCount = exercise.logs.filter((log) => log.done).length;
+      if (doneCount === 0) continue;
+      setsDone += doneCount;
+      // With more than one day ticked, say which day each exercise came from.
+      const prefix = workedDays.length > 1 ? `${day.label} • ` : "";
+      completedExercises.push(`${prefix}${exercise.name} (${fa(doneCount)} ست)`);
+    }
+  }
+
+  const dietDone = current.diet.items.filter((item) => item.done).length;
+  const dietTotal = current.diet.items.length;
+  const waterGlasses = current.diet.waterGlasses ?? 0;
+  const todayWeight =
+    current.weightHistory.find((entry) => entry.date === today)?.weight ?? null;
+
+  const existing = current.activityHistory.find((entry) => entry.date === today);
+  const entry: DailyActivity =
+    existing ?? {
+      date: today,
+      workoutTitle: "",
+      completedExercises: [],
+      setsDone: 0,
+      warmupsDone: 0,
+      dietDone: 0,
+      dietTotal,
+      waterGlasses: 0,
+      bodyWeight: null,
+    };
+
+  const before = JSON.stringify(entry);
+
+  // Only overwrite the workout block when there is progress to record, so
+  // restarting a day does not erase what was already logged today.
+  if (setsDone > 0 && targetDay) {
+    entry.workoutTitle = `${targetDay.label} — ${targetDay.title}`;
+    entry.completedExercises = completedExercises;
+    entry.setsDone = setsDone;
+    entry.warmupsDone = warmupsDone;
+  }
+  entry.dietDone = dietDone;
+  entry.dietTotal = dietTotal;
+  entry.waterGlasses = waterGlasses;
+  if (todayWeight !== null) entry.bodyWeight = todayWeight;
+
+  if (!existing) current.activityHistory.push(entry);
+
+  current.activityHistory.sort((a, b) => b.date.localeCompare(a.date));
+  if (current.activityHistory.length > 90) current.activityHistory.length = 90;
+
+  return JSON.stringify(entry) !== before;
 }
 
 /** Flush pending writes when the app is backgrounded (Android included). */

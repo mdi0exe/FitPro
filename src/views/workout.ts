@@ -19,6 +19,7 @@ import { openGifModal } from "../components/gifModal";
 import { openExerciseEditor, type ExerciseDraft } from "../components/exerciseEditor";
 import { startRest } from "../components/restTimer";
 import { openValuePicker, stepper } from "../components/stepper";
+import { refreshWeeklyActivityCard, renderWeeklyActivityCard } from "../components/weeklyActivity";
 import { syncLogs } from "../lib/localBackend";
 
 const OVERLOAD_CYCLE_DAYS = 14;
@@ -50,6 +51,9 @@ export function renderWorkout(): HTMLElement {
       () => addExercise(day),
     ),
   );
+
+  // Same weekly calendar as the progress tab, so the day's log is one scroll away.
+  view.append(renderWeeklyActivityCard());
 
   return view;
 }
@@ -719,6 +723,9 @@ function refreshProgress(day: WorkoutDay, exercise: Exercise): void {
   if (exercise.logs.length > 0 && done === exercise.logs.length) {
     toast(`حرکت «${exercise.name}» کامل شد ✅`, "ok");
   }
+
+  // The calendar at the bottom of this tab is derived from the same ticks.
+  refreshWeeklyActivityCard();
 }
 
 // ---------------------------------------------------------------------------

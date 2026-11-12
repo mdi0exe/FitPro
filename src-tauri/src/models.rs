@@ -242,6 +242,35 @@ pub struct Milestone {
     pub kind: String,
 }
 
+/// One day's snapshot for the weekly calendar.
+///
+/// This is derived state: the frontend writes it on every persist so the
+/// calendar can show what actually happened on each day of the week.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyActivity {
+    /// ISO date: YYYY-MM-DD
+    pub date: String,
+    /// e.g. "روز ۱ — بالاتنه A"
+    #[serde(default)]
+    pub workout_title: String,
+    /// Exercise names with at least one completed set that day.
+    #[serde(default)]
+    pub completed_exercises: Vec<String>,
+    #[serde(default)]
+    pub sets_done: u32,
+    #[serde(default)]
+    pub warmups_done: u32,
+    #[serde(default)]
+    pub diet_done: u32,
+    #[serde(default)]
+    pub diet_total: u32,
+    #[serde(default)]
+    pub water_glasses: u32,
+    #[serde(default)]
+    pub body_weight: Option<f32>,
+}
+
 // ---------------------------------------------------------------------------
 // Root state
 // ---------------------------------------------------------------------------
@@ -261,11 +290,25 @@ pub struct AppStateData {
     /// Index of the day currently selected in the UI.
     pub active_day: usize,
     pub rest_seconds: u32,
+    /// Derived per-day snapshots for the weekly calendar (newest first).
+    /// `serde(default)` keeps every older saved file loading unchanged.
+    #[serde(default)]
+    pub activity_history: Vec<DailyActivity>,
 }
 
 impl AppStateData {
     /// Keep every exercise's `logs` vector in sync with its `sets` count.
     pub fn normalize(&mut self) {
+        // Calendar history: drop junk, keep the newest 90 days, clamp counters.
+        self.activity_history.retain(|entry| !entry.date.is_empty());
+        self.activity_history.sort_by(|a, b| b.date.cmp(&a.date));
+        self.activity_history.truncate(90);
+        for entry in self.activity_history.iter_mut() {
+            entry.water_glasses = entry.water_glasses.min(30);
+            entry.diet_total = entry.diet_total.min(20);
+            entry.diet_done = entry.diet_done.min(entry.diet_total.max(5));
+        }
+
         if self.days.is_empty() {
             return;
         }
@@ -566,6 +609,7 @@ mod tests {
             overload_count: 0,
             active_day: 0,
             rest_seconds: DEFAULT_REST_SECONDS,
+            activity_history: Vec::new(),
         };
         for index in 0..80 {
             state.push_milestone("2026-01-01", format!("event {index}"), "system");
@@ -605,6 +649,33 @@ mod tests {
         assert!(state.diet.items[0].text.contains("صبحانه سلف"));
         assert!(state.diet.items.iter().all(|item| !item.done));
         assert_eq!(state.diet.water_reminder_minutes, 60);
+    }
+
+    #[test]
+    fn legacy_state_without_activity_history_loads() {
+        // Existing gym_state.json files predate the calendar field.
+        let mut value = serde_json::to_value(crate::storage::seed()).unwrap();
+        value.as_object_mut().unwrap().remove("activityHistory");
+        let state: AppStateData = serde_json::from_value(value).unwrap();
+        assert!(state.activity_history.is_empty());
+    }
+
+    #[test]
+    fn activity_history_is_sorted_and_trimmed() {
+        let mut state = crate::storage::seed();
+        for index in 0..120 {
+            state.activity_history.push(DailyActivity {
+                date: format!("2026-01-{:02}", (index % 28) + 1),
+                ..Default::default()
+            });
+        }
+        state.normalize();
+
+        assert_eq!(state.activity_history.len(), 90);
+        assert!(state
+            .activity_history
+            .windows(2)
+            .all(|pair| pair[0].date >= pair[1].date));
     }
 
     #[test]

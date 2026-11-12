@@ -3,9 +3,9 @@ import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { clock, fa, faDate, isoToday } from "../lib/fa";
 import { getState, persist, requestRender, syncWaterChecklist, WATER_GOAL } from "../lib/store";
+import { ensureNotificationPermission } from "../lib/notify";
 import {
   beep,
-  requestNotificationPermission,
   softTap,
   startWaterReminder,
   stopWaterReminder,
@@ -360,7 +360,12 @@ function toggleWaterReminder(): void {
 
   if (state.diet.waterReminderEnabled) {
     startWaterReminder(state.diet.waterReminderMinutes);
-    requestNotificationPermission();
+    // Ask for the OS permission while we still have the tap (Android 13+).
+    void ensureNotificationPermission().then((granted) => {
+      if (!granted) {
+        toast("اجازه اعلان داده نشد؛ یادآور فقط داخل برنامه نمایش داده می‌شود.", "info");
+      }
+    });
     toast(`یادآور آب هر ${fa(state.diet.waterReminderMinutes)} دقیقه روشن شد.`, "info");
   } else {
     stopWaterReminder();

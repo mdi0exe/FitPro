@@ -17,6 +17,12 @@ const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 export function normalizeState(input: AppStateData): AppStateData {
   const state = input;
   state.days = state.days ?? [];
+  // Older localStorage snapshots predate the weekly calendar.
+  state.activityHistory = Array.isArray(state.activityHistory) ? state.activityHistory : [];
+  state.activityHistory = state.activityHistory
+    .filter((entry) => entry && typeof entry.date === "string" && entry.date.length > 0)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 90);
   if (state.days.length === 0) return createSeedState();
   state.activeDay = Math.min(Math.max(0, state.activeDay ?? 0), state.days.length - 1);
   if (!state.restSeconds || state.restSeconds < 15 || state.restSeconds > 600) {

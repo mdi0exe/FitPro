@@ -83,6 +83,20 @@ export interface Milestone {
   kind: MilestoneKind | string;
 }
 
+/** One day's snapshot for the weekly calendar (derived, not user-entered). */
+export interface DailyActivity {
+  /** ISO date: YYYY-MM-DD */
+  date: string;
+  workoutTitle: string;
+  completedExercises: string[];
+  setsDone: number;
+  warmupsDone: number;
+  dietDone: number;
+  dietTotal: number;
+  waterGlasses: number;
+  bodyWeight?: number | null;
+}
+
 export interface AppStateData {
   version: number;
   profile: UserProfile;
@@ -94,6 +108,8 @@ export interface AppStateData {
   overloadCount: number;
   activeDay: number;
   restSeconds: number;
+  /** Derived per-day snapshots for the weekly calendar (newest first). */
+  activityHistory: DailyActivity[];
 }
 
 export type TabId = "workout" | "progress" | "nutrition" | "coach";

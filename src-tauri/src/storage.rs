@@ -509,6 +509,7 @@ pub fn seed() -> AppStateData {
         overload_count: 0,
         active_day: 0,
         rest_seconds: DEFAULT_REST_SECONDS,
+        activity_history: Vec::new(),
     };
     state.normalize();
     state

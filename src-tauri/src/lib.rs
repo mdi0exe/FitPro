@@ -161,6 +161,7 @@ fn overload_status(app: AppHandle) -> Result<i64, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             get_app_state,
             save_app_state,

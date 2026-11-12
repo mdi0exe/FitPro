@@ -6,12 +6,14 @@ import { logBodyWeight } from "../lib/api";
 import { getState, requestRender, setState } from "../lib/store";
 import type { Milestone, WeightEntry } from "../types";
 import { progressBar, sectionTitle, toast } from "../components/ui";
+import { renderWeeklyActivityCard } from "../components/weeklyActivity";
 
 export function renderProgress(): HTMLElement {
   const state = getState();
   const view = el("div", "space-y-3 animate-fade-up");
 
   view.append(weightHero());
+  view.append(renderWeeklyActivityCard());
   view.append(weightLogger());
   view.append(chartCard(state.weightHistory));
   view.append(statsGrid());

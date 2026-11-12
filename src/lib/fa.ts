@@ -117,6 +117,41 @@ export function isoToday(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+/** Compact weekday labels for the 7-column calendar strip (Sunday first). */
+const WEEKDAY_SHORT = ["یک", "دو", "سه", "چهار", "پنج", "جم", "شن"];
+
+/** Persian weekday name for an ISO date. */
+export function faWeekdayName(iso: string): string {
+  if (!iso) return "";
+  return WEEKDAYS[new Date(`${iso}T12:00:00`).getDay()] ?? "";
+}
+
+/** Compact weekday label for narrow calendar cells. */
+export function faWeekdayShort(iso: string): string {
+  if (!iso) return "";
+  return WEEKDAY_SHORT[new Date(`${iso}T12:00:00`).getDay()] ?? "";
+}
+
+/**
+ * The 7 ISO dates (Saturday → Friday) of the Iranian week containing
+ * `referenceIso`. `getDay()` is Sunday-based, so Saturday is offset 0.
+ */
+export function currentPersianWeekIsos(referenceIso = isoToday()): string[] {
+  const ref = new Date(`${referenceIso}T12:00:00`);
+  const offsetFromSaturday = (ref.getDay() + 1) % 7;
+  const saturday = new Date(ref);
+  saturday.setDate(ref.getDate() - offsetFromSaturday);
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const days: string[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    const cur = new Date(saturday);
+    cur.setDate(saturday.getDate() + i);
+    days.push(`${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}`);
+  }
+  return days;
+}
+
 /** Whole days from `fromIso` to `toIso` (positive when `toIso` is later). */
 export function daysBetween(fromIso: string, toIso: string): number {
   const from = Date.parse(`${fromIso}T00:00:00`);

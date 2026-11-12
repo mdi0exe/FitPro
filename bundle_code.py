@@ -327,6 +327,10 @@ def build_bundle(root: Path, files: list[SourceFile], notes: list[str]) -> str:
     add("     artifact. It rasterises src-tauri/icons/icon.svg into every mipmap.")
     add(" Assets: public/sounds/*.mp3 are studio alerts bundled offline into the")
     add("     APK; src/lib/timer.ts plays them via Web Audio (no synthesis).")
+    add(" Native: tauri-plugin-notification posts water/rest alerts to the Android")
+    add("     status bar (src/lib/notify.ts, channel fitpro-alerts, High).")
+    add(" Calendar: activityHistory snapshots (DailyActivity) drive a Sat-Fri week")
+    add("     view in src/components/weeklyActivity.ts, shown on two tabs.")
     add("")
 
     # ------------------------------------------------------------------ tree

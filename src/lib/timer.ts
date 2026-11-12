@@ -103,6 +103,8 @@ export class CountdownTimer {
 // (or Web Audio is throttled), an HTMLAudioElement fallback still routes the
 // same file through the hardware media channel. No oscillators, no WAV synth.
 
+import { pushSystemNotification } from "./notify";
+
 type SoundKey = "alarm" | "success" | "water" | "tap";
 
 /** Absolute paths inside the built frontend (Vite `public/` → `dist/`). */
@@ -309,23 +311,7 @@ export function stopWaterReminder(): void {
  * vibration — the WebView on Android may not support Notification at all.
  */
 export function notifyWater(title: string, body: string): void {
-  try {
-    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-      new Notification(title, { body });
-    }
-  } catch (error) {
-    console.warn("notification unavailable", error);
-  }
+  // Native status-bar notification on Android, Web Notification in a browser.
   // No sound/vibration here: the caller decides (waterAlert stays soft).
-}
-
-/** Asks for notification permission (no-op when unsupported/denied). */
-export function requestNotificationPermission(): void {
-  try {
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      void Notification.requestPermission();
-    }
-  } catch {
-    /* unsupported — the in-app toast still works */
-  }
+  void pushSystemNotification(title, body);
 }

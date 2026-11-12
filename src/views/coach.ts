@@ -3,6 +3,7 @@ import { btn, clamp, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { fa, faNum, parseNum } from "../lib/fa";
 import { resetToDefaults, storageMode } from "../lib/api";
+import { ensureNotificationPermission, pushSystemNotification } from "../lib/notify";
 import { alarm, waterAlert } from "../lib/timer";
 import { getState, persist, requestRender, setState } from "../lib/store";
 import type { AppStateData } from "../types";
@@ -236,6 +237,20 @@ function settingsCard(): HTMLElement {
     btn("btn-ghost w-full py-2 text-xs", "💧 تست یادآور آب (ملایم)", () => {
       waterAlert();
       toast("تست صدای ملایم و نوتیفیکیشن آب انجام شد 💧");
+    }),
+    btn("btn-ghost w-full py-2 text-xs", "🔔 تست نوتیفیکیشن در نوار اعلان", () => {
+      // First tap also asks for the Android 13+ POST_NOTIFICATIONS permission.
+      void ensureNotificationPermission().then(async (granted) => {
+        if (!granted) {
+          toast("اجازه اعلان داده نشد. از تنظیمات گوشی فعالش کن.", "error");
+          return;
+        }
+        await pushSystemNotification(
+          "🔔 اعلان فیت‌پرو فعال است",
+          "این پیام باید در نوار اعلان‌های گوشی دیده شود.",
+        );
+        toast("اگر نوتیفیکیشن را دیدی، همه‌چیز درست است ✅");
+      });
     }),
   );
   card.append(soundTests);
