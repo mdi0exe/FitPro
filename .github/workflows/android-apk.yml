@@ -26,6 +26,7 @@ on:
       - "postcss.config.js"
       - "scripts/gen-icons.mjs"
       - "src-tauri/icons/**"
+      - "public/**"
       - ".github/workflows/android-apk.yml"
   pull_request:
     paths:
@@ -35,6 +36,7 @@ on:
       - "package-lock.json"
       - "scripts/gen-icons.mjs"
       - "src-tauri/icons/**"
+      - "public/**"
       - ".github/workflows/android-apk.yml"
   workflow_dispatch:
     inputs:
@@ -212,13 +214,12 @@ jobs:
           ls -1 src-tauri/gen/android
 
       # `tauri android init` scaffolds the project with Tauri's default launcher
-      # icons, so the custom icon set has to be pushed into the generated
-      # mipmap folders before Gradle packages the APK. app-icon.png is the
-      # pristine 1024px master (tauri icon rewrites icon.png at 512).
+      # icons. The CLI rasterises the committed SVG (pure Rust, no browser needed
+      # on the Linux runner) into every density, adaptive foreground and mipmap.
       - name: Generate and apply app icons to Android project
         run: |
           set -euo pipefail
-          npx tauri icon src-tauri/icons/app-icon.png
+          npx tauri icon src-tauri/icons/icon.svg
           ls -1 src-tauri/gen/android/app/src/main/res | head -n 12
 
       # ---------------------------------------------------------------------

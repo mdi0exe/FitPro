@@ -1,0 +1,171 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="38%" r="70%">
+      <stop offset="0%" stop-color="#0f2926" />
+      <stop offset="55%" stop-color="#06101e" />
+      <stop offset="100%" stop-color="#020617" />
+    </radialGradient>
+
+    <!-- Ambient Top-Right Emerald Glow -->
+    <radialGradient id="emeraldGlow" cx="72%" cy="22%" r="48%">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.42" />
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Ambient Bottom-Left Cyan Glow -->
+    <radialGradient id="cyanGlow" cx="24%" cy="80%" r="48%">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Shield Border Gradient -->
+    <linearGradient id="shieldRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6ee7b7" />
+      <stop offset="50%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#22d3ee" />
+    </linearGradient>
+
+    <!-- Shield Inner Fill -->
+    <linearGradient id="shieldFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0b192c" stop-opacity="0.92" />
+      <stop offset="100%" stop-color="#020617" stop-opacity="0.96" />
+    </linearGradient>
+
+    <!-- Metallic Chrome Bar Gradient -->
+    <linearGradient id="chromeBar" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="28%" stop-color="#cbd5e1" />
+      <stop offset="55%" stop-color="#64748b" />
+      <stop offset="85%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#94a3b8" />
+    </linearGradient>
+
+    <!-- Inner Heavy Plate (Emerald) -->
+    <linearGradient id="plateEmerald" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a7f3d0" />
+      <stop offset="18%" stop-color="#34d399" />
+      <stop offset="55%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+
+    <!-- Middle Plate (Teal-Cyan) -->
+    <linearGradient id="plateTeal" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#99f6e4" />
+      <stop offset="20%" stop-color="#2dd4bf" />
+      <stop offset="60%" stop-color="#0d9488" />
+      <stop offset="100%" stop-color="#115e59" />
+    </linearGradient>
+
+    <!-- Outer Plate (Electric Cyan) -->
+    <linearGradient id="plateCyan" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#cffafe" />
+      <stop offset="22%" stop-color="#22d3ee" />
+      <stop offset="65%" stop-color="#0891b2" />
+      <stop offset="100%" stop-color="#155e75" />
+    </linearGradient>
+
+    <!-- Gold/Emerald Lightning Accent -->
+    <linearGradient id="sparkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde68a" />
+      <stop offset="50%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#22d3ee" />
+    </linearGradient>
+
+    <!-- 3D Drop Shadow Filter -->
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#000000" flood-opacity="0.7" />
+      <feDropShadow dx="0" dy="0" stdDeviation="16" flood-color="#10b981" flood-opacity="0.28" />
+    </filter>
+
+    <filter id="shieldGlow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#000000" flood-opacity="0.8" />
+      <feDropShadow dx="0" dy="0" stdDeviation="14" flood-color="#22d3ee" flood-opacity="0.22" />
+    </filter>
+  </defs>
+
+  <!-- 1. Base Background -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bgGrad)" />
+  <rect width="1024" height="1024" rx="220" fill="url(#emeraldGlow)" />
+  <rect width="1024" height="1024" rx="220" fill="url(#cyanGlow)" />
+
+  <!-- Subtle Concentric Power Rings -->
+  <circle cx="512" cy="512" r="410" fill="none" stroke="url(#shieldRim)" stroke-opacity="0.08" stroke-width="3" />
+  <circle cx="512" cy="512" r="350" fill="none" stroke="url(#shieldRim)" stroke-opacity="0.12" stroke-width="2" stroke-dasharray="14 14" />
+
+  <!-- 2. Central Hexagon Shield Crest -->
+  <g filter="url(#shieldGlow)">
+    <path
+      d="M 512 132
+         L 828 314
+         Q 856 330 856 362
+         L 856 662
+         Q 856 694 828 710
+         L 512 892
+         Q 484 908 456 892
+         L 196 710
+         Q 168 694 168 662
+         L 168 362
+         Q 168 330 196 314
+         L 456 132
+         Q 484 116 512 132 Z"
+      transform="translate(14, 0)"
+      fill="url(#shieldFill)"
+      stroke="url(#shieldRim)"
+      stroke-width="14"
+      stroke-linejoin="round"
+    />
+  </g>
+
+  <!-- Subtle Lightning / Hypertrophy Pulse Watermark Inside Shield -->
+  <path
+    d="M 548 250 L 418 502 L 516 502 L 472 774 L 626 488 L 524 488 Z"
+    fill="url(#sparkGrad)"
+    opacity="0.16"
+  />
+
+  <!-- 3. 3D Sculpted Olympic Dumbbell (Rotated -28 deg around center) -->
+  <g filter="url(#dropShadow)" transform="translate(512, 512) rotate(-28) scale(0.82) translate(-512, -512)">
+    <!-- End Lock Collars -->
+    <rect x="70" y="468" width="28" height="88" rx="10" fill="url(#chromeBar)" />
+    <rect x="926" y="468" width="28" height="88" rx="10" fill="url(#chromeBar)" />
+
+    <!-- Center Chrome Handle Bar -->
+    <rect x="310" y="482" width="404" height="60" rx="12" fill="url(#chromeBar)" />
+
+    <!-- Knurling Grip Texture on Handle -->
+    <g opacity="0.35" stroke="#0f172a" stroke-width="5" stroke-linecap="round">
+      <line x1="400" y1="486" x2="400" y2="538" />
+      <line x1="422" y1="486" x2="422" y2="538" />
+      <line x1="444" y1="486" x2="444" y2="538" />
+      <line x1="466" y1="486" x2="466" y2="538" />
+      <line x1="558" y1="486" x2="558" y2="538" />
+      <line x1="580" y1="486" x2="580" y2="538" />
+      <line x1="602" y1="486" x2="602" y2="538" />
+      <line x1="624" y1="486" x2="624" y2="538" />
+    </g>
+
+    <!-- Center Glowing Ring on Handle -->
+    <rect x="498" y="476" width="28" height="72" rx="8" fill="url(#plateEmerald)" stroke="#a7f3d0" stroke-width="2" />
+
+    <!-- LEFT PLATES (3 Tiers) -->
+    <!-- Inner Plate -->
+    <rect x="236" y="330" width="90" height="364" rx="28" fill="url(#plateEmerald)" stroke="#a7f3d0" stroke-width="3" stroke-opacity="0.65" />
+    <rect x="252" y="352" width="14" height="90" rx="7" fill="#ffffff" opacity="0.35" />
+    <!-- Middle Plate -->
+    <rect x="156" y="374" width="70" height="276" rx="22" fill="url(#plateTeal)" stroke="#99f6e4" stroke-width="3" stroke-opacity="0.55" />
+    <rect x="170" y="394" width="12" height="70" rx="6" fill="#ffffff" opacity="0.3" />
+    <!-- Outer Plate -->
+    <rect x="94" y="416" width="52" height="192" rx="18" fill="url(#plateCyan)" stroke="#cffafe" stroke-width="2.5" stroke-opacity="0.55" />
+
+    <!-- RIGHT PLATES (3 Tiers - Exact Mirror) -->
+    <!-- Inner Plate -->
+    <rect x="698" y="330" width="90" height="364" rx="28" fill="url(#plateEmerald)" stroke="#a7f3d0" stroke-width="3" stroke-opacity="0.65" />
+    <rect x="714" y="352" width="14" height="90" rx="7" fill="#ffffff" opacity="0.35" />
+    <!-- Middle Plate -->
+    <rect x="798" y="374" width="70" height="276" rx="22" fill="url(#plateTeal)" stroke="#99f6e4" stroke-width="3" stroke-opacity="0.55" />
+    <rect x="812" y="394" width="12" height="70" rx="6" fill="#ffffff" opacity="0.3" />
+    <!-- Outer Plate -->
+    <rect x="878" y="416" width="52" height="192" rx="18" fill="url(#plateCyan)" stroke="#cffafe" stroke-width="2.5" stroke-opacity="0.55" />
+  </g>
+</svg>

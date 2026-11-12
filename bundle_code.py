@@ -41,7 +41,7 @@ from pathlib import Path
 TEXT_EXTENSIONS: set[str] = {
     ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
     ".rs", ".toml", ".json", ".json5", ".jsonc",
-    ".css", ".scss", ".html", ".htm",
+    ".css", ".scss", ".html", ".htm", ".svg",
     ".yml", ".yaml", ".md", ".txt",
     ".py", ".sh", ".bat", ".ps1",
     ".sql", ".graphql",
@@ -90,7 +90,7 @@ LANG_BY_EXT: dict[str, str] = {
     ".rs": "rust", ".toml": "toml",
     ".json": "json", ".json5": "json5", ".jsonc": "jsonc",
     ".css": "css", ".scss": "scss",
-    ".html": "html", ".htm": "html",
+    ".html": "html", ".htm": "html", ".svg": "svg",
     ".yml": "yaml", ".yaml": "yaml",
     ".md": "markdown", ".txt": "text",
     ".py": "python", ".sh": "bash", ".bat": "bat", ".ps1": "powershell",
@@ -323,8 +323,10 @@ def build_bundle(root: Path, files: list[SourceFile], notes: list[str]) -> str:
     add(" Backend: Rust (src-tauri/src) — models, atomic JSON storage, IPC commands.")
     add(" Frontend: Vite + TypeScript + Tailwind, 100% Persian RTL UI (src/).")
     add(" CI: GitHub Actions (.github/workflows) builds a debug Android APK for")
-    add("     arm64 by default, with Rust debug symbols stripped; the artifact")
-    add("     ships as a downloadable zip of the .apk.")
+    add("     armv7 by default (Rust debug symbols stripped) and uploads it as an")
+    add("     artifact. It rasterises src-tauri/icons/icon.svg into every mipmap.")
+    add(" Assets: public/sounds/*.mp3 are studio alerts bundled offline into the")
+    add("     APK; src/lib/timer.ts plays them via Web Audio (no synthesis).")
     add("")
 
     # ------------------------------------------------------------------ tree

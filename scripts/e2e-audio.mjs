@@ -1,11 +1,29 @@
 /**
- * Audio engine checks: WAV generation, compressor chain, vibration patterns.
- * Usage: node scripts/e2e-audio.mjs
+ * Audio checks: bundled studio MP3s, per-alert gain/vibration, no synthesis.
+ * Usage: node scripts/e2e-audio.mjs   (requires scripts/serve-dist.mjs)
  */
 import puppeteer from "puppeteer-core";
+import fs from "node:fs";
+import path from "node:path";
 
 const EDGE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 const URL = process.env.APP_URL ?? "http://127.0.0.1:4400/";
+const SOUNDS = ["alarm", "success", "water", "tap"];
+
+const checks = [];
+const check = (name, ok, detail = "") => {
+  checks.push({ name, ok });
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
+};
+
+// ---------------------------------------------------------------- file checks
+for (const name of SOUNDS) {
+  const source = path.join("public", "sounds", `${name}.mp3`);
+  const bundled = path.join("dist", "sounds", `${name}.mp3`);
+  const buf = fs.existsSync(source) ? fs.readFileSync(source) : Buffer.alloc(0);
+  const isMpeg = buf.length > 1000 && buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0;
+  check(`${name}.mp3 bundled in public/ and dist/`, isMpeg && fs.existsSync(bundled), `${buf.length} bytes`);
+}
 
 const browser = await puppeteer.launch({
   executablePath: EDGE,
@@ -16,36 +34,75 @@ const browser = await puppeteer.launch({
 
 const page = await browser.newPage();
 const errors = [];
+const requests = [];
 page.on("pageerror", (err) => errors.push(err.message));
+page.on("request", (req) => {
+  if (req.url().includes("/sounds/")) requests.push(req.url());
+});
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const checks = [];
-const check = (name, ok, detail = "") => {
-  checks.push({ name, ok });
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
-};
 
 await page.goto(URL, { waitUntil: "networkidle2" });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: "networkidle2" });
 await wait(700);
 
-// Instrument Audio + vibrate + AudioContext before any click.
+// Instrument Web Audio + vibration before the first user gesture.
 await page.evaluate(() => {
-  window.__audio = [];
+  window.__gains = [];
   window.__vibrate = [];
+  window.__oscillators = 0;
+  window.__bufferSources = 0;
+  window.__wavDataUrls = 0;
+  window.__mediaFallback = [];
+  window.__gainProbe = true;
+
+  const proto = window.AudioContext.prototype;
+
+  const createGain = proto.createGain;
+  proto.createGain = function () {
+    const node = createGain.call(this);
+    try {
+      const param = node.gain;
+      const proxy = new Proxy(param, {
+        set(target, prop, value) {
+          if (prop === "value") window.__gains.push(value);
+          target.value = value;
+          return true;
+        },
+      });
+      Object.defineProperty(node, "gain", { configurable: true, value: proxy });
+    } catch {
+      window.__gainProbe = false;
+    }
+    return node;
+  };
+
+  const createBufferSource = proto.createBufferSource;
+  proto.createBufferSource = function () {
+    window.__bufferSources += 1;
+    return createBufferSource.call(this);
+  };
+
+  const createOscillator = proto.createOscillator;
+  proto.createOscillator = function () {
+    window.__oscillators += 1;
+    return createOscillator.call(this);
+  };
+
+  const createCompressor = proto.createDynamicsCompressor;
+  proto.createDynamicsCompressor = function () {
+    const node = createCompressor.call(this);
+    window.__compressorNode = node;
+    return node;
+  };
 
   const OriginalAudio = window.Audio;
   window.Audio = function (src) {
     const element = new OriginalAudio(src);
-    const entry = { src: typeof src === "string" ? src : "", volume: element.volume, played: false };
-    window.__audio.push(entry);
-    const originalPlay = element.play.bind(element);
-    element.play = () => {
-      entry.played = true;
-      entry.volume = element.volume;
-      return originalPlay();
-    };
+    const url = String(src ?? "");
+    if (url.startsWith("data:audio")) window.__wavDataUrls += 1;
+    window.__mediaFallback.push({ src: url, volume: element.volume });
     return element;
   };
 
@@ -53,33 +110,32 @@ await page.evaluate(() => {
     window.__vibrate.push(pattern);
     return true;
   };
-
-  const Original = window.AudioContext;
-  window.__compressorNode = null;
-  window.AudioContext = function (...args) {
-    const ctx = new Original(...args);
-    const originalCreate = ctx.createDynamicsCompressor.bind(ctx);
-    ctx.createDynamicsCompressor = () => {
-      const node = originalCreate();
-      window.__compressorNode = node;
-      return node;
-    };
-    return ctx;
-  };
 });
 
-// Go offline so the online clips fail and the generated WAV path is exercised.
-await page.setOfflineMode(true);
-
+// First real gesture unlocks audio and warms all four clips.
 const nav = await page.$$("#nav-slot nav button");
 await nav[3].click();
-await wait(600);
+await wait(1000);
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 await wait(400);
+
+check("all 4 MP3s fetched by the app", SOUNDS.every((n) => requests.some((u) => u.endsWith(`/sounds/${n}.mp3`))), `${requests.length} sound requests`);
+check("no synthesized oscillators", (await page.evaluate(() => window.__oscillators)) === 0);
+check("no generated WAV data URLs", (await page.evaluate(() => window.__wavDataUrls)) === 0);
+check("gain probe installed", await page.evaluate(() => window.__gainProbe));
+
+const compressor = await page.evaluate(() => {
+  const node = window.__compressorNode;
+  if (!node) return null;
+  return { threshold: node.threshold.value, knee: node.knee.value, ratio: node.ratio.value, attack: node.attack.value, release: node.release.value };
+});
+check("master compressor configured", compressor?.threshold === -12 && compressor?.ratio === 12 && compressor?.knee === 10, JSON.stringify(compressor));
 
 const clickText = async (text) => {
   for (const handle of await page.$$("button")) {
     if ((await handle.evaluate((n) => (n.textContent ?? "").trim())).includes(text)) {
+      await handle.evaluate((n) => n.scrollIntoView({ block: "center" }));
+      await wait(250);
       await handle.click();
       return true;
     }
@@ -88,90 +144,65 @@ const clickText = async (text) => {
 };
 
 // ------------------------------------------------------------- loud alarm
-const clickedAlarm = await clickText("تست صدای هشدار استراحت");
-await wait(900);
-let audio = await page.evaluate(() => window.__audio);
-let vibrate = await page.evaluate(() => window.__vibrate);
-
-check("alarm test button exists", clickedAlarm);
-check(
-  "alarm generates a WAV data URL",
-  audio.some((entry) => entry.src.startsWith("data:audio/wav;base64,")),
-  audio.map((entry) => entry.src.slice(0, 24)).join(" | "),
-);
-check(
-  "alarm WAV plays at full volume",
-  audio.some((entry) => entry.src.startsWith("data:audio/wav") && entry.volume === 1 && entry.played),
-  JSON.stringify(audio.map((entry) => entry.volume)),
-);
-check(
-  "alarm uses the strong vibration pattern",
-  vibrate.some((pattern) => JSON.stringify(pattern) === JSON.stringify([500, 150, 500, 150, 700])),
-  JSON.stringify(vibrate),
-);
-
-const wav = await page.evaluate(async () => {
-  const entry = window.__audio.find((item) => item.src.startsWith("data:audio/wav"));
-  if (!entry) return null;
-  const base64 = entry.src.split(",")[1];
-  const binary = atob(base64);
-  const header = binary.slice(0, 12);
-  return {
-    riff: header.slice(0, 4),
-    wave: header.slice(8, 12),
-    bytes: binary.length,
-    sampleRate: new DataView(
-      Uint8Array.from(binary.slice(24, 28), (c) => c.charCodeAt(0)).buffer,
-    ).getUint32(0, true),
-  };
-});
-check("WAV header is valid 44.1kHz RIFF", wav?.riff === "RIFF" && wav?.wave === "WAVE" && wav?.sampleRate === 44100, JSON.stringify(wav));
+await page.evaluate(() => { window.__gains = []; window.__vibrate = []; window.__bufferSources = 0; });
+check("alarm test button exists", await clickText("تست صدای هشدار استراحت"));
+await wait(700);
+let gains = await page.evaluate(() => window.__gains);
+let vibrates = await page.evaluate(() => window.__vibrate);
+check("alarm plays at 1.8x gain", gains.includes(1.8), JSON.stringify(gains));
+check("alarm uses decoded MP3 buffer", (await page.evaluate(() => window.__bufferSources)) >= 1);
+check("alarm uses strong vibration", vibrates.some((p) => JSON.stringify(p) === JSON.stringify([500, 150, 500, 150, 700])), JSON.stringify(vibrates));
 
 // ------------------------------------------------------------- soft water
-await page.evaluate(() => {
-  window.__audio = [];
-  window.__vibrate = [];
-});
-const clickedWater = await clickText("تست یادآور آب");
-await wait(900);
-audio = await page.evaluate(() => window.__audio);
-vibrate = await page.evaluate(() => window.__vibrate);
+await page.evaluate(() => { window.__gains = []; window.__vibrate = []; });
+check("water test button exists", await clickText("تست یادآور آب"));
+await wait(700);
+gains = await page.evaluate(() => window.__gains);
+vibrates = await page.evaluate(() => window.__vibrate);
+check("water alert plays at 0.35 gain", gains.includes(0.35), JSON.stringify(gains));
+check("water alert uses light vibration", vibrates.some((p) => JSON.stringify(p) === JSON.stringify([100, 60, 100])), JSON.stringify(vibrates));
 
-check("water test button exists", clickedWater);
-check(
-  "water alert is quiet (0.25)",
-  audio.some((entry) => entry.volume === 0.25),
-  JSON.stringify(audio.map((entry) => entry.volume)),
-);
-check(
-  "water alert uses the light vibration",
-  vibrate.some((pattern) => JSON.stringify(pattern) === JSON.stringify([100, 60, 100])),
-  JSON.stringify(vibrate),
-);
-
-// --------------------------------------------------------- compressor chain
-const compressor = await page.evaluate(() => {
-  const node = window.__compressorNode;
-  if (!node) return null;
-  return {
-    threshold: node.threshold.value,
-    knee: node.knee.value,
-    ratio: node.ratio.value,
-    attack: node.attack.value,
-    release: node.release.value,
+// ------------------------------- HTMLAudioElement media fallback (fresh page)
+// The main page has already cached decoded buffers, so decode failure has to be
+// simulated before the app ever unlocks audio.
+const fallbackPage = await browser.newPage();
+fallbackPage.on("pageerror", (err) => errors.push(`[fallback] ${err.message}`));
+await fallbackPage.goto(URL, { waitUntil: "networkidle2" });
+await fallbackPage.evaluate(() => {
+  window.__mediaFallback = [];
+  window.AudioContext.prototype.decodeAudioData = function () {
+    return Promise.reject(new Error("simulated decode failure"));
+  };
+  const OriginalAudio = window.Audio;
+  window.Audio = function (src) {
+    const element = new OriginalAudio(src);
+    window.__mediaFallback.push({ src: String(src ?? ""), volume: element.volume });
+    return element;
   };
 });
-check(
-  "master compressor is configured",
-  compressor?.threshold === -12 && compressor?.ratio === 12 && compressor?.knee === 10,
-  JSON.stringify(compressor),
-);
+const fNav = await fallbackPage.$$("#nav-slot nav button");
+await fNav[3].click();
+await wait(900);
+await fallbackPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+await wait(400);
+for (const handle of await fallbackPage.$$("button")) {
+  if ((await handle.evaluate((n) => (n.textContent ?? "").trim())).includes("تست صدای هشدار استراحت")) {
+    await handle.evaluate((n) => n.scrollIntoView({ block: "center" }));
+    await wait(250);
+    await handle.click();
+    break;
+  }
+}
+await wait(700);
+const fallback = await fallbackPage.evaluate(() => window.__mediaFallback);
+check("media fallback plays the real alarm MP3", fallback.some((a) => a.src === "/sounds/alarm.mp3" && a.volume === 1), JSON.stringify(fallback));
+await fallbackPage.close();
 
 console.log("\n--- runtime errors ---");
 console.log(errors.length ? errors.join("\n") : "none");
+check("no runtime errors", errors.length === 0);
 
 const failed = checks.filter((c) => !c.ok).length;
 console.log(`\n${checks.length - failed}/${checks.length} checks passed`);
-
 await browser.close();
 process.exit(failed === 0 ? 0 : 1);

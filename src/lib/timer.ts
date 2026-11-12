@@ -93,29 +93,33 @@ export class CountdownTimer {
 }
 
 // ---------------------------------------------------------------------------
-// Audio engine
+// Audio engine — real studio-recorded MP3s bundled into the APK
 // ---------------------------------------------------------------------------
 //
-// Phone speakers in a noisy gym need every bit of help they can get, so the
-// chain is: layered oscillators → DynamicsCompressor → destination, plus a
-// generated PCM/WAV <audio> player (Android routes <audio> through the media
-// channel at full speaker volume even when Web Audio gets throttled) and an
-// optional online alarm clip that degrades gracefully when offline.
+// `public/sounds/*.mp3` is copied by Vite into dist/sounds/, so every alert is
+// fully offline. Playback goes through decodeAudioData → BufferSource → GainNode
+// → DynamicsCompressor → destination; the compressor keeps the 1.8x gym alarm
+// loud without clipping the phone speaker. If a WebView refuses to decode MP3
+// (or Web Audio is throttled), an HTMLAudioElement fallback still routes the
+// same file through the hardware media channel. No oscillators, no WAV synth.
 
-interface TonePulse {
-  freq: number;
-  durationMs: number;
-  pauseMs: number;
-}
+type SoundKey = "alarm" | "success" | "water" | "tap";
 
-const ONLINE_SOUNDS = {
-  alarm: "https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg",
-  water: "https://actions.google.com/sounds/v1/water/water_drop.ogg",
-} as const;
+/** Absolute paths inside the built frontend (Vite `public/` → `dist/`). */
+export const SOUND_FILES: Record<SoundKey, string> = {
+  alarm: "/sounds/alarm.mp3",
+  success: "/sounds/success.mp3",
+  water: "/sounds/water.mp3",
+  tap: "/sounds/tap.mp3",
+};
+
+const clamp = (value: number, low: number, high: number) =>
+  Math.min(high, Math.max(low, value));
 
 let audioContext: AudioContext | null = null;
 let masterBus: AudioNode | null = null;
-const onlineCache = new Map<string, HTMLAudioElement>();
+const decoded = new Map<SoundKey, AudioBuffer>();
+const inflight = new Map<SoundKey, Promise<AudioBuffer | null>>();
 
 function getAudioContext(): AudioContext | null {
   try {
@@ -127,7 +131,7 @@ function getAudioContext(): AudioContext | null {
     if (!audioContext) {
       audioContext = new Ctor();
 
-      // Squash peaks instead of letting the speaker clip at full volume.
+      // Squash the boosted peaks instead of letting the speaker clip.
       const compressor = audioContext.createDynamicsCompressor();
       compressor.threshold.value = -12;
       compressor.knee.value = 10;
@@ -138,7 +142,6 @@ function getAudioContext(): AudioContext | null {
 
       masterBus = compressor;
     }
-
     return audioContext;
   } catch (error) {
     console.warn("Web Audio is unavailable", error);
@@ -146,293 +149,129 @@ function getAudioContext(): AudioContext | null {
   }
 }
 
-/** Android WebView starts the context suspended; always resume before scheduling. */
+/** Android WebView starts the context suspended; resume before scheduling. */
 async function ensureRunning(ctx: AudioContext): Promise<void> {
   if (ctx.state === "suspended") {
     try {
       await ctx.resume();
     } catch {
-      /* the WAV player still fires */
+      /* the HTMLAudioElement fallback still fires */
     }
   }
 }
 
-/** One layered pulse: square for cut-through + triangle for body. */
-function scheduleTone(
-  ctx: AudioContext,
-  at: number,
-  frequency: number,
-  duration: number,
-  gainValue: number,
-): void {
-  const bus = masterBus ?? ctx.destination;
+/** Fetch + decode once; `null` means "use the media-element fallback". */
+function loadBuffer(ctx: AudioContext, key: SoundKey): Promise<AudioBuffer | null> {
+  const cached = decoded.get(key);
+  if (cached) return Promise.resolve(cached);
 
-  (["square", "triangle"] as OscillatorType[]).forEach((type, index) => {
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const level = Math.min(1, gainValue * (index === 0 ? 0.7 : 0.55));
+  const pending = inflight.get(key);
+  if (pending) return pending;
 
-    oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, at);
-
-    // Short attack (no click), flat sustain, quick release at the very end.
-    gain.gain.setValueAtTime(0.0001, at);
-    gain.gain.exponentialRampToValueAtTime(level, at + 0.006);
-    gain.gain.setValueAtTime(level, at + duration * 0.86);
-    gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
-
-    oscillator.connect(gain).connect(bus);
-    oscillator.start(at);
-    oscillator.stop(at + duration + 0.02);
-  });
-}
-
-// --------------------------------------------------------------------- WAV
-function writeAscii(bytes: Uint8Array, offset: number, text: string): void {
-  for (let index = 0; index < text.length; index += 1) {
-    bytes[offset + index] = text.charCodeAt(index);
-  }
-}
-
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const chunk = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
-  }
-  return btoa(binary);
-}
-
-/** 16-bit / 44.1 kHz mono PCM rendered in memory as a data URL. */
-function buildWavDataUrl(pulses: TonePulse[]): string {
-  const sampleRate = 44100;
-  const totalMs = pulses.reduce((sum, pulse) => sum + pulse.durationMs + pulse.pauseMs, 0);
-  const frames = Math.max(1, Math.ceil((totalMs / 1000) * sampleRate));
-  const samples = new Int16Array(frames);
-
-  let cursor = 0;
-  for (const pulse of pulses) {
-    const count = Math.floor((pulse.durationMs / 1000) * sampleRate);
-    for (let index = 0; index < count && cursor + index < frames; index += 1) {
-      const t = index / sampleRate;
-      const attack = Math.min(1, index / 200);
-      const release = Math.min(1, (count - index) / 240);
-      const wave =
-        Math.sin(2 * Math.PI * pulse.freq * t) * 0.65 +
-        Math.sin(4 * Math.PI * pulse.freq * t) * 0.25;
-      samples[cursor + index] = Math.round(Math.max(-1, Math.min(1, wave * attack * release)) * 32767);
+  const job = (async () => {
+    try {
+      const response = await fetch(SOUND_FILES[key]);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.arrayBuffer();
+      const buffer = await ctx.decodeAudioData(data);
+      decoded.set(key, buffer);
+      return buffer;
+    } catch (error) {
+      console.warn(`sound "${key}" is not decodable here; using media fallback`, error);
+      return null;
+    } finally {
+      inflight.delete(key);
     }
-    cursor += Math.floor(((pulse.durationMs + pulse.pauseMs) / 1000) * sampleRate);
-  }
+  })();
 
-  const bytes = new Uint8Array(44 + samples.length * 2);
-  const view = new DataView(bytes.buffer);
-
-  writeAscii(bytes, 0, "RIFF");
-  view.setUint32(4, 36 + samples.length * 2, true);
-  writeAscii(bytes, 8, "WAVE");
-  writeAscii(bytes, 12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeAscii(bytes, 36, "data");
-  view.setUint32(40, samples.length * 2, true);
-  for (let index = 0; index < samples.length; index += 1) {
-    view.setInt16(44 + index * 2, samples[index], true);
-  }
-
-  return `data:audio/wav;base64,${toBase64(bytes)}`;
+  inflight.set(key, job);
+  return job;
 }
 
 /**
- * Plays a synthesized pattern through an `<audio>` element. This is the layer
- * that still reaches the hardware media channel when Web Audio is throttled.
+ * Plays a bundled clip at a chosen gain. `rate` gives the same real recording a
+ * slightly higher pitch for overload / exercise-completion cues — no synthesis.
  */
-export function playWavTonePattern(pulses: TonePulse[], volume = 1): void {
-  try {
-    const audio = new Audio(buildWavDataUrl(pulses));
-    audio.volume = Math.min(1, Math.max(0, volume));
-    void audio.play().catch(() => undefined);
-  } catch (error) {
-    console.warn("wav playback failed", error);
-  }
-}
+async function playClip(key: SoundKey, gainValue: number, rate = 1): Promise<void> {
+  const ctx = getAudioContext();
+  const buffer = ctx ? await loadBuffer(ctx, key) : null;
 
-function getOnlineAudio(key: keyof typeof ONLINE_SOUNDS): HTMLAudioElement | null {
-  const cached = onlineCache.get(key);
-  if (cached) return cached;
+  if (ctx && buffer) {
+    await ensureRunning(ctx);
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
 
-  try {
-    const audio = new Audio();
-    audio.crossOrigin = "anonymous";
-    audio.preload = "auto";
-    audio.src = ONLINE_SOUNDS[key];
-    onlineCache.set(key, audio);
-    return audio;
-  } catch {
-    return null;
-  }
-}
+    source.buffer = buffer;
+    source.playbackRate.value = rate;
+    gain.gain.value = gainValue;
 
-/** Online clip when it loads, generated WAV pattern otherwise. */
-function playOnlineOrWav(key: keyof typeof ONLINE_SOUNDS, volume: number, fallback: TonePulse[]): void {
-  const source = getOnlineAudio(key);
-  if (!source) {
-    playWavTonePattern(fallback, volume);
+    source.connect(gain).connect(masterBus ?? ctx.destination);
+    source.start();
     return;
   }
 
+  // Fallback: <audio> uses the media volume channel and needs no decode.
   try {
-    const clip = source.cloneNode(true) as HTMLAudioElement;
-    clip.volume = Math.min(1, Math.max(0, volume));
-    void clip
-      .play()
-      .then(() => undefined)
-      .catch(() => playWavTonePattern(fallback, volume));
-  } catch {
-    playWavTonePattern(fallback, volume);
+    const audio = new Audio(SOUND_FILES[key]);
+    audio.volume = clamp(gainValue, 0, 1);
+    audio.playbackRate = rate;
+    void audio.play().catch(() => undefined);
+  } catch (error) {
+    console.warn("audio playback failed", error);
   }
 }
 
-/** Android/iOS only allow audio after a user gesture — call this once. */
+/** Call on the first user gesture: unlock the context and warm all four clips. */
 export function unlockAudio(): void {
-  getAudioContext();
-  // Warm the optional online clips so the first alarm is instant.
-  getOnlineAudio("alarm");
-  getOnlineAudio("water");
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  void ensureRunning(ctx);
+  (Object.keys(SOUND_FILES) as SoundKey[]).forEach((key) => {
+    void loadBuffer(ctx, key);
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Alert vocabulary
 // ---------------------------------------------------------------------------
 
-const ALARM_PATTERN: TonePulse[] = [
-  { freq: 2400, durationMs: 90, pauseMs: 45 },
-  { freq: 1200, durationMs: 90, pauseMs: 45 },
-  { freq: 2400, durationMs: 90, pauseMs: 45 },
-  { freq: 1200, durationMs: 110, pauseMs: 260 },
-  { freq: 2400, durationMs: 90, pauseMs: 45 },
-  { freq: 1200, durationMs: 90, pauseMs: 45 },
-  { freq: 2400, durationMs: 90, pauseMs: 45 },
-  { freq: 1200, durationMs: 130, pauseMs: 0 },
-];
-
-const RISING_BEEP = [1046, 1318, 1568];
-
 /**
- * Rest timer / cardio timer finished: double burst at full level + strong buzz.
- * This has to cut through gym music, so every layer plays at once.
+ * Rest timer / 5-min cardio timer finished. The real alarm clip is boosted to
+ * 1.8x — that "200%" is what cuts through gym music — paired with a long buzz.
  */
 export function alarm(): void {
-  const ctx = getAudioContext();
-
-  void (async () => {
-    if (ctx) {
-      await ensureRunning(ctx);
-      let at = ctx.currentTime + 0.01;
-      for (const pulse of ALARM_PATTERN) {
-        scheduleTone(ctx, at, pulse.freq, pulse.durationMs / 1000, 1);
-        at += (pulse.durationMs + pulse.pauseMs) / 1000;
-      }
-    }
-    playOnlineOrWav("alarm", 1, ALARM_PATTERN);
-  })();
-
+  void playClip("alarm", 1.8);
   vibrate([500, 150, 500, 150, 700]);
 }
 
 /**
- * Set completed / overload applied: crisp rising beeps at 0.85 level.
+ * Set completed / progressive overload applied. `frequency` and `times` only
+ * nudge the playback rate of the same studio bell, they no longer build a tone.
  */
-export function beep(times = 2, frequency = 1200, duration = 0.14): void {
-  const ctx = getAudioContext();
-  const pulses: TonePulse[] = [];
-
-  for (let index = 0; index < times; index += 1) {
-    const freq = frequency === 1200
-      ? RISING_BEEP[Math.min(index, RISING_BEEP.length - 1)]
-      : frequency * (1 + index * 0.08);
-    pulses.push({ freq, durationMs: duration * 1000, pauseMs: 60 });
-  }
-
-  void (async () => {
-    if (ctx) {
-      await ensureRunning(ctx);
-      let at = ctx.currentTime + 0.01;
-      for (const pulse of pulses) {
-        scheduleTone(ctx, at, pulse.freq, duration, 0.85);
-        at += (pulse.durationMs + pulse.pauseMs) / 1000;
-      }
-    }
-    playWavTonePattern(pulses, 0.85);
-  })();
-
-  vibrate([120, 60, 180]);
+export function beep(times = 2, frequency = 1200, _duration = 0.14): void {
+  const rate = clamp(frequency / 1200 + (times - 2) * 0.03, 0.85, 1.45);
+  void playClip("success", 1.0, rate);
+  vibrate([120, 50, 150]);
 }
 
-/** Whole exercise finished: quick rising arpeggio. */
+/** All sets of an exercise finished: the same success bell, brighter + louder. */
 export function chord(): void {
-  const ctx = getAudioContext();
-  const notes = [523.25, 659.25, 783.99, 1046.5];
-
-  void (async () => {
-    if (!ctx) return;
-    await ensureRunning(ctx);
-    const start = ctx.currentTime + 0.01;
-    notes.forEach((freq, index) => {
-      scheduleTone(ctx, start + index * 0.085, freq, 0.32, 0.7);
-    });
-  })();
-
+  void playClip("success", 1.15, 1.22);
   vibrate([80, 40, 80, 40, 120]);
 }
 
-/** Minor ticks (warm-up, checklist rows): short and polite. */
-export function softTap(frequency = 980, duration = 0.09): void {
-  const ctx = getAudioContext();
-
-  void (async () => {
-    if (!ctx) return;
-    await ensureRunning(ctx);
-    scheduleTone(ctx, ctx.currentTime + 0.01, frequency, duration, 0.45);
-  })();
-
-  vibrate(50);
+/** Minor ticks (warm-ups, checklist rows): short, quiet UI pop. */
+export function softTap(_frequency = 980, _duration = 0.09): void {
+  void playClip("tap", 0.5);
+  vibrate(40);
 }
 
 /**
- * Water reminder: deliberately soft — a droplet chime, a light buzz and a
- * system notification when the user allowed them.
+ * Water reminder: deliberately soft droplet sound, light buzz and a system
+ * notification. Never the gym alarm.
  */
 export function waterAlert(): void {
-  const ctx = getAudioContext();
-
-  void (async () => {
-    if (ctx) {
-      await ensureRunning(ctx);
-      const at = ctx.currentTime + 0.01;
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(600, at);
-      oscillator.frequency.exponentialRampToValueAtTime(1100, at + 0.18);
-
-      gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.exponentialRampToValueAtTime(0.22, at + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.18);
-
-      oscillator.connect(gain).connect(masterBus ?? ctx.destination);
-      oscillator.start(at);
-      oscillator.stop(at + 0.2);
-    }
-    playOnlineOrWav("water", 0.25, [{ freq: 900, durationMs: 180, pauseMs: 0 }]);
-  })();
-
+  void playClip("water", 0.35);
   vibrate([100, 60, 100]);
   notifyWater("💧 یادآور نوشیدن آب", "وقت نوشیدن ۱ لیوان آب است! (۷۰٪ حجم عضله آب است)");
 }

@@ -2,7 +2,7 @@
 import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { daysBetween, fa, faDate, faNum, faReps, firstNumber, isoToday } from "../lib/fa";
-import { alarm, beep, cardioTimer, chord, softTap, vibrate } from "../lib/timer";
+import { alarm, beep, cardioTimer, chord, softTap } from "../lib/timer";
 import { applyProgressiveOverload } from "../lib/api";
 import {
   getState,
@@ -210,8 +210,8 @@ async function runOverload(): Promise<void> {
     const next = await applyProgressiveOverload();
     setState(next);
     toast("چرخه افزایش وزنه اعمال شد. سنگین‌تر بزن! 💪");
+    // beep() owns its vibration now; no second vibrate() here.
     beep(3, 1480, 0.15);
-    vibrate([200, 80, 200, 80, 300]);
     requestRender();
   } catch (error) {
     toast(error instanceof Error ? error.message : "اعمال افزایش وزنه ناموفق بود.", "error");
@@ -661,8 +661,12 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     }`;
 
     if (log.done) {
-      beep(2, 1320, 0.12);
-      vibrate([100, 50, 150]);
+      // One clip per tap: the final set plays the brighter "chord" instead of
+      // the regular bell, so the two real MP3s never overlap.
+      const allDone =
+        exercise.logs.length > 0 && exercise.logs.every((entry) => entry.done);
+      if (allDone) chord();
+      else beep(2, 1320, 0.12);
       startRest();
     }
     refreshProgress(day, exercise);
@@ -714,7 +718,6 @@ function refreshProgress(day: WorkoutDay, exercise: Exercise): void {
 
   if (exercise.logs.length > 0 && done === exercise.logs.length) {
     toast(`حرکت «${exercise.name}» کامل شد ✅`, "ok");
-    chord();
   }
 }
 
