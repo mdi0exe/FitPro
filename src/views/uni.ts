@@ -13,37 +13,15 @@ import {
   scheduleRepeatingNotification,
 } from "../lib/notify";
 import { softTap } from "../lib/timer";
+import { resolveShuttle, type ScheduleGroupKey } from "../data/shuttle";
+import { renderClassScheduleCard } from "./uniCourses";
+import { renderLanguageStudyCard } from "./uniLanguage";
+import { openShuttleAiImportModal } from "./uniShuttleAi";
 
-type ScheduleGroupKey = "sun-wed" | "sat" | "thu" | "fri" | "suburbs";
-
-interface RailwaySchedule {
-  title: string;
-  fromRailway: string[];
-  fromUni: string[];
+/** Active timetable: imported JSON when present, else the published table. */
+function shuttle() {
+  return resolveShuttle(getState().customShuttleJson);
 }
-
-const RAILWAY_SCHEDULES: Record<Exclude<ScheduleGroupKey, "suburbs">, RailwaySchedule> = {
-  "sun-wed": {
-    title: "یکشنبه تا چهارشنبه",
-    fromRailway: ["08:15", "10:00", "13:00", "15:00", "19:15", "21:00"],
-    fromUni: ["09:10", "11:15", "14:00", "16:00", "18:00", "20:00"],
-  },
-  sat: {
-    title: "شنبه‌ها",
-    fromRailway: ["08:15", "21:00"],
-    fromUni: ["09:30", "16:00"],
-  },
-  thu: {
-    title: "پنجشنبه‌ها",
-    fromRailway: ["08:15", "21:00"],
-    fromUni: ["09:30", "15:00"],
-  },
-  fri: {
-    title: "جمعه‌ها و ایام تعطیل",
-    fromRailway: ["09:00", "21:00"],
-    fromUni: ["10:00", "15:00"],
-  },
-};
 
 /** Plugin weekday numbering: 1 = Sunday … 7 = Saturday. */
 const GROUP_WEEKDAYS: Record<ScheduleGroupKey, number[]> = {
@@ -53,45 +31,6 @@ const GROUP_WEEKDAYS: Record<ScheduleGroupKey, number[]> = {
   fri: [6],
   suburbs: [1, 2, 3, 4],
 };
-
-const SUBURB_ROUTES: Array<{ id: string; route: string; direction: string; times: string[] }> = [
-  {
-    id: "khosro-to-uni",
-    route: "خسروشهر ← دانشگاه",
-    direction: "حرکت مینی‌بوس از فلکه اصلی خسروشهر به دانشگاه",
-    times: ["08:15"],
-  },
-  {
-    id: "osku-to-uni",
-    route: "اسکو ← دانشگاه",
-    direction: "حرکت مینی‌بوس از اسکو به دانشگاه",
-    times: ["08:25"],
-  },
-  {
-    id: "uni-to-khosro-osku",
-    route: "دانشگاه ← خسروشهر و اسکو",
-    direction: "حرکت از دانشگاه به خسروشهر و از مسیر اسکو",
-    times: ["16:00", "18:00"],
-  },
-  {
-    id: "east-to-uni",
-    route: "شرق تبریز ← دانشگاه",
-    direction: "حرکت از شرق تبریز به دانشگاه",
-    times: ["08:00"],
-  },
-  {
-    id: "uni-to-east",
-    route: "دانشگاه ← شرق تبریز",
-    direction: "حرکت از دانشگاه به شرق تبریز",
-    times: ["16:00", "18:00"],
-  },
-  {
-    id: "fahmideh-to-uni",
-    route: "میدان شهید فهمیده ← دانشگاه",
-    direction: "حرکت از میدان شهید فهمیده تبریز به دانشگاه",
-    times: ["07:45"],
-  },
-];
 
 function detectTodayScheduleKey(): Exclude<ScheduleGroupKey, "suburbs"> {
   const day = new Date().getDay(); // 0 = Sunday … 6 = Saturday
@@ -117,7 +56,14 @@ function ensureUniReminders() {
 
 export function renderUni(): HTMLElement {
   const view = el("div", "space-y-3 animate-fade-up");
-  view.append(uniHeroBanner(), nextBusRadarCard(), reminderCard(), shuttleScheduleCard());
+  view.append(
+    uniHeroBanner(),
+    nextBusRadarCard(),
+    renderClassScheduleCard(),
+    renderLanguageStudyCard(),
+    reminderCard(),
+    shuttleScheduleCard(),
+  );
   return view;
 }
 
@@ -132,7 +78,7 @@ function uniHeroBanner(): HTMLElement {
     el(
       "p",
       "mt-1 text-[11px] leading-6 text-slate-400",
-      "برنامه رسمی سرویس‌های راه‌آهن، خسروشهر، اسکو، شرق و میدان فهمیده (اجرا از ۱۴۰۵/۰۸/۲۳)",
+      `برنامه سرویس‌های راه‌آهن، خسروشهر، اسکو، شرق و میدان فهمیده (اجرا از ${shuttle().effectiveDate})`,
     ),
   );
 
@@ -148,7 +94,7 @@ function parseMinutes(hhmm: string): number {
 
 function nextBusRadarCard(): HTMLElement {
   const todayKey = detectTodayScheduleKey();
-  const schedule = RAILWAY_SCHEDULES[todayKey];
+  const schedule = shuttle().railway[todayKey];
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -331,6 +277,16 @@ function shuttleScheduleCard(): HTMLElement {
     ),
   );
 
+  // Future semesters: replace the whole table from an AI-extracted JSON.
+  card.append(
+    btn(
+      "btn-ghost w-full border-dashed text-[11px] text-slate-300",
+      "🤖 تغییر برنامه سرویس‌ها با هوش مصنوعی",
+      () => openShuttleAiImportModal(),
+      { "aria-label": "بروزرسانی سرویس‌ها با هوش مصنوعی" },
+    ),
+  );
+
   const tabs: Array<{ id: ScheduleGroupKey; label: string }> = [
     { id: "sun-wed", label: "یکشنبه تا چهارشنبه" },
     { id: "sat", label: "شنبه" },
@@ -339,6 +295,7 @@ function shuttleScheduleCard(): HTMLElement {
     { id: "suburbs", label: "خسروشهر / اسکو / شرق / فهمیده" },
   ];
 
+  const timetable = shuttle();
   const tabBar = el("div", "flex flex-wrap gap-1.5");
   for (const tab of tabs) {
     const active = activeGroup === tab.id;
@@ -371,7 +328,7 @@ function shuttleScheduleCard(): HTMLElement {
       ),
     );
 
-    for (const item of SUBURB_ROUTES) {
+    for (const item of timetable.suburbs) {
       const box = el("div", "space-y-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-3");
       box.append(
         el("p", "text-xs font-extrabold text-slate-100", escapeHtml(item.route)),
@@ -390,7 +347,7 @@ function shuttleScheduleCard(): HTMLElement {
     return card;
   }
 
-  const schedule = RAILWAY_SCHEDULES[activeGroup];
+  const schedule = timetable.railway[activeGroup];
   const grid = el("div", "grid grid-cols-2 gap-2.5");
 
   const column = (title: string, times: string[], direction: "uni" | "rail", accent: string) => {

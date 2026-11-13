@@ -12,11 +12,16 @@ import {
   cancel,
   createChannel,
   isPermissionGranted,
+  onAction,
+  registerActionTypes,
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
+import { toast } from "../components/ui";
 import { isTauri } from "./api";
+import { fa } from "./fa";
 import { adjustTimestampForWaterQuietHours } from "./quietHours";
+import { getState, persist, requestRender, syncTodayActivity, syncWaterChecklist } from "./store";
 
 /** Android 8+ needs a channel; High importance gives a heads-up banner. */
 const CHANNEL_ID = "fitpro-alerts";
@@ -95,6 +100,7 @@ export async function pushSystemNotification(
   title: string,
   body: string,
   id?: number,
+  actionTypeId?: string,
 ): Promise<void> {
   if (!(await canPost())) return;
 
@@ -106,6 +112,7 @@ export async function pushSystemNotification(
         body,
         channelId: CHANNEL_ID,
         ...(id === undefined ? {} : { id }),
+        ...(actionTypeId === undefined ? {} : { actionTypeId }),
       });
       return;
     } catch (error) {
@@ -123,6 +130,69 @@ export async function pushSystemNotification(
 
 /** Fixed id so an immediate alert replaces its scheduled twin. */
 export const WATER_NOTIFICATION_ID = 7701;
+
+/** Action group shown under the water notification on Android. */
+export const WATER_ACTION_TYPE_ID = "water-reminder-actions";
+/** The single "I drank a glass" button inside that group. */
+export const WATER_ACTION_ID = "drink_one_glass";
+
+let actionsInitialized = false;
+
+/**
+ * Registers the water notification's action button and listens for taps.
+ *
+ * Android draws the button under the notification, so a glass can be logged
+ * without opening the app — the tap is delivered here even from a cold start
+ * (the plugin replays it once the listener is attached).
+ */
+export async function initNotificationActions(): Promise<void> {
+  if (!isTauri() || actionsInitialized) return;
+  actionsInitialized = true;
+
+  try {
+    await registerActionTypes([
+      {
+        id: WATER_ACTION_TYPE_ID,
+        actions: [{ id: WATER_ACTION_ID, title: "💧 +۱ لیوان آب خوردم" }],
+      },
+    ]);
+
+    await onAction((event) => {
+      // `tap` is a plain notification tap (just opens the app), not the button.
+      if (event.actionId !== WATER_ACTION_ID) return;
+      incrementWaterGlassFromNotification();
+    });
+  } catch (error) {
+    // Desktop and browsers have no notification actions; the in-app button and
+    // the toast action still work.
+    console.warn("notification actions unavailable", error);
+  }
+}
+
+/**
+ * Logs one glass straight from the notification (or the toast action).
+ * Returns the new count so callers can show a message.
+ */
+export function addWaterGlass(count = 1): number {
+  const state = getState();
+  const next = Math.min(20, Math.max(0, (state.diet.waterGlasses ?? 0) + count));
+  state.diet.waterGlasses = next;
+  syncWaterChecklist();
+  syncTodayActivity();
+  persist(0);
+  return next;
+}
+
+/** Action-button handler: adds a glass and refreshes whatever tab is open. */
+export function incrementWaterGlassFromNotification(): void {
+  try {
+    const glasses = addWaterGlass(1);
+    toast(`💧 نوش جان! آب امروز: ${fa(glasses)} لیوان`);
+    requestRender();
+  } catch (error) {
+    console.warn("failed to log water from the notification", error);
+  }
+}
 
 /**
  * Registers a native OS alarm at `nextAtMs`.
@@ -146,6 +216,7 @@ export async function scheduleWaterNotificationAt(nextAtMs: number): Promise<voi
       channelId: CHANNEL_ID,
       title: "💧 وقت نوشیدن آب است!",
       body: "۱ لیوان آب بنوش (۷۰٪ حجم عضله آب است و برای ریکاوری حیاتی است).",
+      actionTypeId: WATER_ACTION_TYPE_ID,
       // `allowWhileIdle` keeps Doze from swallowing the alarm.
       schedule: Schedule.at(new Date(safeNextAt), false, true),
     });

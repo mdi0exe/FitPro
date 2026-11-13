@@ -2,12 +2,13 @@
 import "./styles.css";
 
 import { loadState } from "./lib/api";
-import { clear, el, escapeHtml, preserveScroll } from "./lib/dom";
+import { clear, el, escapeHtml } from "./lib/dom";
 import { installNavigation } from "./lib/navigation";
 import { restoreWaterReminderOnBoot, unlockAudio } from "./lib/timer";
 import {
   ensureDailyDietReset,
   getActiveTab,
+  getState,
   initState,
   installLifecycleFlush,
   persist,
@@ -20,12 +21,28 @@ import { installWakeLockLifecycle } from "./lib/workoutTools";
 import { renderUni } from "./views/uni";
 import { renderHeader, renderNav } from "./components/shell";
 import { toast } from "./components/ui";
+import { initNotificationActions } from "./lib/notify";
 import { renderWorkout } from "./views/workout";
 import { renderProgress } from "./views/progress";
 import { renderNutrition } from "./views/nutrition";
 import { renderCoach } from "./views/coach";
+import type { TabId } from "./types";
 
 const app = document.getElementById("app") as HTMLElement;
+
+let lastRenderedTab: TabId | null = null;
+let lastNavTab: TabId | null = null;
+let lastHeaderKey = "";
+
+/** Cheap fingerprint of everything `renderHeader` draws. */
+function headerSignature(): string {
+  try {
+    const { profile } = getState();
+    return `${profile.name}|${profile.currentWeight}|${profile.targetWeight}|${profile.startWeight}`;
+  } catch {
+    return "";
+  }
+}
 
 // Android WebView paints edge-to-edge but reports 0 for env(safe-area-*), so the
 // CSS variables fall back to fixed minima on that platform only.
@@ -49,16 +66,28 @@ function buildShell(): void {
   app.append(headerSlot, view, navSlot);
 }
 
-function renderChrome(): void {
+function renderChrome(force = false): void {
   const headerSlot = document.getElementById("header-slot");
   const navSlot = document.getElementById("nav-slot");
-  if (headerSlot) {
-    clear(headerSlot);
-    headerSlot.append(renderHeader());
+  const tab = getActiveTab();
+
+  // The header only depends on the profile numbers, and the bottom nav only on
+  // the active tab. Replacing them on every tick made the whole page flash, so
+  // each slot is rebuilt only when its own data actually changed.
+  const headerKey = headerSignature();
+  if (force || headerKey !== lastHeaderKey) {
+    lastHeaderKey = headerKey;
+    if (headerSlot) {
+      clear(headerSlot);
+      headerSlot.append(renderHeader());
+    }
   }
-  if (navSlot) {
-    clear(navSlot);
-    navSlot.append(renderNav());
+  if (force || tab !== lastNavTab) {
+    lastNavTab = tab;
+    if (navSlot) {
+      clear(navSlot);
+      navSlot.append(renderNav());
+    }
   }
 }
 
@@ -83,13 +112,25 @@ function renderView(keepScroll = false): void {
   const view = document.getElementById("view");
   if (!view) return;
 
-  const paint = () => {
-    clear(view);
-    view.append(currentView());
-  };
+  const tab = getActiveTab();
+  // Switching tabs is the only moment the entrance animation should replay.
+  // Re-rendering after a tap inside the same tab must not restart it.
+  const sameTab = lastRenderedTab === tab;
+  lastRenderedTab = tab;
 
-  if (keepScroll) preserveScroll(paint);
-  else paint();
+  const next = currentView();
+  if (sameTab) next.classList.remove("animate-fade-up");
+
+  if (keepScroll) {
+    const y = window.scrollY;
+    view.replaceChildren(next);
+    // Two frames: the browser applies the layout before the restore, so the
+    // scroll position never jumps (iOS/Android webviews included).
+    window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
+    requestAnimationFrame(() => window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior }));
+  } else {
+    view.replaceChildren(next);
+  }
 
   renderChrome();
 }
@@ -127,6 +168,8 @@ async function boot(): Promise<void> {
     installLifecycleFlush();
     // Keep the screen awake while training (re-acquired on resume).
     installWakeLockLifecycle();
+    // Android action button: "+1 glass" straight from the notification shade.
+    void initNotificationActions();
     setRenderHook(() => renderView(true));
 
     // Android back: close the open overlay first, otherwise return to the

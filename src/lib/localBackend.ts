@@ -9,6 +9,7 @@ import type { AppStateData, Exercise, Milestone, SetLog } from "../types";
 import { createSeedState, localIso } from "../data/seed";
 import defaultGifs from "../data/default-gifs.json";
 import { en, fa, firstNumber } from "./fa";
+import { uid } from "./dom";
 
 const STORAGE_KEY = "persian-hypertrophy::state::v1";
 
@@ -52,8 +53,59 @@ export function normalizeState(input: AppStateData): AppStateData {
       ? [...new Set(reminders.activeBusAlarms.filter((key) => typeof key === "string" && key))].slice(0, 64)
       : [],
   };
-  state.activeDay = Math.min(Math.max(0, state.activeDay ?? 0), state.days.length - 1);
-  if (!state.restSeconds || state.restSeconds < 15 || state.restSeconds > 600) {
+
+  // MSc timetable: missing = legacy save (seed it), empty array = user deleted
+  // every course and must stay empty.
+  if (!Array.isArray(state.courses)) {
+    state.courses = seed.courses;
+  } else {
+    state.courses = state.courses
+      .filter((course) => course && typeof course.name === "string" && course.name.trim())
+      .map((course) => ({
+        id: course.id || uid("course"),
+        name: course.name.trim(),
+        professor: (course.professor ?? "").trim(),
+        dayOfWeek: Number.isInteger(course.dayOfWeek) && course.dayOfWeek >= 0 && course.dayOfWeek <= 6
+          ? course.dayOfWeek
+          : 0,
+        startTime: hhmm(course.startTime, "09:00"),
+        endTime: hhmm(course.endTime, "11:00"),
+        weekType: (["all", "odd", "even"] as const).includes(course.weekType) ? course.weekType : "all",
+      }))
+      .slice(0, 60);
+  }
+  if (state.semesterWeekType !== "odd" && state.semesterWeekType !== "even") {
+    state.semesterWeekType = "odd";
+  }
+
+  const lang = state.languageStudy ?? seed.languageStudy;
+  state.languageStudy = {
+    reminderEnabled: lang.reminderEnabled !== false,
+    reminderTime: hhmm(lang.reminderTime, "20:30"),
+    targetMinutes: Math.min(180, Math.max(10, Math.round(Number(lang.targetMinutes) || 60))),
+    completedDates: Array.isArray(lang.completedDates)
+      ? [...new Set(lang.completedDates.filter((date) => typeof date === "string" && date))]
+          .sort()
+          .slice(-400)
+      : [],
+  };
+
+  if (typeof state.customShuttleJson === "string") {
+    const raw = state.customShuttleJson.trim();
+    let valid = raw.length > 0 && raw.length <= 20_000;
+    if (valid) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        valid = Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed);
+      } catch {
+        valid = false;
+      }
+    }
+    state.customShuttleJson = valid ? raw : null;
+  } else {
+    state.customShuttleJson = null;
+  }
+  state.activeDay = Math.min(Math.max(0, state.activeDay ?? 0), state.days.length - 1);  if (!state.restSeconds || state.restSeconds < 15 || state.restSeconds > 600) {
     state.restSeconds = 90;
   }
   // Same migration as models.rs: old installs carry the 6-item grocery list.

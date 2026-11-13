@@ -132,6 +132,30 @@ export interface UniReminders {
 
 export type Readiness = "high" | "normal" | "low";
 
+/** One row of the MSc timetable. */
+export interface CourseSession {
+  id: string;
+  name: string;
+  professor: string;
+  /** `Date.getDay()` numbering: 6 = Saturday, 0 = Sunday … 4 = Thursday. */
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  /** `all` = every week, `odd` = `*` (first/odd), `even` = `**` (second/even). */
+  weekType: "all" | "odd" | "even";
+}
+
+/** Which half of the fortnight the timetable is showing. */
+export type SemesterWeekType = "odd" | "even";
+
+export interface LanguageStudyState {
+  reminderEnabled: boolean;
+  reminderTime: string;
+  targetMinutes: number;
+  /** ISO dates with a completed session. */
+  completedDates: string[];
+}
+
 export interface AppStateData {
   version: number;
   profile: UserProfile;
@@ -150,6 +174,12 @@ export interface AppStateData {
   personalRecords: Record<string, PersonalRecord>;
   progressPhotos: ProgressPhoto[];
   uniReminders: UniReminders;
+  /** Editable MSc timetable; seeded for saves that predate it. */
+  courses: CourseSession[];
+  semesterWeekType: SemesterWeekType;
+  languageStudy: LanguageStudyState;
+  /** Raw JSON imported from the AI shuttle template (null = built-in table). */
+  customShuttleJson: string | null;
 }
 
 export type TabId = "workout" | "progress" | "nutrition" | "uni" | "coach";

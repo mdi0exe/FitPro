@@ -5,6 +5,7 @@
  * the app runs outside Tauri (plain `npm run dev` in a browser), so the whole
  * UI stays testable without a native shell.
  */
+import { defaultCourses } from "./courses";
 import type {
   AppStateData,
   DietItem,
@@ -447,5 +448,14 @@ export function createSeedState(): AppStateData {
       gymReminderTime: "16:30",
       activeBusAlarms: [],
     },
+    courses: defaultCourses(),
+    semesterWeekType: "odd",
+    languageStudy: {
+      reminderEnabled: true,
+      reminderTime: "20:30",
+      targetMinutes: 60,
+      completedDates: [],
+    },
+    customShuttleJson: null,
   };
 }

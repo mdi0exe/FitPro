@@ -521,6 +521,10 @@ pub fn seed() -> AppStateData {
         personal_records: std::collections::HashMap::new(),
         progress_photos: Vec::new(),
         uni_reminders: crate::models::UniReminders::default(),
+        courses: crate::models::seed_default_courses(),
+        semester_week_type: "odd".to_string(),
+        language_study: crate::models::LanguageStudyState::default(),
+        custom_shuttle_json: None,
     };
     state.normalize();
     state

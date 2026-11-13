@@ -173,8 +173,56 @@ export function toast(message: string, kind: ToastKind = "ok"): void {
   }, 2600);
 }
 
-/** Slim gradient progress bar (0-100). */
-export function progressBar(percent: number, extraClass = ""): HTMLElement {
+/**
+ * Toast with one inline action button.
+ *
+ * Used by the water reminder so a glass can be logged straight from the banner
+ * (the Android notification carries the same action). Stays up longer than a
+ * plain toast because it needs a decision.
+ */
+export function toastWithAction(
+  message: string,
+  actionLabel: string,
+  onAction: () => void,
+  kind: ToastKind = "info",
+): void {
+  const root = toastRoot();
+  if (!root) return;
+
+  const node = el(
+    "div",
+    `pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-bold shadow-xl backdrop-blur-md ${toastStyles[kind]}`,
+  );
+  node.append(svgIcon(icons.drop, "h-4 w-4 shrink-0"));
+  node.append(el("span", "min-w-0 flex-1 leading-6", escapeHtml(message)));
+
+  const action = btn(
+    "shrink-0 rounded-xl bg-cyan-400 px-2.5 py-1.5 text-[11px] font-black text-slate-950 transition active:scale-95",
+    actionLabel,
+    () => {
+      dismiss();
+      onAction();
+    },
+    { "aria-label": actionLabel },
+  );
+  node.append(action);
+  node.style.animation = "fade-up 0.25s ease-out both";
+  root.append(node);
+
+  let removed = false;
+  const dismiss = () => {
+    if (removed) return;
+    removed = true;
+    window.clearTimeout(timer);
+    node.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+    node.style.opacity = "0";
+    node.style.transform = "translateY(-8px)";
+    window.setTimeout(() => node.remove(), 320);
+  };
+  const timer = window.setTimeout(dismiss, 7000);
+}
+
+/** Slim gradient progress bar (0-100). */export function progressBar(percent: number, extraClass = ""): HTMLElement {
   const track = el("div", `h-2 w-full overflow-hidden rounded-full bg-slate-800/80 ${extraClass}`);
   const fill = el(
     "div",

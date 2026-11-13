@@ -103,10 +103,13 @@ export class CountdownTimer {
 // (or Web Audio is throttled), an HTMLAudioElement fallback still routes the
 // same file through the hardware media channel. No oscillators, no WAV synth.
 
+import { toastWithAction } from "../components/ui";
 import { getState, persist } from "./store";
 import {
+  WATER_ACTION_TYPE_ID,
   WATER_NOTIFICATION_ID,
   cancelScheduledWaterNotification,
+  incrementWaterGlassFromNotification,
   pushSystemNotification,
   scheduleWaterNotificationAt,
 } from "./notify";
@@ -288,6 +291,10 @@ export function waterAlert(): void {
   void playClip("water", 0.35);
   vibrate([100, 60, 100]);
   notifyWater("💧 یادآور نوشیدن آب", "وقت نوشیدن ۱ لیوان آب است! (۷۰٪ حجم عضله آب است)");
+  // In-app twin of the notification button: log the glass without leaving the tab.
+  toastWithAction("💧 وقت نوشیدن ۱ لیوان آب است!", "+۱ آب خوردم 💧", () =>
+    incrementWaterGlassFromNotification(),
+  );
 }
 
 export function vibrate(pattern: number | number[] = [200, 100, 200]): void {
@@ -307,7 +314,7 @@ export const cardioTimer = new CountdownTimer(300);
 
 /** Water notification (shared id so an alert replaces its scheduled twin). */
 export function notifyWater(title: string, body: string): void {
-  void pushSystemNotification(title, body, WATER_NOTIFICATION_ID);
+  void pushSystemNotification(title, body, WATER_NOTIFICATION_ID, WATER_ACTION_TYPE_ID);
 }
 
 // ---------------------------------------------------------------------------

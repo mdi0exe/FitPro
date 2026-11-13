@@ -390,6 +390,119 @@ fn is_hhmm(value: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// MSc class schedule
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CourseSession {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub professor: String,
+    /// `Date::getDay()` numbering: 0 = Sunday … 4 = Thursday, 6 = Saturday.
+    #[serde(default)]
+    pub day_of_week: u32,
+    #[serde(default = "default_course_start")]
+    pub start_time: String,
+    #[serde(default = "default_course_end")]
+    pub end_time: String,
+    /// `all` (every week) | `odd` (`*`, first/odd weeks) | `even` (`**`, second/even weeks).
+    #[serde(default = "default_week_type")]
+    pub week_type: String,
+}
+
+fn default_course_start() -> String {
+    "09:00".to_string()
+}
+
+fn default_course_end() -> String {
+    "11:00".to_string()
+}
+
+fn default_week_type() -> String {
+    "all".to_string()
+}
+
+fn default_semester_week() -> String {
+    "odd".to_string()
+}
+
+/// `hhmm` shifted by `delta` minutes, clamped to the end of the day.
+fn plus_minutes(hhmm: &str, delta: u32) -> String {
+    let hour = hhmm.get(0..2).and_then(|v| v.parse::<u32>().ok()).unwrap_or(9);
+    let minute = hhmm.get(3..5).and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+    let total = (hour * 60 + minute + delta).min(23 * 60 + 59);
+    format!("{:02}:{:02}", total / 60, total % 60)
+}
+
+/// The student's current MSc (Electronics) timetable, used when a save predates
+/// the editable schedule. An explicitly emptied list stays empty.
+pub fn seed_default_courses() -> Vec<CourseSession> {
+    let course = |id: &str, name: &str, professor: &str, day: u32, start: &str, end: &str, week: &str| {
+        CourseSession {
+            id: id.to_string(),
+            name: name.to_string(),
+            professor: professor.to_string(),
+            day_of_week: day,
+            start_time: start.to_string(),
+            end_time: end.to_string(),
+            week_type: week.to_string(),
+        }
+    };
+
+    vec![
+        // یکشنبه
+        course("c-1", "VLSI", "د. فرجی", 0, "09:00", "11:00", "all"),
+        course("c-2", "معماری کامپیوتر پیشرفته", "د. بدری", 0, "11:00", "13:00", "all"),
+        // دوشنبه — یک‌ستاره و دوستاره جای هم می‌نشینند
+        course("c-3", "VLSI", "د. فرجی", 1, "11:00", "13:00", "odd"),
+        course("c-4", "معماری کامپیوتر پیشرفته", "د. بدری", 1, "11:00", "13:00", "even"),
+        course("c-5", "ابزار دقیق پیشرفته", "د. بدری", 1, "16:00", "18:00", "all"),
+        // سه‌شنبه
+        course("c-6", "ابزار دقیق پیشرفته", "د. بدری", 2, "14:00", "16:00", "even"),
+    ]
+}
+
+// ---------------------------------------------------------------------------
+// Daily language study
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageStudyState {
+    #[serde(default = "default_true")]
+    pub reminder_enabled: bool,
+    #[serde(default = "default_lang_time")]
+    pub reminder_time: String,
+    #[serde(default = "default_lang_minutes")]
+    pub target_minutes: u32,
+    /// ISO dates with a completed study session (newest kept, max 400).
+    #[serde(default)]
+    pub completed_dates: Vec<String>,
+}
+
+fn default_lang_time() -> String {
+    "20:30".to_string()
+}
+
+fn default_lang_minutes() -> u32 {
+    60
+}
+
+impl Default for LanguageStudyState {
+    fn default() -> Self {
+        Self {
+            reminder_enabled: true,
+            reminder_time: default_lang_time(),
+            target_minutes: default_lang_minutes(),
+            completed_dates: Vec::new(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Root state
 // ---------------------------------------------------------------------------
 
@@ -426,6 +539,17 @@ pub struct AppStateData {
     pub progress_photos: Vec<ProgressPhoto>,
     #[serde(default)]
     pub uni_reminders: UniReminders,
+    /// Editable MSc timetable (see `seed_default_courses`).
+    #[serde(default = "seed_default_courses")]
+    pub courses: Vec<CourseSession>,
+    /// `odd` (`*`) or `even` (`**`): which half of the fortnight is showing.
+    #[serde(default = "default_semester_week")]
+    pub semester_week_type: String,
+    #[serde(default)]
+    pub language_study: LanguageStudyState,
+    /// Raw JSON imported from the AI shuttle-schedule template.
+    #[serde(default)]
+    pub custom_shuttle_json: Option<String>,
 }
 
 impl AppStateData {
@@ -460,6 +584,71 @@ impl AppStateData {
         }
         if !is_hhmm(&self.uni_reminders.gym_reminder_time) {
             self.uni_reminders.gym_reminder_time = default_gym_time();
+        }
+
+        // ------------------------------------------------- class schedule
+        if !matches!(self.semester_week_type.as_str(), "odd" | "even") {
+            self.semester_week_type = default_semester_week();
+        }
+        self.courses.retain(|course| !course.name.trim().is_empty());
+        for course in self.courses.iter_mut() {
+            course.name = course.name.trim().to_string();
+            course.professor = course.professor.trim().to_string();
+            if course.day_of_week > 6 {
+                course.day_of_week = 0;
+            }
+            if !is_hhmm(&course.start_time) {
+                course.start_time = default_course_start();
+            }
+            if !is_hhmm(&course.end_time) {
+                course.end_time = default_course_end();
+            }
+            // An end before the start would render an empty bar: give it the
+            // standard 2-hour slot instead of swapping the two values.
+            if course.end_time <= course.start_time {
+                course.end_time = plus_minutes(&course.start_time, 120);
+            }
+            if !matches!(course.week_type.as_str(), "all" | "odd" | "even") {
+                course.week_type = default_week_type();
+            }
+            if course.id.trim().is_empty() {
+                course.id = format!("c-{}-{}", course.day_of_week, course.start_time);
+            }
+        }
+        self.courses.truncate(60);
+
+        // ------------------------------------------------- language study
+        if !is_hhmm(&self.language_study.reminder_time) {
+            self.language_study.reminder_time = default_lang_time();
+        }
+        self.language_study.target_minutes = self.language_study.target_minutes.clamp(10, 180);
+        self.language_study
+            .completed_dates
+            .retain(|date| !date.trim().is_empty());
+        self.language_study.completed_dates.sort();
+        self.language_study.completed_dates.dedup();
+        // Keep the newest dates only; the list is append-only and grows forever.
+        let excess = self
+            .language_study
+            .completed_dates
+            .len()
+            .saturating_sub(400);
+        if excess > 0 {
+            self.language_study.completed_dates.drain(0..excess);
+        }
+
+        // Imported shuttle JSON: reject anything that is not a small JSON object
+        // so a bad paste can never bloat the save file.
+        if let Some(raw) = self.custom_shuttle_json.clone() {
+            let trimmed = raw.trim();
+            let parsed = serde_json::from_str::<serde_json::Value>(trimmed).ok();
+            let valid = trimmed.len() <= 20_000
+                && parsed.map(|value| value.is_object()).unwrap_or(false);
+            self.custom_shuttle_json = if valid {
+                Some(trimmed.to_string())
+            } else {
+                None
+            };
         }
 
         if self.days.is_empty() {
@@ -781,6 +970,10 @@ mod tests {
             personal_records: std::collections::HashMap::new(),
             progress_photos: Vec::new(),
             uni_reminders: UniReminders::default(),
+            courses: Vec::new(),
+            semester_week_type: default_semester_week(),
+            language_study: LanguageStudyState::default(),
+            custom_shuttle_json: None,
         };
         for index in 0..80 {
             state.push_milestone("2026-01-01", format!("event {index}"), "system");
@@ -878,6 +1071,95 @@ mod tests {
         value.as_object_mut().unwrap().remove("activityHistory");
         let state: AppStateData = serde_json::from_value(value).unwrap();
         assert!(state.activity_history.is_empty());
+    }
+
+    #[test]
+    fn legacy_state_gets_the_msc_timetable() {
+        // Saves written before the class schedule existed must not open empty.
+        let mut value = serde_json::to_value(crate::storage::seed()).unwrap();
+        let object = value.as_object_mut().unwrap();
+        object.remove("courses");
+        object.remove("semesterWeekType");
+        object.remove("languageStudy");
+        let state: AppStateData = serde_json::from_value(value).unwrap();
+
+        assert_eq!(state.courses.len(), 6);
+        assert_eq!(state.semester_week_type, "odd");
+        assert!(state.language_study.reminder_enabled);
+        assert_eq!(state.language_study.reminder_time, "20:30");
+        assert_eq!(state.language_study.target_minutes, 60);
+        // The * / ** pair share Monday 11:00 so the switch has something to show.
+        let monday: Vec<&CourseSession> = state
+            .courses
+            .iter()
+            .filter(|course| course.day_of_week == 1)
+            .collect();
+        assert!(monday.iter().any(|course| course.week_type == "odd"));
+        assert!(monday.iter().any(|course| course.week_type == "even"));
+    }
+
+    #[test]
+    fn an_explicitly_empty_timetable_stays_empty() {
+        let mut state = crate::storage::seed();
+        state.courses.clear();
+        state.normalize();
+        assert!(state.courses.is_empty());
+    }
+
+    #[test]
+    fn course_rows_are_sanitised() {
+        let mut state = crate::storage::seed();
+        state.courses = vec![
+            CourseSession {
+                id: String::new(),
+                name: "  شبکه  ".to_string(),
+                professor: " د. احمدی ".to_string(),
+                day_of_week: 9,
+                start_time: "25:00".to_string(),
+                end_time: "08:00".to_string(),
+                week_type: "weekly".to_string(),
+            },
+            CourseSession {
+                id: "c-x".to_string(),
+                name: "   ".to_string(),
+                professor: String::new(),
+                day_of_week: 3,
+                start_time: "10:00".to_string(),
+                end_time: "12:00".to_string(),
+                week_type: "all".to_string(),
+            },
+        ];
+        state.semester_week_type = "banana".to_string();
+        state.language_study.target_minutes = 5;
+        state.language_study.reminder_time = "9:5".to_string();
+        state.custom_shuttle_json = Some("  {not json".to_string());
+
+        state.normalize();
+
+        // The nameless row is dropped, the rest is repaired.
+        assert_eq!(state.courses.len(), 1);
+        let course = &state.courses[0];
+        assert_eq!(course.name, "شبکه");
+        assert_eq!(course.professor, "د. احمدی");
+        assert_eq!(course.day_of_week, 0);
+        assert_eq!(course.start_time, "09:00");
+        assert_eq!(course.end_time, "11:00");
+        assert_eq!(course.week_type, "all");
+        assert!(!course.id.is_empty());
+
+        assert_eq!(state.semester_week_type, "odd");
+        assert_eq!(state.language_study.target_minutes, 10);
+        assert_eq!(state.language_study.reminder_time, "20:30");
+        assert!(state.custom_shuttle_json.is_none());
+    }
+
+    #[test]
+    fn imported_shuttle_json_is_kept_when_it_looks_like_an_object() {
+        let mut state = crate::storage::seed();
+        let raw = r#"{"effectiveDate":"1405/08/23","railway":{},"suburbs":[]}"#;
+        state.custom_shuttle_json = Some(format!("  {raw}  "));
+        state.normalize();
+        assert_eq!(state.custom_shuttle_json.as_deref(), Some(raw));
     }
 
     #[test]
