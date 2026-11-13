@@ -98,7 +98,9 @@ check("university tab is present", labels.includes("دانشگاه"));
 // -------------------------------------------------------------- uni tab
 await go("دانشگاه");
 let text = await mainText();
-check("hero mentions the university", text.includes("دانشگاه صنعتی تبریز"));
+// The campus name is user-editable now, so compare against the saved profile.
+const savedUniName = (await state()).profile.universityName;
+check("hero shows the saved university", text.includes(savedUniName), savedUniName);
 check("next-bus radar renders", text.includes("رادار سرویس"));
 check("Thursday reminder card renders", text.includes("رزرو غذای هفته بعد"));
 check("full schedule card renders", text.includes("جدول کامل سرویس"));

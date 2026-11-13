@@ -5,10 +5,12 @@ import { fa, faNum, parseNum } from "../lib/fa";
 import { resetToDefaults, storageMode } from "../lib/api";
 import { ensureNotificationPermission, pushSystemNotification } from "../lib/notify";
 import { alarm, waterAlert } from "../lib/timer";
-import { getState, persist, requestRender, setState } from "../lib/store";
+import { applyTheme, getState, persist, requestRender, setState } from "../lib/store";
+import { applyDeveloperPreset } from "../lib/appSettings";
 import type { AppStateData } from "../types";
 import { confirmDialog, sectionTitle, toast } from "../components/ui";
 import { renderBackupRestoreCard } from "../components/progressPhotos";
+import { openOnboardingModal } from "../components/onboarding";
 
 export function renderCoach(): HTMLElement {
   const view = el("div", "space-y-3 animate-fade-up");
@@ -183,6 +185,25 @@ function settingsCard(): HTMLElement {
   const state = getState();
   const card = el("div", "card space-y-3");
   card.append(sectionTitle("تنظیمات", el("span", "chip", storageMode() === "native" ? "ذخیره بومی" : "مرورگر")));
+
+  // Modular setup: same wizard as the first run, plus the one-tap dev preset.
+  const setupRow = el("div", "space-y-2");
+  setupRow.append(
+    el("label", "label", "حالت برنامه، دانشگاه و برنامه تمرینی"),
+    btn(
+      "btn-ghost w-full py-2 text-right text-xs",
+      "⚙️ تغییر پروفایل، حالت برنامه (دانشگاه/ورزش) و برنامه تمرینی",
+      () => openOnboardingModal(),
+      { "aria-label": "تغییر پروفایل و حالت برنامه" },
+    ),
+    btn(
+      "btn-ghost w-full py-2 text-right text-xs",
+      "⚡ بارگذاری پروفایل پیشفرض (برای توسعه دهنده)",
+      () => void loadDeveloperPreset(),
+      { "aria-label": "بارگذاری پروفایل پیشفرض توسعه دهنده" },
+    ),
+  );
+  card.append(setupRow, el("div", "divider"));
   card.append(profileEditor(state));
 
   const restRow = el("div", "space-y-2");
@@ -283,11 +304,28 @@ function settingsCard(): HTMLElement {
   return card;
 }
 
+async function loadDeveloperPreset(): Promise<void> {
+  const confirmed = await confirmDialog({
+    title: 'پروفایل پیش‌فرض توسعه‌دهنده',
+    message:
+      'برنامه ۴ روزه حجم (۶۵ به ۷۵ کیلو)، تغذیه ۳ وعده سلف، دروس ارشد الکترونیک و سرویس‌های دانشگاه صنعتی تبریز بارگذاری می‌شود. تاریخچه وزن، رویدادها و عکس‌ها حفظ می‌شوند. ادامه می‌دهی؟',
+    confirmText: 'بارگذاری',
+    danger: true,
+  });
+  if (!confirmed) return;
+
+  applyDeveloperPreset(getState());
+  applyTheme();
+  persist(0);
+  toast('پروفایل پیش‌فرض توسعه‌دهنده بارگذاری شد ⚡');
+  requestRender();
+}
+
 async function resetPlan(): Promise<void> {
   const confirmed = await confirmDialog({
     title: "بازگردانی برنامه",
     message:
-      "برنامه ۴ روزه به حالت اولیه برمی‌گردد (حرکات، ست‌ها و تیک‌ها پاک می‌شوند). تاریخچه وزن و رویدادها حفظ می‌شود. ادامه می‌دهی؟",
+      "برنامه تمرینی به حالت اولیه برمی‌گردد (حرکات، ست‌ها و تیک‌ها پاک می‌شوند). تنظیمات، تم، دانشگاه و تاریخچه وزن حفظ می‌شود. ادامه می‌دهی؟",
     confirmText: "بازگردانی",
     danger: true,
   });

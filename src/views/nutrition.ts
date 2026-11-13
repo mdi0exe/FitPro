@@ -1,7 +1,13 @@
 /** Nutrition tab: student-budget checklist, protein target and cheap calorie table. */
-import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
+import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { clock, fa, faDate, isoToday } from "../lib/fa";
+import { clock, fa, faDate, faNum, isoToday } from "../lib/fa";
+import {
+  activeDietTemplateId,
+  CUSTOM_DIET_PRESETS,
+  DIET_TEMPLATES,
+  dietTemplateItems,
+} from "../data/dietTemplates";
 import { getState, persist, requestRender, syncWaterChecklist, WATER_GOAL } from "../lib/store";
 import { ensureNotificationPermission } from "../lib/notify";
 import { isWaterQuietHours, WATER_QUIET_LABEL } from "../lib/quietHours";
@@ -13,7 +19,7 @@ import {
   startNewWaterReminderCycle,
   stopWaterReminder,
 } from "../lib/timer";
-import { progressBar, sectionTitle, toast } from "../components/ui";
+import { openModal, progressBar, sectionTitle, toast, type ModalHandle } from "../components/ui";
 
 const RING_RADIUS = 26;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
@@ -23,6 +29,7 @@ export function renderNutrition(): HTMLElement {
 
   view.append(nutritionHero());
   view.append(waterTrackerCard());
+  view.append(dietTemplateCard());
   view.append(checklist());
   view.append(proteinCard());
   view.append(coachTipCard());
@@ -73,6 +80,141 @@ function nutritionHero(): HTMLElement {
   return card;
 }
 
+/** Three one-tap student meal patterns, shown above the daily checklist. */
+function dietTemplateCard(): HTMLElement {
+  const state = getState();
+  const active = activeDietTemplateId(state.diet.items);
+  const card = el("div", "card space-y-2");
+  card.append(
+    sectionTitle(
+      "الگوی تغذیه دانشجویی",
+      el("span", "chip chip-emerald", `${fa(state.diet.items.length)} مورد`),
+    ),
+  );
+
+  const list = el("div", "space-y-1.5");
+  DIET_TEMPLATES.forEach((template) => {
+    const isActive = active === template.id;
+    list.append(
+      btn(
+        `flex w-full flex-col items-start rounded-2xl border p-2.5 text-right transition active:scale-[0.99] ${
+          isActive
+            ? "border-emerald-400 bg-emerald-500/15 text-emerald-200"
+            : "border-slate-800 bg-slate-950/50 text-slate-300"
+        }`,
+        `<span class="text-[11px] font-extrabold">${template.label}</span>
+         <span class="mt-0.5 text-[10px] leading-5 opacity-80">${template.hint}</span>`,
+        () => setDietTemplate(template.id),
+        { "aria-pressed": String(isActive), "aria-label": template.label },
+      ),
+    );
+  });
+  card.append(list);
+  card.append(
+    el(
+      "p",
+      "text-[10px] leading-5 text-slate-500",
+      "آیتمهای دلخواهی که خودت اضافه کردهای هنگام تغییر الگو حفظ میشوند.",
+    ),
+  );
+  return card;
+}
+
+function setDietTemplate(id: string): void {
+  const state = getState();
+  if (activeDietTemplateId(state.diet.items) === id) {
+    toast("همین الگوی تغذیه فعال است.", "info");
+    return;
+  }
+  const custom = state.diet.items.filter((entry) => entry.id.startsWith("custom-"));
+  state.diet.items = [...dietTemplateItems(id), ...custom];
+  syncWaterChecklist();
+  softTap();
+  persist(0);
+  toast("الگوی تغذیه تغییر کرد 🍱");
+  requestRender();
+}
+
+/** Adds a user-defined meal / supplement row without forcing a keyboard. */
+function openAddDietItemModal(): void {
+  let handle: ModalHandle;
+  const body = el("div", "space-y-3");
+  body.append(
+    el(
+      "p",
+      "text-[11px] leading-6 text-slate-400",
+      "یک گزینه آماده لمس کن یا عنوان دلخواهت را بنویس (مثل کراتین، پروتئین وی یا میانوعده).",
+    ),
+  );
+
+  const input = el("input", "field text-right text-sm");
+  input.type = "text";
+  input.placeholder = "مثلاً: کراتین ۵ گرم بعد از تمرین";
+  body.append(input);
+
+  const presets = el("div", "space-y-1.5");
+  CUSTOM_DIET_PRESETS.forEach((preset) => {
+    presets.append(
+      btn(
+        "btn-ghost w-full justify-start py-2 text-right text-[11px]",
+        escapeHtml(preset.text),
+        () => {
+          input.value = preset.text;
+          softTap();
+        },
+      ),
+    );
+  });
+  body.append(presets);
+
+  const save = btn(
+    "btn-primary w-full",
+    "➕ افزودن به چکلیست",
+    () => {
+      const text = input.value.trim().slice(0, 160);
+      if (!text) {
+        toast("ابتدا یک عنوان وارد کن.", "error");
+        return;
+      }
+      const preset = CUSTOM_DIET_PRESETS.find((entry) => entry.text === text);
+      getState().diet.items.push({
+        id: uid("custom"),
+        text,
+        hint: preset?.hint ?? "وعده یا مکمل دلخواه",
+        done: false,
+      });
+      persist(0);
+      handle.close();
+      toast("آیتم دلخواه به چکلیست اضافه شد ✅");
+      requestRender();
+    },
+    { "aria-label": "تایید افزودن وعده دلخواه" },
+  );
+
+  handle = openModal({
+    title: "➕ افزودن وعده یا مکمل دلخواه",
+    subtitle: "مخصوص شرایط خودت؛ قابل حذف از کنار هر ردیف",
+    body,
+    footer: save,
+  });
+}
+
+/** The `diet-4` row drives the water counter, so it is never removable. */
+function removeDietItem(id: string): void {
+  const state = getState();
+  if (id === "diet-4") {
+    toast("ردیف آب با شمارنده همگام است و حذف نمیشود.", "info");
+    return;
+  }
+  const index = state.diet.items.findIndex((entry) => entry.id === id);
+  if (index < 0) return;
+  state.diet.items.splice(index, 1);
+  softTap();
+  persist(0);
+  toast("آیتم حذف شد.", "info");
+  requestRender();
+}
+
 function checklist(): HTMLElement {
   const state = getState();
   const card = el("div", "card space-y-1");
@@ -86,7 +228,7 @@ function checklist(): HTMLElement {
   state.diet.items.forEach((item) => {
     const row = el(
       "button",
-      `flex w-full items-start gap-3 rounded-xl border px-2.5 py-2.5 text-right transition active:scale-[0.99] ${
+      `flex min-w-0 flex-1 items-start gap-3 rounded-xl border px-2.5 py-2.5 text-right transition active:scale-[0.99] ${
         item.done ? "border-emerald-500/30 bg-emerald-500/5" : "border-slate-800 bg-slate-950/40"
       }`,
     );
@@ -127,8 +269,27 @@ function checklist(): HTMLElement {
       requestRender();
     });
 
-    card.append(row);
+    const rowWrap = el("div", "flex items-stretch gap-1.5");
+    rowWrap.append(row);
+    rowWrap.append(
+      btn(
+        "btn-icon h-9 w-9 shrink-0 text-[11px]",
+        "✕",
+        () => removeDietItem(item.id),
+        { "aria-label": `حذف ${item.text}`, title: "حذف این ردیف" },
+      ),
+    );
+    card.append(rowWrap);
   });
+
+  card.append(
+    btn(
+      "btn-ghost mt-1 w-full border-dashed py-2 text-[11px]",
+      "➕ افزودن وعده یا مکمل دلخواه",
+      () => openAddDietItemModal(),
+      { "aria-label": "افزودن وعده یا مکمل دلخواه" },
+    ),
+  );
 
   const bar = progressBar((state.diet.items.filter((i) => i.done).length / Math.max(1, state.diet.items.length)) * 100, "mt-2");
   card.append(bar);
@@ -155,8 +316,11 @@ async function resetDay(): Promise<void> {
 
 function proteinCard(): HTMLElement {
   const { profile } = getState();
-  const proteinTarget = Math.round(profile.currentWeight * 1.54);
-  const calories = Math.round(profile.currentWeight * 37);
+  // A target below the current weight means a cut: fewer calories, more
+  // protein per kilo to keep the muscle while losing fat.
+  const cutting = profile.targetWeight < profile.currentWeight;
+  const proteinTarget = Math.round(profile.currentWeight * (cutting ? 1.8 : 1.55));
+  const calories = Math.round(profile.currentWeight * (cutting ? 28 : 37));
 
   const card = el("div", "card border-emerald-500/20 bg-emerald-500/5");
   card.append(
@@ -164,7 +328,9 @@ function proteinCard(): HTMLElement {
     el(
       "p",
       "mt-1 text-[10px] leading-5 text-emerald-100/60",
-      "قابل تامین با ۳ وعده سلف دانشگاه (بدون نیاز به میان‌وعده یا خرید اضافی).",
+      cutting
+        ? `⚖️ هدف کاهش وزن (${faNum(profile.currentWeight, 0)} ← ${faNum(profile.targetWeight, 0)} کیلو): کالری کنترل‌شده و پروتئین بالاتر برای حفظ عضله.`
+        : "قابل تامین با ۳ وعده سلف دانشگاه (بدون نیاز به میان‌وعده یا خرید اضافی).",
     ),
   );
 
@@ -278,31 +444,39 @@ function waterTrackerCard(): HTMLElement {
   card.append(el("div", "divider my-3"));
 
   // ---------------------------------------------------------- reminder
+  // A real flex switch pill: no absolutely-positioned knob, so RTL can never
+  // skew or overlap it (the old h-7/w-12 toggle did on narrow WebViews).
   const enabled = state.diet.waterReminderEnabled;
-  const toggleRow = el("div", "flex items-center justify-between gap-3");
-  const toggleText = el("div", "min-w-0");
-  toggleText.append(
-    el("p", "text-[11px] font-bold text-slate-200", "🔔 یادآور هوشمند نوشیدن آب"),
-    el(
-      "p",
-      "mt-0.5 text-[10px] text-slate-500",
-      enabled ? `هر ${fa(state.diet.waterReminderMinutes)} دقیقه` : "خاموش است",
-    ),
-  );
-
-  const knob = el("span", "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all");
-  knob.style[enabled ? "left" : "right"] = "0.125rem";
-  const toggle = btn(
-    `relative h-7 w-12 shrink-0 rounded-full border transition ${
-      enabled ? "border-emerald-400/60 bg-emerald-400/40" : "border-slate-700 bg-slate-800"
+  const minutes = state.diet.waterReminderMinutes || 60;
+  const toggleRow = el(
+    'div',
+    `flex items-center justify-between gap-3 rounded-2xl border p-3 transition ${
+      enabled ? 'border-cyan-500/40 bg-cyan-500/10' : 'border-slate-800 bg-slate-950/50'
     }`,
-    "",
-    () => toggleWaterReminder(),
-    { "aria-label": "یادآور آب", "aria-pressed": String(enabled) },
   );
-  toggle.append(knob);
+  const toggleText = el(
+    'div',
+    'min-w-0 flex-1 text-right',
+    `<p class="text-xs font-extrabold text-slate-100">🔔 یادآور هوشمند نوشیدن آب</p>
+     <p class="mt-0.5 text-[10px] leading-5 text-slate-400">
+       ${
+         enabled
+           ? `فعال • هر ${fa(minutes)} دقیقه (۱۲ شب تا ۹ صبح بی‌صدا)`
+           : 'برای دریافت نوتیفیکیشن منظم نوشیدن آب روشن کن'
+       }
+     </p>`,
+  );
 
-  toggleRow.append(toggleText, toggle);
+  const switchBtn = el('button', `toggle-switch border ${enabled ? 'is-on' : 'is-off'}`);
+  switchBtn.type = 'button';
+  switchBtn.setAttribute('role', 'switch');
+  switchBtn.setAttribute('aria-checked', String(enabled));
+  switchBtn.setAttribute('aria-pressed', String(enabled));
+  switchBtn.setAttribute('aria-label', 'یادآور آب');
+  switchBtn.append(el('span', 'toggle-switch-thumb'));
+  switchBtn.addEventListener('click', () => toggleWaterReminder());
+
+  toggleRow.append(toggleText, switchBtn);
   card.append(toggleRow);
 
   const intervals = el("div", "mt-2 flex gap-2");

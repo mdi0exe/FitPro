@@ -2,18 +2,19 @@
  * University tab: Tabriz University of Technology shuttle schedule, next-bus
  * radar, 15-minute bus alarms, Thursday cafeteria reservation and gym reminder.
  */
-import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
+import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { fa } from "../lib/fa";
 import { getState, persist, requestRender } from "../lib/store";
-import { sectionTitle, toast } from "../components/ui";
+import { openModal, sectionTitle, toast } from "../components/ui";
+import type { CourseSession } from "../types";
 import {
   cancelNotifications,
   ensureNotificationPermission,
   scheduleRepeatingNotification,
 } from "../lib/notify";
 import { softTap } from "../lib/timer";
-import { resolveShuttle, type ScheduleGroupKey } from "../data/shuttle";
+import { parseShuttleJson, resolveShuttle, type ScheduleGroupKey } from "../data/shuttle";
 import { renderClassScheduleCard } from "./uniCourses";
 import { renderLanguageStudyCard } from "./uniLanguage";
 import { openShuttleAiImportModal } from "./uniShuttleAi";
@@ -50,14 +51,35 @@ function ensureUniReminders() {
     gymReminderEnabled: false,
     gymReminderTime: "16:30",
     activeBusAlarms: [],
+    foodReminderDay: 4,
   };
+  if (!Number.isInteger(state.uniReminders.foodReminderDay)) {
+    state.uniReminders.foodReminderDay = 4;
+  }
   return state.uniReminders;
+}
+
+/** `Date.getDay()` → notification plugin weekday (1 = Sunday … 7 = Saturday). */
+function foodAlarmWeekday(day: number): number {
+  return Math.min(6, Math.max(0, day)) + 1;
+}
+
+export const FOOD_DAY_OPTIONS: Array<{ day: number; label: string }> = [
+  { day: 2, label: "سهشنبه" },
+  { day: 3, label: "چهارشنبه" },
+  { day: 4, label: "پنجشنبه" },
+  { day: 5, label: "جمعه" },
+];
+
+export function foodDayLabel(day: number): string {
+  return FOOD_DAY_OPTIONS.find((option) => option.day === day)?.label ?? "پنجشنبه";
 }
 
 export function renderUni(): HTMLElement {
   const view = el("div", "space-y-3 animate-fade-up");
   view.append(
     uniHeroBanner(),
+    shareUniversityCard(),
     nextBusRadarCard(),
     renderClassScheduleCard(),
     renderLanguageStudyCard(),
@@ -73,7 +95,7 @@ function uniHeroBanner(): HTMLElement {
 
   const text = el("div", "min-w-0");
   text.append(
-    el("p", "text-[10px] font-bold text-cyan-300", "دانشگاه صنعتی تبریز • اداره امور دانشجویان"),
+    el("p", "text-[10px] font-bold text-cyan-300", `${escapeHtml(getState().profile.universityName)} • اداره امور دانشجویان`),
     el("h2", "mt-0.5 text-base font-extrabold text-slate-50", "🚌 سرویس‌ها و رزرو سلف"),
     el(
       "p",
@@ -85,6 +107,176 @@ function uniHeroBanner(): HTMLElement {
   const row = el("div", "card flex items-start gap-3 border-cyan-500/25 bg-cyan-500/5");
   row.append(badge, text);
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Share / import the university setup with classmates
+// ---------------------------------------------------------------------------
+
+interface UniSharePayload {
+  universityName: string;
+  courses: CourseSession[];
+  customShuttleJson: string | null;
+}
+
+function sharePayload(): UniSharePayload {
+  const state = getState();
+  return {
+    universityName: state.profile.universityName,
+    courses: state.courses,
+    customShuttleJson: state.customShuttleJson,
+  };
+}
+
+function shareUniversityCard(): HTMLElement {
+  const card = el("div", "card space-y-2 border-cyan-500/25 bg-cyan-500/5");
+  card.append(
+    el("p", "text-xs font-extrabold text-slate-100", "📤 اشتراکگذاری سرویس و دروس با همدانشگاهیها"),
+    el(
+      "p",
+      "text-[10px] leading-5 text-slate-400",
+      "جدول سرویسها و برنامه کلاسهای دانشگاهت را بهصورت یک JSON فشرده توی پیامرسان بفرست یا از پیام دوستت دریافت کن.",
+    ),
+  );
+  const row = el("div", "grid grid-cols-2 gap-2");
+  row.append(
+    btn("btn-ghost py-2 text-[11px]", "📋 کپی JSON", () => void copyShareJson(), {
+      "aria-label": "کپی JSON سرویس و دروس",
+    }),
+    btn("btn-ghost py-2 text-[11px]", "📥 دریافت و اعمال", () => void openShareImportModal(), {
+      "aria-label": "دریافت برنامه سرویس و دروس",
+    }),
+  );
+  card.append(row);
+  return card;
+}
+
+async function copyShareJson(): Promise<void> {
+  const json = JSON.stringify(sharePayload());
+  let copied = false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(json);
+      copied = true;
+    }
+  } catch {
+    /* the WebView may deny clipboard access */
+  }
+  if (!copied) {
+    const temp = el("textarea", "sr-only");
+    temp.value = json;
+    document.body.append(temp);
+    temp.select();
+    try {
+      copied = document.execCommand("copy");
+    } catch {
+      copied = false;
+    }
+    temp.remove();
+  }
+  if (copied) toast("JSON سرویسها و دروس کپی شد؛ برای همدانشگاهیها بفرست 📤");
+  else openShareJsonModal(json, "export");
+}
+
+async function openShareImportModal(): Promise<void> {
+  let text = "";
+  try {
+    if (navigator.clipboard?.readText) text = await navigator.clipboard.readText();
+  } catch {
+    /* manual paste below */
+  }
+  openShareJsonModal(text, "import");
+}
+
+function openShareJsonModal(initial: string, mode: "export" | "import"): void {
+  const body = el("div", "space-y-2");
+  body.append(
+    el(
+      "p",
+      "text-[11px] leading-6 text-slate-400",
+      mode === "export"
+        ? "دسترسی کلیپبورد در دسترس نیست؛ متن زیر را انتخاب و بهصورت دستی کپی کن."
+        : "JSON دریافتی از همهرشتهایات را اینجا بچسبان (شامل نام دانشگاه، دروس و جدول سرویسها).",
+    ),
+  );
+  const area = el("textarea", "field h-40 w-full resize-none text-left text-[10px] leading-5");
+  area.value = initial;
+  area.readOnly = mode === "export";
+  area.setAttribute("dir", "ltr");
+  if (mode === "import") area.placeholder = '{ "universityName": "...", "courses": [], "customShuttleJson": null }';
+  body.append(area);
+
+  const footer =
+    mode === "export"
+      ? btn(
+          "btn-primary w-full",
+          "📋 انتخاب کل متن",
+          () => {
+            area.select();
+            toast("متن انتخاب شد؛ با Ctrl+C یا لمس طولانی کپی کن.");
+          },
+          { "aria-label": "انتخاب کل متن JSON" },
+        )
+      : btn(
+          "btn-primary w-full",
+          "✅ اعمال برنامه دانشگاه",
+          () => applyShareJson(area.value, () => handle.close()),
+          { "aria-label": "اعمال برنامه دانشگاه" },
+        );
+
+  const handle = openModal({
+    title: mode === "export" ? "📤 JSON سرویسها و دروس" : "📥 دریافت برنامه دانشگاه",
+    body,
+    footer,
+  });
+}
+
+/** Validates and applies a shared payload; a bad paste never corrupts state. */
+function applyShareJson(raw: string, close: () => void): void {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw.trim());
+  } catch {
+    toast("متن واردشده JSON معتبر نیست.", "error");
+    return;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    toast("ساختار JSON باید یک شیء باشد.", "error");
+    return;
+  }
+  const data = parsed as Partial<UniSharePayload>;
+  const state = getState();
+
+  if (typeof data.universityName === "string" && data.universityName.trim()) {
+    state.profile.universityName = data.universityName.trim().slice(0, 80);
+  }
+
+  if (Array.isArray(data.courses)) {
+    const weekTypes = ["all", "odd", "even"];
+    state.courses = data.courses
+      .filter((course) => course && typeof course.name === "string" && course.name.trim())
+      .slice(0, 60)
+      .map((course) => ({
+        id: typeof course.id === "string" && course.id ? course.id : uid("course"),
+        name: String(course.name).trim().slice(0, 80),
+        professor: typeof course.professor === "string" ? course.professor.trim().slice(0, 80) : "",
+        dayOfWeek: Number.isInteger(course.dayOfWeek) ? Math.min(6, Math.max(0, course.dayOfWeek)) : 0,
+        startTime: typeof course.startTime === "string" ? course.startTime : "09:00",
+        endTime: typeof course.endTime === "string" ? course.endTime : "11:00",
+        weekType: (weekTypes.includes(String(course.weekType)) ? course.weekType : "all") as CourseSession["weekType"],
+      }));
+  }
+
+  if (data.customShuttleJson === null || data.customShuttleJson === undefined) {
+    state.customShuttleJson = null;
+  } else if (typeof data.customShuttleJson === "string" && parseShuttleJson(data.customShuttleJson)) {
+    state.customShuttleJson = data.customShuttleJson.trim();
+  }
+
+  persist(0);
+  close();
+  toast("برنامه سرویسها و دروس دانشگاه اعمال شد 🎓");
+  requestRender();
 }
 
 function parseMinutes(hhmm: string): number {
@@ -158,13 +350,19 @@ function nextBusRadarCard(): HTMLElement {
 
 function reminderCard(): HTMLElement {
   const reminders = ensureUniReminders();
-  const isThursday = new Date().getDay() === 4;
+  const foodDay = reminders.foodReminderDay;
+  const dayLabel = foodDayLabel(foodDay);
+  const isFoodDay = new Date().getDay() === foodDay;
 
   const card = el("div", "card space-y-3");
   card.append(
     sectionTitle(
       "🍱 یادآور رزرو سلف و باشگاه",
-      el("span", `chip ${isThursday ? "chip-amber" : "chip-cyan"}`, isThursday ? "امروز پنجشنبه!" : "پنجشنبه‌ها"),
+      el(
+        "span",
+        `chip ${isFoodDay ? "chip-amber" : "chip-cyan"}`,
+        isFoodDay ? `امروز ${dayLabel}!` : `${dayLabel}‌ها`,
+      ),
     ),
   );
 
@@ -183,9 +381,9 @@ function reminderCard(): HTMLElement {
     el(
       "div",
       "min-w-0 flex-1",
-      `<p class="text-xs font-extrabold text-amber-200">🍱 رزرو غذای هفته بعد (پنجشنبه‌ها)</p>
+      `<p class="text-xs font-extrabold text-amber-200">🍱 رزرو غذای هفته بعد (${dayLabel}‌ها)</p>
        <p class="mt-0.5 text-[10px] leading-5 text-slate-300">
-         هر پنجشنبه یادآوری می‌کند تا سلف هفته بعد را رزرو کنی (اولویت: جوجه و مرغ برای پروتئین).
+         هر ${dayLabel} یادآوری می‌کند تا سلف هفته بعد را رزرو کنی (اولویت: جوجه و مرغ برای پروتئین).
        </p>`,
     ),
     btn(
@@ -196,6 +394,26 @@ function reminderCard(): HTMLElement {
     ),
   );
   foodBox.append(foodHead);
+
+  // Not every campus opens reservations on Thursday: the day is per-student.
+  const foodDays = el("div", "flex flex-wrap items-center gap-1.5");
+  foodDays.append(el("span", "text-[10px] text-slate-400", "روز رزرو:"));
+  FOOD_DAY_OPTIONS.forEach(({ day, label }) => {
+    const active = foodDay === day;
+    foodDays.append(
+      btn(
+        `rounded-xl border px-2.5 py-1 text-[11px] font-bold transition ${
+          active
+            ? "border-amber-400 bg-amber-400/20 text-amber-200"
+            : "border-slate-800 bg-slate-900 text-slate-400"
+        }`,
+        label,
+        () => void setFoodReminderDay(day),
+        { "aria-label": `روز رزرو سلف ${label}`, "aria-pressed": String(active) },
+      ),
+    );
+  });
+  foodBox.append(foodDays);
 
   const foodTimes = el("div", "flex flex-wrap items-center gap-1.5");
   foodTimes.append(el("span", "text-[10px] text-slate-400", "ساعت یادآوری:"));
@@ -491,6 +709,21 @@ async function toggleBusAlarm(
   requestRender();
 }
 
+/** Weekly cafeteria alarm on the student-selected weekday. */
+async function scheduleFoodAlarm(): Promise<boolean> {
+  const reminders = ensureUniReminders();
+  const granted = await ensureNotificationPermission();
+  if (!granted) return false;
+  const at = shiftEarlier(reminders.thursdayFoodTime, 0);
+  const label = foodDayLabel(reminders.foodReminderDay);
+  return scheduleRepeatingNotification(
+    7901,
+    "🍱 یادآور رزرو غذای سلف",
+    `امروز ${label} است! غذای هفته بعد سلف را رزرو کن (اولویت: چلو جوجه و مرغ).`,
+    { hour: at.hour, minute: at.minute, weekday: foodAlarmWeekday(reminders.foodReminderDay) },
+  );
+}
+
 async function toggleThursdayFood(): Promise<void> {
   const reminders = ensureUniReminders();
   reminders.thursdayFoodEnabled = !reminders.thursdayFoodEnabled;
@@ -498,17 +731,8 @@ async function toggleThursdayFood(): Promise<void> {
   persist(0);
 
   if (reminders.thursdayFoodEnabled) {
-    const granted = await ensureNotificationPermission();
-    const at = shiftEarlier(reminders.thursdayFoodTime, 0);
-    const ok =
-      granted &&
-      (await scheduleRepeatingNotification(
-        7901,
-        "🍱 یادآور رزرو غذای سلف",
-        "پنجشنبه است! غذای هفته بعد سلف را رزرو کن (اولویت: چلو جوجه و مرغ).",
-        { hour: at.hour, minute: at.minute, weekday: 5 },
-      ));
-    toast(ok ? "یادآور پنجشنبه‌ها فعال شد 🍱" : "یادآور داخل برنامه فعال شد (اعلان سیستمی در دسترس نیست).", ok ? "ok" : "info");
+    const ok = await scheduleFoodAlarm();
+    toast(ok ? "یادآور رزرو سلف فعال شد 🍱" : "یادآور داخل برنامه فعال شد (اعلان سیستمی در دسترس نیست).", ok ? "ok" : "info");
   } else {
     await cancelNotifications([7901]);
     toast("یادآور رزرو سلف خاموش شد.", "info");
@@ -523,17 +747,19 @@ async function setThursdayFoodTime(time: string): Promise<void> {
   softTap();
   persist(0);
 
-  const granted = await ensureNotificationPermission();
-  const at = shiftEarlier(time, 0);
-  const ok =
-    granted &&
-    (await scheduleRepeatingNotification(
-      7901,
-      "🍱 یادآور رزرو غذای سلف",
-      "پنجشنبه است! غذای هفته بعد سلف را رزرو کن (اولویت: چلو جوجه و مرغ).",
-      { hour: at.hour, minute: at.minute, weekday: 5 },
-    ));
-  toast(ok ? `یادآور پنجشنبه ساعت ${fa(time)} تنظیم شد ✅` : `ساعت ${fa(time)} ذخیره شد.`, ok ? "ok" : "info");
+  const ok = await scheduleFoodAlarm();
+  toast(ok ? `یادآور ${foodDayLabel(reminders.foodReminderDay)} ساعت ${fa(time)} تنظیم شد ✅` : `ساعت ${fa(time)} ذخیره شد.`, ok ? "ok" : "info");
+  requestRender();
+}
+
+async function setFoodReminderDay(day: number): Promise<void> {
+  const reminders = ensureUniReminders();
+  reminders.foodReminderDay = day;
+  softTap();
+  persist(0);
+
+  if (reminders.thursdayFoodEnabled) await scheduleFoodAlarm();
+  toast(`روز رزرو سلف: ${foodDayLabel(day)} 🍱`);
   requestRender();
 }
 

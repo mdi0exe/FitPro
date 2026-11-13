@@ -13,6 +13,10 @@ export interface UserProfile {
   targetWeight: number;
   goal: string;
   trainingWindow: string;
+  /** Editable — the app is generic for every university, not one campus. */
+  universityName: string;
+  /** Id of the active template in `src/data/programs.ts`. */
+  workoutProgramId: string;
 }
 
 export interface WarmupItem {
@@ -128,6 +132,8 @@ export interface UniReminders {
   gymReminderEnabled: boolean;
   gymReminderTime: string;
   activeBusAlarms: string[];
+  /** `Date.getDay()` numbering: 0 = Sunday … 4 = Thursday … 6 = Saturday. */
+  foodReminderDay: number;
 }
 
 export type Readiness = "high" | "normal" | "low";
@@ -154,6 +160,8 @@ export interface LanguageStudyState {
   targetMinutes: number;
   /** ISO dates with a completed session. */
   completedDates: string[];
+  /** Editable goal: language, programming, exam prep, thesis, … */
+  title: string;
 }
 
 export interface AppStateData {
@@ -180,6 +188,16 @@ export interface AppStateData {
   languageStudy: LanguageStudyState;
   /** Raw JSON imported from the AI shuttle template (null = built-in table). */
   customShuttleJson: string | null;
+  /** `"dark" | "light"` — toggled from the header. */
+  theme: Theme;
+  /** Modular layout: both sections, university only, or gym only. */
+  appMode: AppMode;
+  /** Controls the first-run setup wizard. */
+  onboardingCompleted: boolean;
 }
+
+export type Theme = "dark" | "light";
+/** `"full"` = gym + university, `"uni_only"` hides workout/progress. */
+export type AppMode = "full" | "uni_only" | "gym_only";
 
 export type TabId = "workout" | "progress" | "nutrition" | "uni" | "coach";

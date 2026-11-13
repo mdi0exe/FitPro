@@ -6,15 +6,18 @@ import { clear, el, escapeHtml } from "./lib/dom";
 import { installNavigation } from "./lib/navigation";
 import { restoreWaterReminderOnBoot, unlockAudio } from "./lib/timer";
 import {
+  applyTheme,
   ensureDailyDietReset,
   getActiveTab,
   getState,
+  homeTab,
   initState,
   installLifecycleFlush,
   persist,
   requestRender,
   setActiveTab,
   setRenderHook,
+  visibleTabs,
 } from "./lib/store";
 import { mountRestTimer } from "./components/restTimer";
 import { installWakeLockLifecycle } from "./lib/workoutTools";
@@ -26,19 +29,33 @@ import { renderWorkout } from "./views/workout";
 import { renderProgress } from "./views/progress";
 import { renderNutrition } from "./views/nutrition";
 import { renderCoach } from "./views/coach";
+import { openOnboardingModal } from "./components/onboarding";
 import type { TabId } from "./types";
 
 const app = document.getElementById("app") as HTMLElement;
 
 let lastRenderedTab: TabId | null = null;
-let lastNavTab: TabId | null = null;
+let lastNavKey = "";
 let lastHeaderKey = "";
 
 /** Cheap fingerprint of everything `renderHeader` draws. */
 function headerSignature(): string {
   try {
-    const { profile } = getState();
-    return `${profile.name}|${profile.currentWeight}|${profile.targetWeight}|${profile.startWeight}`;
+    const state = getState();
+    const { profile } = state;
+    return [
+      profile.name,
+      profile.currentWeight,
+      profile.targetWeight,
+      profile.startWeight,
+      profile.workoutProgramId,
+      profile.universityName,
+      state.theme,
+      state.appMode,
+      state.languageStudy.title,
+      state.languageStudy.targetMinutes,
+      state.languageStudy.completedDates.length,
+    ].join("|");
   } catch {
     return "";
   }
@@ -82,8 +99,11 @@ function renderChrome(force = false): void {
       headerSlot.append(renderHeader());
     }
   }
-  if (force || tab !== lastNavTab) {
-    lastNavTab = tab;
+  // The nav also has to rebuild when the modular mode changes: switching to
+  // "university only" removes two tabs without changing the active tab.
+  const navKey = `${tab}|${getState().appMode}`;
+  if (force || navKey !== lastNavKey) {
+    lastNavKey = navKey;
     if (navSlot) {
       clear(navSlot);
       navSlot.append(renderNav());
@@ -159,6 +179,9 @@ async function boot(): Promise<void> {
   try {
     const state = await loadState();
     initState(state);
+    // Paint the saved theme before the first frame so a light-mode user never
+    // sees a dark flash on cold start.
+    applyTheme();
 
     // A new calendar day starts with an empty nutrition checklist.
     if (ensureDailyDietReset()) persist(0);
@@ -175,14 +198,27 @@ async function boot(): Promise<void> {
     // Android back: close the open overlay first, otherwise return to the
     // workout tab instead of letting the OS kill the app.
     installNavigation(() => {
-      if (getActiveTab() !== "workout") {
-        setActiveTab("workout");
+      const home = homeTab(getState().appMode);
+      if (getActiveTab() !== home) {
+        setActiveTab(home);
         requestRender();
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     });
 
     renderView();
+
+    // First run (or `?onboarding=1` for previews/e2e) opens the setup wizard.
+    // The browser fallback seed already marks itself configured so scripted
+    // dev pages are not blocked by a modal.
+    const forceWizard = new URLSearchParams(window.location.search).has("onboarding");
+    if (!state.onboardingCompleted || forceWizard) {
+      if (!visibleTabs(state.appMode).includes(getActiveTab())) {
+        setActiveTab(homeTab(state.appMode));
+        requestRender();
+      }
+      openOnboardingModal();
+    }
 
     // Resume the water reminder from its persisted deadline. This never resets
     // the countdown: closing the app only pauses it.

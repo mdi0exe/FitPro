@@ -67,7 +67,7 @@ export function renderClassScheduleCard(): HTMLElement {
   const card = el("div", "card space-y-3");
   card.append(
     sectionTitle(
-      "🎓 برنامه هفتگی کلاس‌های ارشد",
+      "🎓 برنامه هفتگی کلاس‌ها",
       btn("btn-primary px-2.5 py-1 text-[11px]", "➕ افزودن درس", () => openCourseModal(), {
         "aria-label": "افزودن درس",
       }),

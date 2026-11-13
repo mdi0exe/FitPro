@@ -6,9 +6,9 @@
  * UI stays testable without a native shell.
  */
 import { defaultCourses } from "./courses";
+import { cafeteriaItems } from "./dietTemplates";
 import type {
   AppStateData,
-  DietItem,
   Exercise,
   SetLog,
   WarmupItem,
@@ -374,32 +374,6 @@ function seedDays(): WorkoutDay[] {
   ];
 }
 
-const dietItems = (): DietItem[] =>
-  [
-    ["صبحانه سلف: املت دانشگاه + نان کامل", "حدود ۱۲ گرم پروتئین و انرژی صبحگاهی"],
-    [
-      "ناهار سلف آزاد: چلو جوجه کباب یا چلو مرغ کامل تا آخر برنج",
-      "حدود ۴۵ گرم پروتئین و کربوهیدرات کافی برای پر شدن ذخایر گلیکوژن",
-    ],
-    [
-      "شام سلف آزاد (بلافاصله بعد از باشگاه): خوراک مرغ، چلو جوجه یا برگر",
-      "حدود ۴۰ گرم پروتئین — به عنوان وعده ریکاوری بعد تمرین!",
-    ],
-    [
-      "نوشیدن حداقل ۸ تا ۱۰ لیوان آب در طول روز و در باشگاه",
-      "۷۰٪ حجم عضله آب است! هیدراته ماندن برای پمپ عضلانی و ریکاوری حیاتی است",
-    ],
-    [
-      "خواب شبانه ۷ تا ۸ ساعت برای ترشح هورمون رشد",
-      "بیشترین ترشح هورمون رشد و عضله‌سازی در خواب عمیق اتفاق می‌افتد",
-    ],
-  ].map(([text, hint], index) => ({
-    id: `diet-${index + 1}`,
-    text,
-    hint,
-    done: false,
-  }));
-
 export function createSeedState(): AppStateData {
   const today = localIso();
   return {
@@ -413,11 +387,13 @@ export function createSeedState(): AppStateData {
       targetWeight: 75,
       goal: "افزایش حجم خشک (Lean Bulk)",
       trainingWindow: "۱٫۵ ساعت قبل از شام سلف",
+      universityName: "دانشگاه من",
+      workoutProgramId: "upper-lower-4",
     },
     days: seedDays(),
     weightHistory: [{ date: today, weight: 65 }],
     diet: {
-      items: dietItems(),
+      items: cafeteriaItems(),
       lastResetDate: today,
       waterGlasses: 0,
       waterReminderEnabled: false,
@@ -447,6 +423,7 @@ export function createSeedState(): AppStateData {
       gymReminderEnabled: false,
       gymReminderTime: "16:30",
       activeBusAlarms: [],
+      foodReminderDay: 4,
     },
     courses: defaultCourses(),
     semesterWeekType: "odd",
@@ -455,7 +432,13 @@ export function createSeedState(): AppStateData {
       reminderTime: "20:30",
       targetMinutes: 60,
       completedDates: [],
+      title: "مطالعه روزانه زبان",
     },
     customShuttleJson: null,
+    theme: "dark",
+    appMode: "full",
+    // The browser fallback is a dev/e2e surface: skip the first-run wizard so
+    // scripted pages stay usable. The native Rust seed uses `false`.
+    onboardingCompleted: true,
   };
 }

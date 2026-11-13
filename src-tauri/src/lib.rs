@@ -119,7 +119,9 @@ fn reset_to_defaults(app: AppHandle) -> Result<AppStateData, String> {
     let mut fresh = storage::seed();
     let today = timeutil::today_iso();
 
-    // Keep the whole profile — only the workout plan is reset.
+    // Only the workout plan is reset. Everything the student configured —
+    // theme, modular mode, university, courses, reminders, diet template and
+    // progress history — has to survive a "reset plan" tap.
     fresh.profile = current.profile.clone();
     if !current.weight_history.is_empty() {
         fresh.weight_history = current.weight_history;
@@ -130,6 +132,19 @@ fn reset_to_defaults(app: AppHandle) -> Result<AppStateData, String> {
     fresh.last_overload_date = current.last_overload_date;
     fresh.rest_seconds = current.rest_seconds;
     fresh.active_day = current.active_day.min(fresh.days.len().saturating_sub(1));
+    fresh.theme = current.theme;
+    fresh.app_mode = current.app_mode;
+    fresh.onboarding_completed = current.onboarding_completed;
+    fresh.uni_reminders = current.uni_reminders;
+    fresh.courses = current.courses;
+    fresh.semester_week_type = current.semester_week_type;
+    fresh.language_study = current.language_study;
+    fresh.custom_shuttle_json = current.custom_shuttle_json;
+    fresh.activity_history = current.activity_history;
+    fresh.personal_records = current.personal_records;
+    fresh.progress_photos = current.progress_photos;
+    fresh.deload_active = current.deload_active;
+    fresh.readiness = current.readiness;
 
     fresh.push_milestone(&today, "برنامه تمرینی به حالت پیش‌فرض بازگشت.", "system");
 

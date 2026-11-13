@@ -31,6 +31,22 @@ pub struct UserProfile {
     pub goal: String,
     /// Golden rule: best training window.
     pub training_window: String,
+    /// Shown in the university tab — the app is not tied to one campus.
+    #[serde(default = "default_uni_name")]
+    pub university_name: String,
+    /// One of the ids in `src/data/programs.ts`.
+    #[serde(default = "default_program_id")]
+    pub workout_program_id: String,
+}
+
+/// Fallback label for saves that predate the editable university name.
+pub fn default_uni_name() -> String {
+    "دانشگاه من".to_string()
+}
+
+/// The original 4-day upper/lower programme stays the default.
+pub fn default_program_id() -> String {
+    "upper-lower-4".to_string()
 }
 
 impl Default for UserProfile {
@@ -44,6 +60,8 @@ impl Default for UserProfile {
             target_weight: 75.0,
             goal: "افزایش حجم خشک (Lean Bulk)".to_string(),
             training_window: "۱٫۵ ساعت قبل از شام سلف".to_string(),
+            university_name: default_uni_name(),
+            workout_program_id: default_program_id(),
         }
     }
 }
@@ -345,10 +363,19 @@ pub struct UniReminders {
     pub gym_reminder_time: String,
     #[serde(default)]
     pub active_bus_alarms: Vec<String>,
+    /// `Date.getDay()` numbering: 0 = Sunday … 4 = Thursday … 6 = Saturday.
+    /// The UI offers Tuesday … Friday, but any weekday is accepted here.
+    #[serde(default = "default_food_day")]
+    pub food_reminder_day: u32,
 }
 
 fn default_true() -> bool {
     true
+}
+
+/// Cafeteria reservations traditionally open on Thursday.
+pub fn default_food_day() -> u32 {
+    4
 }
 
 /// Demos bundled with the app; anything else cannot be trusted in the WebView.
@@ -387,6 +414,7 @@ impl Default for UniReminders {
             gym_reminder_enabled: false,
             gym_reminder_time: default_gym_time(),
             active_bus_alarms: Vec::new(),
+            food_reminder_day: default_food_day(),
         }
     }
 }
@@ -501,6 +529,9 @@ pub struct LanguageStudyState {
     /// ISO dates with a completed study session (newest kept, max 400).
     #[serde(default)]
     pub completed_dates: Vec<String>,
+    /// Student-editable goal: language, programming, thesis, exam prep, …
+    #[serde(default = "default_study_title")]
+    pub title: String,
 }
 
 fn default_lang_time() -> String {
@@ -511,6 +542,10 @@ fn default_lang_minutes() -> u32 {
     60
 }
 
+pub fn default_study_title() -> String {
+    "مطالعه روزانه زبان".to_string()
+}
+
 impl Default for LanguageStudyState {
     fn default() -> Self {
         Self {
@@ -518,6 +553,7 @@ impl Default for LanguageStudyState {
             reminder_time: default_lang_time(),
             target_minutes: default_lang_minutes(),
             completed_dates: Vec::new(),
+            title: default_study_title(),
         }
     }
 }
@@ -570,11 +606,56 @@ pub struct AppStateData {
     /// Raw JSON imported from the AI shuttle-schedule template.
     #[serde(default)]
     pub custom_shuttle_json: Option<String>,
+    /// `"dark"` | `"light"` — toggled from the header.
+    #[serde(default = "default_theme")]
+    pub theme: String,
+    /// `"full"` (gym + uni) | `"uni_only"` (no workout tabs) | `"gym_only"`.
+    #[serde(default = "default_app_mode")]
+    pub app_mode: String,
+    /// First-run wizard is shown once; explicit `false` in a legacy save too.
+    #[serde(default)]
+    pub onboarding_completed: bool,
+}
+
+pub fn default_theme() -> String {
+    "dark".to_string()
+}
+
+pub fn default_app_mode() -> String {
+    "full".to_string()
+}
+
+/// Bounded, trimmed free text so a bad paste cannot bloat the save file.
+fn clean_text(value: &str, max_chars: usize) -> String {
+    value.trim().chars().take(max_chars).collect::<String>()
 }
 
 impl AppStateData {
     /// Keep every exercise's `logs` vector in sync with its `sets` count.
     pub fn normalize(&mut self) {
+        // ------------------------------------------------- look & modules
+        // These run before the `days.is_empty()` early return: a student who
+        // disabled the gym still needs a valid theme, app mode and profile.
+        if !matches!(self.theme.as_str(), "dark" | "light") {
+            self.theme = default_theme();
+        }
+        if !matches!(self.app_mode.as_str(), "full" | "uni_only" | "gym_only") {
+            self.app_mode = default_app_mode();
+        }
+        self.profile.university_name = clean_text(&self.profile.university_name, 80);
+        if self.profile.university_name.is_empty() {
+            self.profile.university_name = default_uni_name();
+        }
+        self.profile.workout_program_id = clean_text(&self.profile.workout_program_id, 64);
+        if self.profile.workout_program_id.is_empty() {
+            self.profile.workout_program_id = default_program_id();
+        }
+        self.uni_reminders.food_reminder_day = self.uni_reminders.food_reminder_day.min(6);
+        self.language_study.title = clean_text(&self.language_study.title, 80);
+        if self.language_study.title.is_empty() {
+            self.language_study.title = default_study_title();
+        }
+
         // Calendar history: drop junk, keep the newest 90 days, clamp counters.
         self.activity_history.retain(|entry| !entry.date.is_empty());
         self.activity_history.sort_by(|a, b| b.date.cmp(&a.date));
@@ -683,16 +764,34 @@ impl AppStateData {
         if self.profile.target_weight <= 0.0 {
             self.profile.target_weight = 75.0;
         }
-        // Older installs carry the 6-item grocery list; swap it for the 3-meal
-        // cafeteria plan without asking the user to reset anything.
-        let legacy_diet = self.diet.items.len() != 5
-            || self
-                .diet
-                .items
-                .iter()
-                .any(|item| item.text.contains("تخم‌مرغ"));
+        // Older installs carry a 6-item grocery list (egg/budget bulking).
+        // Only those exact legacy rows are migrated: a student may now pick a
+        // different template, add custom meals or delete rows, and every one of
+        // those lists must survive a save/load cycle untouched.
+        // Deliberately short, distinctive substrings: matching "تخممرغ" would
+        // also nuke a student's own "تخممرغ آبپز" custom meal.
+        let legacy_markers = [
+            "بمب پروتئین",
+            "عدسی یا خوراک سویا",
+            "وعده کامل سلف دانشگاه",
+        ];
+        let legacy_diet = self.diet.items.is_empty()
+            || self.diet.items.iter().any(|item| {
+                legacy_markers
+                    .iter()
+                    .any(|marker| item.text.contains(marker))
+            });
         if legacy_diet {
             self.diet.items = default_diet_items();
+        }
+        self.diet.items.retain(|item| !item.text.trim().is_empty());
+        self.diet.items.truncate(20);
+        for (index, item) in self.diet.items.iter_mut().enumerate() {
+            item.text = clean_text(&item.text, 160);
+            item.hint = clean_text(&item.hint, 200);
+            if item.id.trim().is_empty() {
+                item.id = format!("diet-custom-{index}");
+            }
         }
         self.diet.water_glasses = self.diet.water_glasses.min(20);
         if self.diet.water_reminder_minutes < 15 || self.diet.water_reminder_minutes > 240 {
@@ -1007,6 +1106,9 @@ mod tests {
             semester_week_type: default_semester_week(),
             language_study: LanguageStudyState::default(),
             custom_shuttle_json: None,
+            theme: default_theme(),
+            app_mode: default_app_mode(),
+            onboarding_completed: true,
         };
         for index in 0..80 {
             state.push_milestone("2026-01-01", format!("event {index}"), "system");
@@ -1359,5 +1461,99 @@ mod tests {
     fn parses_first_number() {
         assert_eq!(parse_first_number("12-15"), Some(12));
         assert_eq!(parse_first_number("حداکثر توان"), None);
+    }
+
+    #[test]
+    fn legacy_state_gets_theme_modes_and_generic_university() {
+        let mut value = serde_json::to_value(crate::storage::seed()).unwrap();
+        let object = value.as_object_mut().unwrap();
+        for key in [
+            "theme",
+            "appMode",
+            "onboardingCompleted",
+            "universityName",
+            "workoutProgramId",
+            "foodReminderDay",
+            "studyTitle",
+        ] {
+            object.remove(key);
+        }
+        value["profile"].as_object_mut().unwrap().remove("universityName");
+        value["profile"].as_object_mut().unwrap().remove("workoutProgramId");
+        value["uniReminders"].as_object_mut().unwrap().remove("foodReminderDay");
+        value["languageStudy"].as_object_mut().unwrap().remove("title");
+
+        let state: AppStateData = serde_json::from_value(value).unwrap();
+        assert_eq!(state.theme, "dark");
+        assert_eq!(state.app_mode, "full");
+        assert!(!state.onboarding_completed);
+        assert_eq!(state.profile.university_name, "دانشگاه من");
+        assert_eq!(state.profile.workout_program_id, "upper-lower-4");
+        assert_eq!(state.uni_reminders.food_reminder_day, 4);
+        assert_eq!(state.language_study.title, "مطالعه روزانه زبان");
+    }
+
+    #[test]
+    fn app_settings_are_sanitised() {
+        let mut state = crate::storage::seed();
+        state.theme = "neon".to_string();
+        state.app_mode = "banana".to_string();
+        state.profile.university_name = "   ".to_string();
+        state.profile.workout_program_id = String::new();
+        state.uni_reminders.food_reminder_day = 42;
+        state.language_study.title = "  ".to_string();
+
+        state.normalize();
+
+        assert_eq!(state.theme, "dark");
+        assert_eq!(state.app_mode, "full");
+        assert_eq!(state.profile.university_name, "دانشگاه من");
+        assert_eq!(state.profile.workout_program_id, "upper-lower-4");
+        assert_eq!(state.uni_reminders.food_reminder_day, 6);
+        assert_eq!(state.language_study.title, "مطالعه روزانه زبان");
+
+        state.theme = "light".to_string();
+        state.app_mode = "uni_only".to_string();
+        state.profile.university_name = "دانشگاه تهران".to_string();
+        state.uni_reminders.food_reminder_day = 2;
+        state.language_study.title = "پایان\u{200c}نامه".to_string();
+        state.normalize();
+        assert_eq!(state.theme, "light");
+        assert_eq!(state.app_mode, "uni_only");
+        assert_eq!(state.profile.university_name, "دانشگاه تهران");
+        assert_eq!(state.uni_reminders.food_reminder_day, 2);
+        assert_eq!(state.language_study.title, "پایان\u{200c}نامه");
+    }
+
+    #[test]
+    fn custom_diet_template_survives_a_save_cycle() {
+        let mut state = crate::storage::seed();
+        state.diet.items = vec![
+            DietItem {
+                id: "diet-1".to_string(),
+                text: "صبحانه خانه: املت و نان".to_string(),
+                hint: String::new(),
+                done: true,
+            },
+            DietItem {
+                id: "diet-4".to_string(),
+                text: "نوشیدن ۸ لیوان آب".to_string(),
+                hint: String::new(),
+                done: false,
+            },
+            DietItem {
+                id: "custom-1".to_string(),
+                text: "تخم\u{200c}مرغ آب\u{200c}پز + کراتین".to_string(),
+                hint: "مکمل دلخواه".to_string(),
+                done: false,
+            },
+        ];
+
+        state.normalize();
+
+        assert_eq!(state.diet.items.len(), 3);
+        assert_eq!(state.diet.items[0].text, "صبحانه خانه: املت و نان");
+        assert_eq!(state.diet.items[2].id, "custom-1");
+        assert!(state.diet.items[0].done, "ticks must survive a reload");
     }
 }

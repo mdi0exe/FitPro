@@ -4,9 +4,20 @@ import { icons } from "../lib/icons";
 import { pushTab } from "../lib/navigation";
 import { fa, faDate, faNum, faSigned, isoToday } from "../lib/fa";
 import { logBodyWeight } from "../lib/api";
-import { getActiveTab, getState, requestRender, setActiveTab, setState } from "../lib/store";
+import {
+  applyTheme,
+  getActiveTab,
+  getState,
+  persist,
+  requestRender,
+  setActiveTab,
+  setState,
+  visibleTabs,
+} from "../lib/store";
+import { findProgram } from "../data/programs";
 import type { TabId } from "../types";
 import { openModal, progressBar, toast } from "./ui";
+import { openOnboardingModal } from "./onboarding";
 
 const NAV_ITEMS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: "workout", label: "تمرین", icon: icons.dumbbell },
@@ -17,10 +28,13 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; icon: string }> = [
 ];
 
 export function renderHeader(): HTMLElement {
-  const { profile } = getState();
+  const state = getState();
+  const { profile } = state;
   const gained = profile.currentWeight - profile.startWeight;
   const span = Math.max(0.1, profile.targetWeight - profile.startWeight);
   const percent = Math.min(100, Math.max(0, (gained / span) * 100));
+  const uniOnly = state.appMode === "uni_only";
+  const program = findProgram(profile.workoutProgramId);
 
   const header = el(
     "header",
@@ -28,35 +42,88 @@ export function renderHeader(): HTMLElement {
   );
   const inner = el("div", "mx-auto max-w-2xl px-4 pb-2.5 pt-[calc(var(--safe-top)+0.5rem)]");
 
-  const row = el("div", "flex items-center justify-between gap-3");
-  const titles = el("div", "min-w-0");
+  const row = el("div", "flex items-center justify-between gap-2");
+  const titles = el("div", "min-w-0 flex-1");
   titles.append(
-    el("p", "text-[10px] font-medium text-emerald-400/80", "هایپرتروفی دانشجویی • ۴ روز در هفته"),
-    el("h1", "truncate text-base font-extrabold text-slate-50", `سلام ${escapeHtml(profile.name)} 💪`),
+    el(
+      "p",
+      "truncate text-[10px] font-medium text-emerald-400/80",
+      uniOnly
+        ? `🎓 ${escapeHtml(profile.universityName)} • برنامهریزی دانشگاه`
+        : `هایپرتروفی دانشجویی • ${program.daysPerWeekLabel}`,
+    ),
+    el(
+      "h1",
+      "truncate text-base font-extrabold text-slate-50",
+      `سلام ${escapeHtml(profile.name)} ${uniOnly ? "🎓" : "💪"}`,
+    ),
   );
 
+  const actions = el("div", "flex shrink-0 items-center gap-1.5");
   const weightChip = btn(
-    "flex shrink-0 flex-col items-center rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-1.5 transition active:scale-95",
+    "flex shrink-0 flex-col items-center rounded-2xl border border-slate-800 bg-slate-900/70 px-2.5 py-1.5 transition active:scale-95",
     `<span class="text-[9px] text-slate-500">وزن فعلی</span>
      <span class="text-sm font-extrabold text-emerald-400">${faNum(profile.currentWeight, 1)}</span>`,
     () => openWeightSheet(),
-    { title: "ثبت وزن" },
+    { title: "ثبت وزن", "aria-label": "ثبت وزن" },
   );
+  const themeBtn = btn(
+    "btn-icon h-9 w-9 shrink-0 text-base",
+    state.theme === "light" ? "🌙" : "☀️",
+    () => {
+      state.theme = state.theme === "light" ? "dark" : "light";
+      applyTheme();
+      persist(0);
+      requestRender();
+    },
+    { title: "تغییر حالت روشن / تیره", "aria-label": "تغییر حالت روشن یا تیره" },
+  );
+  const settingsBtn = btn(
+    "btn-icon h-9 w-9 shrink-0 text-base",
+    "⚙️",
+    () => openOnboardingModal(),
+    { title: "تنظیم پروفایل و حالت برنامه", "aria-label": "تنظیم پروفایل و حالت برنامه" },
+  );
+  actions.append(weightChip, themeBtn, settingsBtn);
+  row.append(titles, actions);
 
-  row.append(titles, weightChip);
+  if (uniOnly) {
+    // No weight progress bar in university-only mode: show the campus and
+    // today's study goal instead.
+    const lang = state.languageStudy;
+    const doneToday = lang.completedDates.includes(isoToday());
+    const infoRow = el(
+      "div",
+      "mt-2 flex items-center justify-between gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/5 px-2.5 py-1.5",
+    );
+    infoRow.append(
+      el("span", "truncate text-[10px] font-bold text-cyan-300", `📚 ${escapeHtml(lang.title)}`),
+      el(
+        "span",
+        "shrink-0 text-[9px] text-slate-400",
+        `${doneToday ? "✅ انجام شد" : "⏳ امروز"} • ${fa(lang.targetMinutes)} دقیقه`,
+      ),
+    );
+    inner.append(row, infoRow);
+  } else {
+    const goalRow = el("div", "mt-2 flex items-center gap-2");
+    const bar = progressBar(percent, "flex-1");
+    const goalText = el(
+      "span",
+      "shrink-0 text-[9px] text-slate-500",
+      `${fa(Math.round(percent))}٪ تا ${faNum(profile.targetWeight, 0)} کیلو`,
+    );
+    goalRow.append(bar, goalText);
+    inner.append(row, goalRow);
+  }
 
-  const goalRow = el("div", "mt-2 flex items-center gap-2");
-  const bar = progressBar(percent, "flex-1");
-  const goalText = el("span", "shrink-0 text-[9px] text-slate-500", `${fa(Math.round(percent))}٪ تا ${faNum(profile.targetWeight, 0)} کیلو`);
-  goalRow.append(bar, goalText);
-
-  inner.append(row, goalRow);
   header.append(inner);
   return header;
 }
 
 export function renderNav(): HTMLElement {
   const active = getActiveTab();
+  const allowed = visibleTabs(getState().appMode);
   const nav = el(
     "nav",
     "fixed inset-x-0 bottom-0 z-50 border-t border-slate-800/80 bg-slate-950/95 backdrop-blur-xl",
@@ -66,7 +133,7 @@ export function renderNav(): HTMLElement {
     "mx-auto flex max-w-2xl items-stretch justify-around px-2 pb-[calc(var(--safe-bottom)+0.25rem)] pt-2",
   );
 
-  NAV_ITEMS.forEach((item) => {
+  NAV_ITEMS.filter((item) => allowed.includes(item.id)).forEach((item) => {
     const isActive = item.id === active;
     const button = el(
       "button",

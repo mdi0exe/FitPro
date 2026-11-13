@@ -1,5 +1,5 @@
 /** Application state container + debounced persistence. */
-import type { AppStateData, DailyActivity, TabId } from "../types";
+import type { AppMode, AppStateData, DailyActivity, TabId } from "../types";
 import { saveState, setFlushHook } from "./api";
 import { fa, isoToday } from "./fa";
 import { ensureDailySwappedExercisesReset } from "./workoutTools";
@@ -13,9 +13,36 @@ let saveTimer: number | null = null;
 let flushing = false;
 let queued = false;
 
+/** Tabs visible in each modular layout, in bottom-nav order. */
+export function visibleTabs(mode: AppMode | undefined): TabId[] {
+  if (mode === "uni_only") return ["uni", "nutrition", "coach"];
+  if (mode === "gym_only") return ["workout", "progress", "nutrition", "coach"];
+  return ["workout", "progress", "nutrition", "uni", "coach"];
+}
+
+/** First tab to open for a given mode (also the Android back destination). */
+export function homeTab(mode: AppMode | undefined): TabId {
+  return visibleTabs(mode)[0];
+}
+
+/**
+ * Mirrors the saved theme onto `<html>`. Called on boot, on every state swap
+ * and right after the header toggle — CSS does the rest via `html.theme-light`.
+ */
+export function applyTheme(): void {
+  if (typeof document === "undefined" || !state) return;
+  const isLight = state.theme === "light";
+  document.documentElement.classList.toggle("theme-light", isLight);
+  // Android paints the status bar from this meta tag; keep it in step with the
+  // theme so a light app does not sit under a near-black system bar.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", isLight ? "#f1f5f9" : "#020617");
+}
+
 export function initState(next: AppStateData): void {
   state = next;
-  activeTab = "workout";
+  activeTab = homeTab(next.appMode);
+  applyTheme();
 }
 
 export function getState(): AppStateData {
@@ -28,6 +55,8 @@ export function setState(next: AppStateData): void {
   // the pending debounce prevents an older snapshot from overwriting it.
   cancelPendingSave();
   state = next;
+  applyTheme();
+  if (!visibleTabs(next.appMode).includes(activeTab)) activeTab = homeTab(next.appMode);
   // Keep the weekly calendar in step with data that came from Rust (e.g. a new
   // body weight) and save the derived snapshot when it actually changed.
   if (syncTodayActivity()) persist(0);
@@ -146,7 +175,11 @@ export const WATER_GOAL = 8;
  */
 export function syncWaterChecklist(): void {
   const current = getState();
-  const item = current.diet.items.find((entry) => entry.id === "diet-4");
+  // The water row keeps its id in every template, but a student may have
+  // deleted/reordered it — fall back to the text so the tick never disappears.
+  const item =
+    current.diet.items.find((entry) => entry.id === "diet-4") ??
+    current.diet.items.find((entry) => entry.text.includes("لیوان آب"));
   if (!item) return;
   item.done = current.diet.waterGlasses >= WATER_GOAL;
 }

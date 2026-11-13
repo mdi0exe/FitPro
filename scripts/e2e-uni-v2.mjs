@@ -163,7 +163,7 @@ const goToUni = async (page) => {
   check("default week type is odd (*)", saved.semesterWeekType === "odd", saved.semesterWeekType);
 
   const cardText = await page.$eval("#view", (node) => node.textContent);
-  check("class schedule card renders", cardText.includes("برنامه هفتگی کلاس‌های ارشد"));
+  check("class schedule card renders", cardText.includes("برنامه هفتگی کلاس‌ها"));
   check("professor names are shown", cardText.includes("د. فرجی") && cardText.includes("د. بدری"));
 
   const editButtons = await page.$$('button[aria-label^="ویرایش "]');

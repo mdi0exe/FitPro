@@ -28,6 +28,24 @@ function gifNeedsReplacement(url: string | null | undefined): boolean {
   );
 }
 
+/** Trimmed, bounded free text so a bad paste cannot bloat the save file. */
+function cleanText(value: unknown, maxChars: number, fallback: string): string {
+  const text = typeof value === "string" ? value.trim().slice(0, maxChars) : "";
+  return text || fallback;
+}
+
+/** The old 6-item "budget bulking" grocery list, before the 3-meal plan. */
+export function isLegacyDiet(items: unknown): boolean {
+  if (!Array.isArray(items) || items.length === 0) return true;
+  const markers = ["بمب پروتئین", "عدسی یا خوراک سویا", "وعده کامل سلف دانشگاه"];
+  return items.some(
+    (row) =>
+      row &&
+      typeof row.text === "string" &&
+      markers.some((marker) => row.text.includes(marker)),
+  );
+}
+
 export function normalizeState(input: AppStateData): AppStateData {
   const state = input;
   state.days = state.days ?? [];
@@ -37,6 +55,25 @@ export function normalizeState(input: AppStateData): AppStateData {
     .filter((entry) => entry && typeof entry.date === "string" && entry.date.length > 0)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 90);
+
+  // ---------------------------------------------------------- look & modules
+  // Runs before the `days.length === 0` short-circuit: a student who turned
+  // the gym off still needs a valid theme, mode and university name.
+  state.profile = state.profile ?? createSeedState().profile;
+  state.profile.universityName = cleanText(state.profile.universityName, 80, "دانشگاه من");
+  state.profile.workoutProgramId = cleanText(
+    state.profile.workoutProgramId,
+    64,
+    "upper-lower-4",
+  );
+  state.theme = state.theme === "light" ? "light" : "dark";
+  state.appMode =
+    state.appMode === "uni_only" || state.appMode === "gym_only" ? state.appMode : "full";
+  // A missing key is a legacy browser snapshot (already configured). An
+  // explicit `false` comes from the native first-run seed and opens the wizard.
+  state.onboardingCompleted =
+    typeof state.onboardingCompleted === "boolean" ? state.onboardingCompleted : true;
+
   if (state.days.length === 0) return createSeedState();
 
   // Gym tools + uni tab fields (added after the first release).
@@ -65,6 +102,9 @@ export function normalizeState(input: AppStateData): AppStateData {
     activeBusAlarms: Array.isArray(reminders.activeBusAlarms)
       ? [...new Set(reminders.activeBusAlarms.filter((key) => typeof key === "string" && key))].slice(0, 64)
       : [],
+    foodReminderDay: Number.isInteger(reminders.foodReminderDay)
+      ? Math.min(6, Math.max(0, reminders.foodReminderDay))
+      : 4,
   };
 
   // MSc timetable: missing = legacy save (seed it), empty array = user deleted
@@ -101,6 +141,7 @@ export function normalizeState(input: AppStateData): AppStateData {
           .sort()
           .slice(-400)
       : [],
+    title: cleanText(lang.title, 80, "مطالعه روزانه زبان"),
   };
 
   if (typeof state.customShuttleJson === "string") {
@@ -121,15 +162,22 @@ export function normalizeState(input: AppStateData): AppStateData {
   state.activeDay = Math.min(Math.max(0, state.activeDay ?? 0), state.days.length - 1);  if (!state.restSeconds || state.restSeconds < 15 || state.restSeconds > 600) {
     state.restSeconds = 90;
   }
-  // Same migration as models.rs: old installs carry the 6-item grocery list.
+  // Same migration as models.rs: only the old 6-item grocery list is replaced.
+  // A student-selected template or an added custom meal must survive a reload.
   const seedDiet = createSeedState().diet;
   if (!state.diet) {
     state.diet = seedDiet;
   } else {
-    const items = state.diet.items;
-    if (!Array.isArray(items) || items.length !== 5 || items.some((item) => item.text.includes("تخم‌مرغ"))) {
-      state.diet.items = seedDiet.items;
-    }
+    if (isLegacyDiet(state.diet.items)) state.diet.items = seedDiet.items;
+    state.diet.items = (state.diet.items ?? [])
+      .filter((row) => row && typeof row.text === 'string' && row.text.trim())
+      .slice(0, 20)
+      .map((row, index) => ({
+        id: cleanText(row.id, 64, `diet-custom-${index}`),
+        text: row.text.trim().slice(0, 160),
+        hint: typeof row.hint === 'string' ? row.hint.trim().slice(0, 200) : '',
+        done: Boolean(row.done),
+      }));
     state.diet.waterGlasses = Math.min(20, Math.max(0, state.diet.waterGlasses ?? 0));
     state.diet.waterReminderEnabled = Boolean(state.diet.waterReminderEnabled);
     const minutes = state.diet.waterReminderMinutes;
@@ -338,6 +386,22 @@ export function localReset(): AppStateData {
   fresh.lastOverloadDate = current.lastOverloadDate;
   fresh.restSeconds = current.restSeconds;
   fresh.activeDay = Math.min(current.activeDay, fresh.days.length - 1);
+  // Only the workout plan is reset: keep theme, modular mode, university,
+  // courses, reminders, diet template and all progress the student entered.
+  fresh.theme = current.theme;
+  fresh.appMode = current.appMode;
+  fresh.onboardingCompleted = current.onboardingCompleted;
+  fresh.uniReminders = current.uniReminders;
+  fresh.courses = current.courses;
+  fresh.semesterWeekType = current.semesterWeekType;
+  fresh.languageStudy = current.languageStudy;
+  fresh.customShuttleJson = current.customShuttleJson;
+  fresh.activityHistory = current.activityHistory;
+  fresh.personalRecords = current.personalRecords;
+  fresh.progressPhotos = current.progressPhotos;
+  fresh.deloadActive = current.deloadActive;
+  fresh.readiness = current.readiness;
+  fresh.profile.workoutProgramId = 'upper-lower-4';
   pushMilestone(fresh, "برنامه تمرینی به حالت پیش‌فرض بازگشت.", "system");
   writeRaw(fresh);
   return clone(fresh);

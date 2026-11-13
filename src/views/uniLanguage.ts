@@ -20,7 +20,15 @@ export const LANGUAGE_ALARM_ID = 7905;
 export const languageStudyTimer = new CountdownTimer(60 * 60);
 
 const PRESET_TIMES = ["10:00", "14:00", "19:00", "20:30", "21:30", "22:30"];
-const PRESET_MINUTES = [30, 45, 60, 90];
+const PRESET_MINUTES = [30, 45, 60, 90, 120];
+
+/** Quick subject chips — the daily goal is not language-only any more. */
+const STUDY_TITLES = [
+  { label: "📚 مطالعه زبان", value: "مطالعه روزانه زبان" },
+  { label: "💻 برنامهنویسی", value: "تمرین برنامهنویسی" },
+  { label: "📖 مطالعه کنکور", value: "مطالعه کنکور" },
+  { label: "📝 پایاننامه", value: "پژوهش و پایاننامه" },
+];
 
 function languageState(): LanguageStudyState {
   const state = getState();
@@ -30,8 +38,10 @@ function languageState(): LanguageStudyState {
       reminderTime: "20:30",
       targetMinutes: 60,
       completedDates: [],
+      title: "مطالعه روزانه زبان",
     };
   }
+  if (!state.languageStudy.title) state.languageStudy.title = "مطالعه روزانه زبان";
   return state.languageStudy;
 }
 
@@ -58,10 +68,11 @@ async function scheduleLanguageAlarm(hhmm: string): Promise<boolean> {
   const [hour, minute] = hhmm.split(":").map((part) => Number.parseInt(part, 10) || 0);
   const granted = await ensureNotificationPermission();
   if (!granted) return false;
+  const title = languageState().title || "مطالعه روزانه زبان";
   return scheduleRepeatingNotification(
     LANGUAGE_ALARM_ID,
-    "📚 وقت مطالعه روزانه زبان است!",
-    "۱ ساعت تمرکز روی زبان = سرمایه‌گذاری روی آینده تحصیلی و شغلی. همین حالا شروع کن 🔥",
+    `📚 وقت ${title} است!`,
+    "یک جلسه تمرکز = سرمایه‌گذاری روی آینده تحصیلی و شغلی. همین حالا شروع کن 🔥",
     { hour, minute },
   );
 }
@@ -85,10 +96,36 @@ export function renderLanguageStudyCard(): HTMLElement {
 
   card.append(
     sectionTitle(
-      "📚 مطالعه روزانه زبان",
+      `📚 ${lang.title}`,
       el("span", `chip ${streak > 0 ? "chip-amber" : "chip-cyan"}`, streak > 0 ? `🔥 ${fa(streak)} روز پیوسته` : `📅 ${fa(lang.completedDates.length)} روز`),
     ),
   );
+
+  // --------------------------------------------- editable study subject
+  const subjects = el("div", "flex flex-wrap gap-1.5");
+  STUDY_TITLES.forEach((subject) => {
+    const active = lang.title === subject.value;
+    subjects.append(
+      btn(
+        `rounded-xl border px-2.5 py-1 text-[10px] font-bold transition active:scale-95 ${
+          active
+            ? "border-indigo-400 bg-indigo-500/20 text-indigo-200"
+            : "border-slate-800 bg-slate-950/60 text-slate-400"
+        }`,
+        subject.label,
+        () => {
+          if (lang.title === subject.value) return;
+          lang.title = subject.value;
+          softTap();
+          persist(0);
+          toast(`هدف مطالعه روزانه: ${subject.value} 📚`);
+          requestRender();
+        },
+        { "aria-pressed": String(active), "aria-label": `هدف مطالعه ${subject.label}` },
+      ),
+    );
+  });
+  card.append(subjects);
 
   // ------------------------------------------------------- daily checkmark
   card.append(
@@ -112,7 +149,7 @@ export function renderLanguageStudyCard(): HTMLElement {
           toast("تیک امروز برداشته شد.", "info");
         } else {
           lang.completedDates.push(today);
-          toast("عالی! مطالعه زبان امروز ثبت شد 📚🔥");
+          toast(`عالی! ${lang.title} امروز ثبت شد 📚🔥`);
         }
         softTap();
         persist(0);
@@ -171,19 +208,19 @@ export function renderLanguageStudyCard(): HTMLElement {
       current.completedDates.push(day);
       persist(0);
     }
-    toast("🎉 جلسه مطالعه زبان تمام شد! خسته نباشی 📚");
+    toast(`🎉 جلسه ${current.title} تمام شد! خسته نباشی 📚`);
     requestRender();
   };
   card.append(timerBox);
 
   // ------------------------------------------------------------- target
-  const targetRow = el("div", "flex items-center gap-1.5");
-  targetRow.append(el("span", "shrink-0 text-[10px] text-slate-400", "مدت جلسه:"));
+  const targetRow = el("div", "flex flex-wrap items-center gap-1.5");
+  targetRow.append(el("span", "w-full shrink-0 text-[10px] text-slate-400", "مدت جلسه:"));
   for (const minutes of PRESET_MINUTES) {
     const active = target === minutes;
     targetRow.append(
       btn(
-        `flex-1 rounded-xl border py-1.5 text-[10px] font-bold transition active:scale-95 ${
+        `flex-1 basis-[30%] rounded-xl border py-1.5 text-[10px] font-bold transition active:scale-95 ${
           active
             ? "border-cyan-400 bg-cyan-500/15 text-cyan-200"
             : "border-slate-800 bg-slate-950 text-slate-400"

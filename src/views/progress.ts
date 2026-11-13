@@ -8,6 +8,7 @@ import type { Milestone, WeightEntry } from "../types";
 import { progressBar, sectionTitle, toast } from "../components/ui";
 import { renderWeeklyActivityCard } from "../components/weeklyActivity";
 import { renderProgressPhotosCard } from "../components/progressPhotos";
+import { findProgram } from "../data/programs";
 
 export function renderProgress(): HTMLElement {
   const state = getState();
@@ -276,8 +277,8 @@ function statsGrid(): HTMLElement {
       "تا افزایش وزنه بعدی",
       "text-cyan-400",
     ),
-    tile(icons.dumbbell, "کل ست‌های برنامه", `${fa(totalSets)} ست`, `${fa(exercises)} حرکت در ۴ روز`, "text-emerald-400"),
-    tile(icons.target, "روزهای تمرین", "۴ روز", "بالاتنه / پایین‌تنه", "text-cyan-400"),
+    tile(icons.dumbbell, "کل ست‌های برنامه", `${fa(totalSets)} ست`, `${fa(exercises)} حرکت در ${fa(state.days.length)} روز`, "text-emerald-400"),
+    tile(icons.target, "روزهای تمرین", `${fa(state.days.length)} روز`, findProgram(state.profile.workoutProgramId).daysPerWeekLabel, "text-cyan-400"),
   );
 
   return grid;

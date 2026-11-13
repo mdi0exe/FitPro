@@ -525,6 +525,11 @@ pub fn seed() -> AppStateData {
         semester_week_type: "odd".to_string(),
         language_study: crate::models::LanguageStudyState::default(),
         custom_shuttle_json: None,
+        // A genuine fresh install opens the setup wizard. The browser fallback
+        // seed sets this to `true` so dev/e2e pages stay scriptable.
+        theme: "dark".to_string(),
+        app_mode: "full".to_string(),
+        onboarding_completed: false,
     };
     state.normalize();
     state
