@@ -15,6 +15,7 @@
     "tauri:build": "tauri build",
     "android:manifest": "node scripts/patch-android-manifest.mjs",
     "android:icons": "node scripts/gen-android-icons.mjs",
+    "gifs": "node scripts/bundle-gifs.mjs",
     "icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {

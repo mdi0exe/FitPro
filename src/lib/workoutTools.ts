@@ -89,7 +89,6 @@ export function installWakeLockLifecycle(): void {
 interface AltSpec {
   name: string;
   query: string;
-  gifUrl: string;
   tip: string;
 }
 
@@ -98,160 +97,134 @@ const ALTERNATIVE_MOVES: Record<string, AltSpec> = {
   d1e1: {
     name: "پرس بالا سینه هالتر (یا اسمیت)",
     query: "Incline Barbell Bench Press gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Incline-Barbell-Bench-Press.gif",
     tip: "میله را تا بالای ترقوه پایین بیاورید و آرنج‌ها زاویه ۴۵ درجه داشته باشند",
   },
   d1e2: {
     name: "بارفیکس دست باز (یا زیربغل دمبل تک‌خم)",
     query: "Dumbbell Row gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Row.gif",
     tip: "دمبل را به سمت مفصل ران بکشید تا زیربغل کاملاً منقبض شود",
   },
   d1e3: {
     name: "پرس سینه دمبل روی میز صاف",
     query: "Dumbbell Bench Press gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Press.gif",
     tip: "دمبل‌ها را با کنترل تا کنار سینه پایین بیاورید و در بالا قفل نکنید",
   },
   d1e4: {
     name: "زیربغل هالتر خم (Barbell Row)",
     query: "Barbell Bent Over Row gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Barbell-Bent-Over-Row.gif",
     tip: "کمر کاملاً صاف و تنه ۴۵ درجه، هالتر را به سمت ناف بکشید",
   },
   d1e5: {
     name: "نشر جانب سیم‌کش (تک‌دست)",
     query: "Cable Lateral Raise gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Cable-Lateral-Raise.gif",
     tip: "تنش دائمی سیم‌کش فشار فوق‌العاده‌ای به سرشانه میانی وارد می‌کند",
   },
   d1e6: {
     name: "جلوبازو دمبل متناوب (ایستاده)",
     query: "Dumbbell Curl gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Curl.gif",
     tip: "مچ دست را در بالا بچرخانید و آرنج را کنار بدن ثابت نگه دارید",
   },
   d1e7: {
     name: "پشت بازو سیم‌کش با دسته صاف (یا دمبل جفت دست)",
     query: "Pushdown gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Pushdown.gif",
     tip: "آرنج‌ها چسبیده به پهلو، فقط ساعد حرکت کند",
   },
   // Day 2
   d2e1: {
     name: "هاگ اسکات دستگاه (یا اسکات هالتر)",
     query: "Sled Hack Squat gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Sled-Hack-Squat.gif",
     tip: "کمر کاملاً چسبیده به پشتی، فشار از پاشنه پا",
   },
   d2e2: {
     name: "گابلت اسکات با دمبل (Goblet Squat)",
     query: "Dumbbell Goblet Squat gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/06/Dumbbell-Goblet-Squat.gif",
     tip: "دمبل را نزدیک سینه نگه دارید و سینه را صاف بالا نگه دارید",
   },
   d2e3: {
     name: "لانگز بلغاری با دمبل (تک پا روی نیمکت)",
     query: "Dumbbell Bulgarian Split Squat gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/05/Dumbbell-Bulgarian-Split-Squat.gif",
     tip: "فشار عالی روی چهارسر ران بدون نیاز به دستگاه جلوپا",
   },
   d2e4: {
     name: "ددلیفت رومانیایی با دمبل (پشت پا)",
     query: "Dumbbell Romanian Deadlift gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Romanian-Deadlift.gif",
     tip: "باسن را به عقب بدهید تا کشش کامل در همسترینگ حس شود",
   },
   d2e5: {
     name: "ساق پا ایستاده با دمبل (روی پله)",
     query: "Dumbbell Calf Raise gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Calf-Raise.gif",
     tip: "مکث ۱ ثانیه‌ای در بالاترین نقطه روی پنجه پا",
   },
   d2e6: {
     name: "کرانچ شکم روی زمین (یا سیم‌کش)",
     query: "Crunch gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2015/11/Crunch.gif",
     tip: "بازدم کامل در بالا و تمرکز روی انقباض عضلات شکم",
   },
   // Day 3
   d3e1: {
     name: "پرس سرشانه دستگاه (یا هالتر از جلو)",
     query: "Lever Shoulder Press gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/04/Lever-Shoulder-Press.gif",
     tip: "کمر را به پشتی بچسبانید و وزنه را با کنترل پایین بیاورید",
   },
   d3e2: {
     name: "پول‌اور سیم‌کش ایستاده (زیربغل)",
     query: "Rope Straight Arm Pulldown gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/05/Rope-Straight-Arm-Pulldown.gif",
     tip: "دست‌ها تقریباً صاف، تمرکز کامل روی کشش زیربغل",
   },
   d3e3: {
     name: "فلای سینه با دمبل روی میز صاف (یا کراس‌اور)",
     query: "Dumbbell Fly gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Fly.gif",
     tip: "آرنج‌ها کمی خمیده، کشش کنترل‌شده در قفسه سینه",
   },
   d3e4: {
     name: "زیربغل دمبل جفت خم (روی میز شیب‌دار)",
     query: "Chest Supported Dumbbell Row gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Chest-Supported-Dumbbell-Row.gif",
     tip: "سینه روی میز شیب‌دار، کتف‌ها را در بالا به هم نزدیک کنید",
   },
   d3e5: {
     name: "نشر خم دمبل (پشت سرشانه) یا فیس‌پول سیم‌کش",
     query: "Face Pull gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Face-Pull.gif",
     tip: "طناب را به سمت پیشانی بکشید و آرنج‌ها را بالا نگه دارید",
   },
   d3e6: {
     name: "جلوبازو تمرکزی با دمبل (نشسته)",
     query: "Concentration Curl gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Concentration-Curl.gif",
     tip: "پشت بازو را به داخل ران تکیه دهید تا هیچ تقلبی نباشد",
   },
   d3e7: {
     name: "پشت بازو هالتر خوابیده (Skull Crusher)",
     query: "Barbell Triceps Extension gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Barbell-Triceps-Extension.gif",
     tip: "میله را تا بالای پیشانی پایین ببرید و آرنج‌ها باز نشوند",
   },
   // Day 4
   d4e1: {
     name: "ددلیفت رومانیایی با هالتر",
     query: "Barbell Romanian Deadlift gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Barbell-Romanian-Deadlift.gif",
     tip: "میله چسبیده به پا حرکت کند و کمر کاملاً صاف باشد",
   },
   d4e2: {
     name: "پرس پا دستگاه (پا باز و بالا)",
     query: "Leg Press gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2015/11/Leg-Press.gif",
     tip: "قرار دادن پاها کمی بالاتر فشار را روی همسترینگ و باسن بیشتر می‌کند",
   },
   d4e3: {
     name: "اسکات بلغاری با دمبل",
     query: "Dumbbell Bulgarian Split Squat gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/05/Dumbbell-Bulgarian-Split-Squat.gif",
     tip: "تنه کمی متمایل به جلو برای درگیری بیشتر باسن و پا",
   },
   d4e4: {
     name: "پشت پا دستگاه خوابیده (یا دمبل بین پا)",
     query: "Leg Curl gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Leg-Curl.gif",
     tip: "لگن از روی تشک بلند نشود و پایین بردن با کنترل باشد",
   },
   d4e5: {
     name: "ساق پا دستگاه نشسته",
     query: "Lever Seated Calf Raise gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/06/Lever-Seated-Calf-Raise.gif",
     tip: "دامنه حرکتی کامل از پایین‌ترین تا بالاترین نقطه",
   },
   d4e6: {
     name: "ساعد با دمبل (یا هالتر از پشت)",
     query: "Dumbbell Wrist Curl gif",
-    gifUrl: "https://fitnessprogramer.com/wp-content/uploads/2021/02/Dumbbell-Wrist-Curl.gif",
     tip: "مچ را کامل باز و جمع کنید تا ساعد به سوزش بیفتد",
   },
 };
@@ -296,7 +269,10 @@ export function swapBusyExercise(exercise: Exercise): void {
   if (alt) {
     exercise.name = alt.name;
     exercise.query = alt.query;
-    exercise.gifUrl = alt.gifUrl;
+    // The bundled demo of the programmed movement: same pattern, other
+    // equipment, and it always renders offline (the remote alternatives were
+    // behind Cloudflare and 403'd inside the WebView).
+    exercise.gifUrl = `/gifs/${exercise.id}.svg`;
     exercise.tip = alt.tip;
   } else {
     // Custom exercises have no curated alternative: rename so the card is honest.

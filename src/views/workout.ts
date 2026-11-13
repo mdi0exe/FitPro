@@ -16,6 +16,7 @@ import {
 import type { Exercise, SetLog, WorkoutDay } from "../types";
 import { confirmDialog, openModal, progressBar, toast } from "../components/ui";
 import { openGifModal } from "../components/gifModal";
+import defaultGifs from "../data/default-gifs.json";
 import { openExerciseEditor, type ExerciseDraft } from "../components/exerciseEditor";
 import { startRest } from "../components/restTimer";
 import { openValuePicker, stepper } from "../components/stepper";
@@ -312,6 +313,7 @@ function warmupCard(day: WorkoutDay): HTMLElement {
           title: item.text,
           query: item.query,
           gifUrl: item.gifUrl,
+          fallbackUrl: bundledWarmupDemo(day.id, item.id),
           onSaveUrl: (url) => {
             item.gifUrl = url;
             persist(0);
@@ -498,6 +500,12 @@ const dayPercent = (day: WorkoutDay) => {
 // Exercise cards
 // ---------------------------------------------------------------------------
 
+/** `/gifs/wu-upper-3.svg` — the bundled demo for a day's warm-up row. */
+function bundledWarmupDemo(dayId: string, warmupId: string): string | null {
+  const map = defaultGifs.warmups as Record<string, string>;
+  return map[`${dayId}:${warmupId}`] ?? null;
+}
+
 function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLElement {
   const card = el("article", "card space-y-3");
   card.setAttribute("data-exercise", exercise.id);
@@ -544,6 +552,7 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
         title: exercise.name,
         query: exercise.query,
         gifUrl: exercise.gifUrl,
+        fallbackUrl: `/gifs/${exercise.id}.svg`,
         onSaveUrl: (url) => {
           exercise.gifUrl = url;
           persist(0);
@@ -584,14 +593,32 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
   card.append(tools);
 
   if (exercise.gifUrl) {
-    // Demos are square with a white background: contain (not cover) so the
-    // athlete is never cropped, and no-referrer so the host serves the file.
-    const img = el("img", "h-44 w-full rounded-2xl border border-slate-800 bg-white p-1 object-contain");
+    // Demos are bundled offline (`/gifs/<id>.svg`): contain (not cover) so the
+    // athlete is never cropped. If a stale remote link sneaks through, fall back
+    // to the bundled file instead of deleting the picture.
+    const img = el("img", "h-48 w-full rounded-2xl border border-slate-800 bg-slate-950 object-contain");
     img.src = exercise.gifUrl;
     img.alt = exercise.name;
     img.loading = "lazy";
     img.referrerPolicy = "no-referrer";
-    img.addEventListener("error", () => img.remove());
+
+    const localDemo = `/gifs/${exercise.id}.svg`;
+    let fellBack = exercise.gifUrl === localDemo;
+    img.addEventListener("error", () => {
+      if (!fellBack) {
+        fellBack = true;
+        img.src = localDemo;
+        return;
+      }
+      // Even the bundled file is unreadable: keep the box, explain it.
+      img.replaceWith(
+        el(
+          "div",
+          "flex h-48 w-full items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 px-4 text-center text-[11px] leading-6 text-slate-500",
+          "نمایش حرکت در دسترس نیست.",
+        ),
+      );
+    });
     card.append(img);
   }
 

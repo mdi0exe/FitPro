@@ -203,8 +203,9 @@ export function openExerciseEditor(options: {
     }
 
     const gifUrl = gifInput.value.trim();
-    if (gifUrl && !/^https?:\/\//i.test(gifUrl)) {
-      toast("لینک گیف باید با http یا https شروع شود.", "error");
+    // Bundled demos are app paths (`/gifs/d1e1.svg`); custom links must be http(s).
+    if (gifUrl && !/^(https?:\/\/|\/)/i.test(gifUrl)) {
+      toast("لینک تصویر باید با http یا https شروع شود.", "error");
       return;
     }
 

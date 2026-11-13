@@ -351,6 +351,25 @@ fn default_true() -> bool {
     true
 }
 
+/// Demos bundled with the app; anything else cannot be trusted in the WebView.
+///
+/// `fitnessprogramer.com` (the old default) is behind Cloudflare and returns
+/// 403 to the Android WebView, so every stored hotlink has to be migrated to the
+/// offline copy. A blank value is treated the same way — the picture matters
+/// more than an old "hide it" intent that the UI no longer offers.
+fn gif_needs_replacement(url: Option<&str>) -> bool {
+    match url {
+        None => true,
+        Some(value) => {
+            let trimmed = value.trim();
+            trimmed.is_empty()
+                || trimmed.contains("fitnessprogramer.com")
+                || trimmed.contains("giphy.com")
+                || trimmed.contains("imgur.com")
+        }
+    }
+}
+
 fn default_thursday_time() -> String {
     "12:00".to_string()
 }
@@ -688,7 +707,9 @@ impl AppStateData {
         for day in self.days.iter_mut() {
             let day_id = day.id.clone();
             for warmup in day.warmups.iter_mut() {
-                if warmup.gif_url.is_none() {
+                // A missing/blank/hotlinked demo is replaced by the bundled
+                // file: `fitnessprogramer.com` answers 403 inside the WebView.
+                if gif_needs_replacement(warmup.gif_url.as_deref()) {
                     warmup.gif_url = gifs
                         .warmups
                         .get(&format!("{day_id}:{}", warmup.id))
@@ -707,7 +728,7 @@ impl AppStateData {
                 // Users on a Persian/Android keyboard may type "۱۰-۱۲"; keep the
                 // stored prescription in ASCII digits so increment_reps works.
                 exercise.reps = to_ascii_digits(&exercise.reps);
-                if exercise.gif_url.is_none() {
+                if gif_needs_replacement(exercise.gif_url.as_deref()) {
                     exercise.gif_url = gifs.exercises.get(&exercise.id).cloned();
                 }
                 exercise.sync_logs();
@@ -984,18 +1005,58 @@ mod tests {
     }
 
     #[test]
-    fn normalize_injects_default_gifs() {
+    fn normalize_injects_bundled_gifs() {
         let mut state = crate::storage::seed();
         state.days[0].exercises[0].gif_url = None;
         state.days[0].warmups[0].gif_url = None;
         state.normalize();
 
-        assert!(state.days[0].exercises[0].gif_url.is_some());
-        assert!(state.days[0].warmups[0].gif_url.is_some());
-        // An explicitly cleared gif (empty string) must stay cleared.
+        assert_eq!(
+            state.days[0].exercises[0].gif_url.as_deref(),
+            Some("/gifs/d1e1.svg")
+        );
+        // Day 1 warm-ups use the upper-body bundle.
+        assert_eq!(
+            state.days[0].warmups[0].gif_url.as_deref(),
+            Some("/gifs/wu-upper-1.svg")
+        );
+        // Day 4 warm-ups use the lower-body bundle.
+        assert_eq!(
+            state.days[3].warmups[0].gif_url.as_deref(),
+            Some("/gifs/wu-lower-1.svg")
+        );
+    }
+
+    #[test]
+    fn cloudflare_blocked_hotlinks_are_migrated_to_the_bundle() {
+        // Exactly what a phone that has been running the old build stores.
+        let mut state = crate::storage::seed();
+        state.days[0].exercises[0].gif_url =
+            Some("https://fitnessprogramer.com/wp-content/uploads/2021/02/Incline-Dumbbell-Press.gif".to_string());
         state.days[0].exercises[1].gif_url = Some(String::new());
+        state.days[0].exercises[2].gif_url = Some("https://example.com/custom.gif".to_string());
+        state.days[1].warmups[0].gif_url =
+            Some("https://fitnessprogramer.com/wp-content/uploads/2021/06/Bike.gif".to_string());
+
         state.normalize();
-        assert_eq!(state.days[0].exercises[1].gif_url.as_deref(), Some(""));
+
+        assert_eq!(
+            state.days[0].exercises[0].gif_url.as_deref(),
+            Some("/gifs/d1e1.svg")
+        );
+        assert_eq!(
+            state.days[0].exercises[1].gif_url.as_deref(),
+            Some("/gifs/d1e2.svg")
+        );
+        // A user-supplied direct link is left alone.
+        assert_eq!(
+            state.days[0].exercises[2].gif_url.as_deref(),
+            Some("https://example.com/custom.gif")
+        );
+        assert_eq!(
+            state.days[1].warmups[0].gif_url.as_deref(),
+            Some("/gifs/wu-lower-1.svg")
+        );
     }
 
     #[test]

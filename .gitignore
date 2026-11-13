@@ -24,6 +24,9 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
+# local scratch (gif download cache, prototype scripts)
+.tmp/
+
 # verification artefacts
 shots/
 shot-*.png

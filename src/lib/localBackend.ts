@@ -15,6 +15,18 @@ const STORAGE_KEY = "persian-hypertrophy::state::v1";
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
+/** True when the stored demo cannot be trusted (missing, blank or hotlinked). */
+function gifNeedsReplacement(url: string | null | undefined): boolean {
+  if (!url) return true;
+  const value = url.trim();
+  return (
+    value.length === 0 ||
+    value.includes("fitnessprogramer.com") ||
+    value.includes("giphy.com") ||
+    value.includes("imgur.com")
+  );
+}
+
 export function normalizeState(input: AppStateData): AppStateData {
   const state = input;
   state.days = state.days ?? [];
@@ -136,8 +148,9 @@ export function normalizeState(input: AppStateData): AppStateData {
 
   for (const day of state.days) {
     for (const warmup of day.warmups ?? []) {
-      // null/undefined = never set, "" = the user removed it on purpose.
-      if (warmup.gifUrl == null) {
+      // Same rule as `gif_needs_replacement` in models.rs: a blank or
+      // Cloudflare-blocked hotlink falls back to the bundled offline demo.
+      if (gifNeedsReplacement(warmup.gifUrl)) {
         warmup.gifUrl = warmupGifs[`${day.id}:${warmup.id}`] ?? null;
       }
     }
@@ -145,7 +158,7 @@ export function normalizeState(input: AppStateData): AppStateData {
       exercise.sets = Math.min(12, Math.max(1, exercise.sets || 1));
       // Same rule as models.rs: keep prescriptions in ASCII digits.
       exercise.reps = en(exercise.reps ?? "");
-      if (exercise.gifUrl == null) {
+      if (gifNeedsReplacement(exercise.gifUrl)) {
         exercise.gifUrl = exerciseGifs[exercise.id] ?? null;
       }
       exercise.logs = syncLogs(exercise);
@@ -188,7 +201,9 @@ function writeRaw(state: AppStateData): void {
 export function localLoad(): AppStateData {
   const raw = readRaw();
   if (!raw) {
-    const seed = createSeedState();
+    // Same as `storage::seed()` in Rust: the seed is normalised before use, so
+    // the bundled offline demos are already attached on the very first launch.
+    const seed = normalizeState(createSeedState());
     writeRaw(seed);
     return clone(seed);
   }

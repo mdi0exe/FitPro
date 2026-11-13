@@ -8,6 +8,8 @@ export interface GifModalOptions {
   title: string;
   query: string;
   gifUrl?: string | null;
+  /** Bundled offline demo used when a custom/remote link fails to load. */
+  fallbackUrl?: string | null;
   /** When provided, the modal lets the user save a direct .gif URL. */
   onSaveUrl?: (url: string | null) => void;
 }
@@ -28,13 +30,22 @@ export function openGifModal(options: GifModalOptions): void {
       img.alt = options.title;
       img.loading = "lazy";
       img.referrerPolicy = "no-referrer";
+      let triedFallback = false;
       img.addEventListener("error", () => {
+        // A saved remote link may be dead (Cloudflare 403): show the bundled
+        // demo instead of an empty box.
+        const fallback = options.fallbackUrl;
+        if (!triedFallback && fallback && fallback !== url) {
+          triedFallback = true;
+          img.src = fallback;
+          return;
+        }
         preview.innerHTML = "";
         preview.append(
           el(
             "div",
             "px-6 py-8 text-center text-xs leading-6 text-rose-300",
-            "گیف بارگذاری نشد. لینک باید مستقیم به فایل <b>.gif</b> ختم شود و به اینترنت دسترسی باشد.",
+            "این تصویر بارگذاری نشد. لینک باید مستقیم به فایل تصویری ختم شود و به اینترنت دسترسی باشد.",
           ),
         );
       });

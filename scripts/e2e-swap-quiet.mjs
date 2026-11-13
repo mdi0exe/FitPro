@@ -114,7 +114,7 @@ async function patchStateOnReload(page, mutate) {
   check("swap stores the original name", swapped.originalName === originalName, swapped.originalName);
   check("swap stores today's date", swapped.swappedDate === today, `${swapped.swappedDate} vs ${today}`);
   check("swap changes the movement", swapped.name !== originalName, swapped.name);
-  check("swap keeps a GIF for the alternative", typeof swapped.gifUrl === "string" && swapped.gifUrl.startsWith("http"), String(swapped.gifUrl));
+  check("swap keeps an offline demo", swapped.gifUrl === "/gifs/d1e1.svg", String(swapped.gifUrl));
 
   const cardText = await page.$eval(firstCard, (node) => node.textContent);
   check("amber 'جایگزین امروز' chip is visible", cardText.includes("جایگزین امروز"));
@@ -146,11 +146,7 @@ async function patchStateOnReload(page, mutate) {
   check("next day restores the name automatically", autoReset.name === originalName, autoReset.name);
   check("next day clears swappedDate", !autoReset.swappedDate, String(autoReset.swappedDate));
   check("next day clears originalName", !autoReset.originalName, String(autoReset.originalName));
-  check(
-    "next day keeps a demo GIF",
-    typeof autoReset.gifUrl === "string" && autoReset.gifUrl.startsWith("http"),
-    String(autoReset.gifUrl),
-  );
+  check("next day keeps the offline demo", autoReset.gifUrl === "/gifs/d1e1.svg", String(autoReset.gifUrl));
   const cardAfterReset = await page.$eval(firstCard, (node) => node.textContent);
   check("'جایگزین امروز' chip is gone", !cardAfterReset.includes("جایگزین امروز"));
 
