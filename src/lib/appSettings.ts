@@ -57,6 +57,7 @@ export function applyDeveloperPreset(state: AppStateData): void {
   state.diet = seed.diet;
   state.courses = seed.courses;
   state.semesterWeekType = seed.semesterWeekType;
+  state.semesterWeekAnchorDate = seed.semesterWeekAnchorDate;
   state.languageStudy = seed.languageStudy;
   state.uniReminders = seed.uniReminders;
   state.customShuttleJson = null;

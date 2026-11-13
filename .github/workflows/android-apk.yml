@@ -28,6 +28,8 @@ on:
       - "scripts/gen-android-icons.mjs"
       - "scripts/patch-android-manifest.mjs"
       - "scripts/setup-android-native.mjs"
+      - "scripts/ensure-keystore.mjs"
+      - "src-tauri/keystore/**"
       - "src-tauri/icons/**"
       - "public/**"
       - ".github/workflows/android-apk.yml"
@@ -41,6 +43,8 @@ on:
       - "scripts/gen-android-icons.mjs"
       - "scripts/patch-android-manifest.mjs"
       - "scripts/setup-android-native.mjs"
+      - "scripts/ensure-keystore.mjs"
+      - "src-tauri/keystore/**"
       - "src-tauri/icons/**"
       - "public/**"
       - ".github/workflows/android-apk.yml"
@@ -266,6 +270,22 @@ jobs:
       # ---------------------------------------------------------------------
       # Build
       # ---------------------------------------------------------------------
+      # A fresh runner generates its own `~/.android/debug.keystore` on the first
+      # Gradle build, which means every CI APK was signed by a different
+      # certificate. Android then refuses to install it over the previous version
+      # (INSTALL_FAILED_UPDATE_INCOMPATIBLE), so updating forced an uninstall that
+      # wiped gym_state.json and the progress photos. Copying the committed key
+      # into place first keeps the signature stable, so updates install in place.
+      - name: Install persistent debug keystore for seamless APK updates
+        run: |
+          set -euo pipefail
+          test -f src-tauri/keystore/debug.keystore
+          mkdir -p "$HOME/.android"
+          cp src-tauri/keystore/debug.keystore "$HOME/.android/debug.keystore"
+          chmod 600 "$HOME/.android/debug.keystore"
+          keytool -list -keystore "$HOME/.android/debug.keystore" -storepass android \
+            | grep -q "androiddebugkey"
+
       # `tauri android build` also runs `beforeBuildCommand` (vite build), so the
       # frontend is bundled automatically before Gradle packages the APK.
       - name: Build debug APK

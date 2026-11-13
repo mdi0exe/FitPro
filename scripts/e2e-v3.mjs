@@ -341,8 +341,8 @@ const navLabels = (page) =>
   saved = await readState(page);
   check("120-minute study session is available", saved.languageStudy.targetMinutes === 120, String(saved.languageStudy.targetMinutes));
 
-  check("share button exists", Boolean(await page.$('button[aria-label="کپی JSON سرویس و دروس"]')));
-  await clickAria(page, "دریافت برنامه سرویس و دروس");
+  check("share button exists", Boolean(await page.$('button[aria-label="کپی JSON دروس"]')));
+  await clickAria(page, "دریافت JSON دروس");
   await wait(450);
   const area = await page.$("#overlay-root textarea");
   check("import sheet has a JSON textarea", Boolean(area));
@@ -351,7 +351,7 @@ const navLabels = (page) =>
       node.value = payload;
       node.dispatchEvent(new Event("input", { bubbles: true }));
     }, JSON.stringify({ universityName: "دانشگاه تهران", courses: [{ id: "x", name: "شبکه", dayOfWeek: 1, startTime: "08:00", endTime: "10:00", weekType: "all", professor: "د. تست" }], customShuttleJson: null }));
-    await clickAria(page, "اعمال برنامه دانشگاه");
+    await clickAria(page, "اعمال دروس");
     await wait(700);
     saved = await readState(page);
     check("shared university is applied", saved.profile.universityName === "دانشگاه تهران", saved.profile.universityName);

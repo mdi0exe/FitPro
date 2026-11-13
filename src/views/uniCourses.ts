@@ -7,12 +7,13 @@
  */
 import { WEEK_DAYS } from "../data/courses";
 import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
-import { fa } from "../lib/fa";
+import { currentPersianWeekIsos, daysBetween, fa, isoAddDays, isoToday } from "../lib/fa";
 import { icons } from "../lib/icons";
 import { getState, persist, requestRender } from "../lib/store";
 import { softTap } from "../lib/timer";
 import type { CourseSession, SemesterWeekType } from "../types";
 import { confirmDialog, openModal, sectionTitle, toast } from "../components/ui";
+import { copyShareJson, openShareImportModal, shareButton } from "../lib/uniShare";
 
 const WEEK_TYPE_LABEL: Record<CourseSession["weekType"], string> = {
   all: "هر هفته",
@@ -53,6 +54,132 @@ export function courseActiveThisWeek(course: CourseSession, week: SemesterWeekTy
   return course.weekType === "all" || course.weekType === week;
 }
 
+/**
+ * Automatic odd/even semester weeks.
+ *
+ * The timetable uses `*` (odd weeks) and `**` (even weeks) for classes that only
+ * run every other week. Asking the student to flip a manual switch meant the
+ * schedule silently showed the wrong half of the fortnight as soon as they
+ * forgot — so the parity is now derived from the term anchor date instead:
+ * week 1 is odd, week 2 is even, week 3 is odd, …
+ *
+ * All calculations run on the Persian week (Saturday → Friday) via
+ * `currentPersianWeekIsos`, which already works on the local calendar.
+ */
+
+/** Saturday that opens the Persian week containing `referenceIso`. */
+export function currentWeekStartIso(referenceIso = isoToday()): string {
+  return currentPersianWeekIsos(referenceIso)[0];
+}
+
+/** True when at least one class only runs on odd or even weeks. */
+export function hasFortnightlyCourses(): boolean {
+  return (getState().courses ?? []).some(
+    (course) => course.weekType === "odd" || course.weekType === "even",
+  );
+}
+
+/**
+ * Whole weeks elapsed since the anchor, signed.
+ *
+ * `0` = the anchor week itself, `1` = one week later, `-1` = one week earlier.
+ * `daysBetween` is calendar-day based, and every week is 7 days, so the floor
+ * division never drifts.
+ */
+function weeksSinceAnchor(referenceIso = isoToday()): number {
+  const anchor = getState().semesterWeekAnchorDate ?? currentWeekStartIso(referenceIso);
+  return Math.floor(daysBetween(anchor, currentWeekStartIso(referenceIso)) / 7);
+}
+
+/** 1-based semester week number (never below 1, for display only). */
+export function semesterWeekNumber(referenceIso = isoToday()): number {
+  return Math.max(1, weeksSinceAnchor(referenceIso) + 1);
+}
+
+/** Week 1/3/5 → `"odd"`, week 2/4/6 → `"even"`; symmetric before the anchor. */
+export function effectiveSemesterWeekType(referenceIso = isoToday()): SemesterWeekType {
+  return Math.abs(weeksSinceAnchor(referenceIso)) % 2 === 0 ? "odd" : "even";
+}
+
+/**
+ * Re-anchors the term so that the current week becomes `weekNumber`.
+ *
+ * Storing the *anchor* rather than the current parity means the answer stays
+ * right for the rest of the semester without any further input.
+ */
+export function setSemesterWeekNumber(weekNumber: number): void {
+  const state = getState();
+  const clamped = Math.min(30, Math.max(1, Math.round(weekNumber)));
+  state.semesterWeekAnchorDate = isoAddDays(currentWeekStartIso(), -(clamped - 1) * 7);
+  state.semesterWeekType = effectiveSemesterWeekType();
+}
+
+/** Small modal: "which week of the term is this?" — the only manual input left. */
+export function openWeekAnchorModal(): void {
+  const body = el("div", "space-y-3");
+  let value = semesterWeekNumber();
+
+  const display = el(
+    "p",
+    "text-center text-4xl font-black leading-none tabular-nums text-slate-50",
+    fa(value),
+  );
+  const wrap = el("div", "rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4");
+  wrap.append(
+    display,
+    el("p", "mt-1 text-center text-[10px] text-slate-500", "شماره هفته جاری در ترم"),
+  );
+
+  const paint = (): void => {
+    display.textContent = fa(value);
+    parity.textContent = value % 2 === 1 ? "این هفته یک‌ستاره (*)" : "این هفته دوستاره (**)";
+  };
+
+  const parity = el("p", "text-center text-[10px] font-bold text-emerald-300");
+
+  body.append(
+    el(
+      "p",
+      "text-[11px] leading-6 text-slate-400",
+      "برنامه فرد و زوج از شماره هفته ساخته می‌شود. فقط همین یک عدد را درست تنظیم کن؛ بقیه ترم خودکار می‌ماند.",
+    ),
+    wrap,
+    parity,
+  );
+
+  const stepper = el("div", "flex items-center justify-center gap-2");
+  stepper.append(
+    btn("btn-icon", svgIcon(icons.minus, "h-4 w-4"), () => {
+      value = Math.max(1, value - 1);
+      paint();
+    }, { "aria-label": "هفته قبل" }),
+    btn("btn-icon", svgIcon(icons.plus, "h-4 w-4"), () => {
+      value = Math.min(30, value + 1);
+      paint();
+    }, { "aria-label": "هفته بعد" }),
+  );
+  body.append(stepper);
+  paint();
+
+  const footer = el("div", "grid grid-cols-2 gap-2");
+  const handle = openModal({
+    title: "تنظیم هفته ترم",
+    subtitle: "محاسبه خودکار هفته‌های فرد و زوج",
+    body,
+    footer,
+  });
+  footer.append(
+    btn("btn-primary", "ذخیره", () => {
+      setSemesterWeekNumber(value);
+      softTap();
+      persist(0);
+      handle.close();
+      requestRender();
+    }),
+    btn("btn-ghost", "بستن", () => handle.close()),
+  );
+}
+
 function coursesForDay(day: number): CourseSession[] {
   return (getState().courses ?? [])
     .filter((course) => course.dayOfWeek === day)
@@ -61,50 +188,56 @@ function coursesForDay(day: number): CourseSession[] {
 
 export function renderClassScheduleCard(): HTMLElement {
   const state = getState();
-  const week: SemesterWeekType = state.semesterWeekType === "even" ? "even" : "odd";
+  const fortnightly = hasFortnightlyCourses();
+  const weekNumber = semesterWeekNumber();
+  // With no * / ** class the flag never matters, but the rows still need a
+  // value; "odd" keeps `courseActiveThisWeek` true for every weekly class.
+  const week: SemesterWeekType = fortnightly ? effectiveSemesterWeekType() : "odd";
   const today = new Date().getDay();
 
   const card = el("div", "card space-y-3");
   card.append(
     sectionTitle(
-      "🎓 برنامه هفتگی کلاس‌ها",
+      "برنامه هفتگی کلاس‌ها",
       btn("btn-primary px-2.5 py-1 text-[11px]", "➕ افزودن درس", () => openCourseModal(), {
         "aria-label": "افزودن درس",
       }),
     ),
   );
 
-  // ------------------------------------------------------- week switch
-  const switchWrap = el(
-    "div",
-    "grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-800 bg-slate-950/60 p-1.5",
-  );
-  const weekOptions: Array<{ id: SemesterWeekType; label: string }> = [
-    { id: "odd", label: "★ هفته یک‌ستاره (*)" },
-    { id: "even", label: "★★ هفته دوستاره (**)" },
-  ];
-  for (const option of weekOptions) {
-    const active = week === option.id;
-    switchWrap.append(
-      btn(
-        `rounded-xl border py-2 text-[11px] font-extrabold transition active:scale-95 ${
-          active
-            ? "border-emerald-400 bg-emerald-500/15 text-emerald-200"
-            : "border-transparent text-slate-400"
-        }`,
-        option.label,
-        () => {
-          if (state.semesterWeekType === option.id) return;
-          state.semesterWeekType = option.id;
-          softTap();
-          persist(0);
-          requestRender();
-        },
-        { "aria-pressed": String(active) },
+  // ------------------------------------------------------- fortnight status
+  // The old two-button switch is gone: the odd/even half of the fortnight is
+  // derived from `semesterWeekAnchorDate`, so the timetable is simply correct
+  // on open. The strip below only *reports* the current week and offers a way
+  // to re-anchor the term (needed once, when the user first opens the tab).
+  if (fortnightly) {
+    const strip = el(
+      "div",
+      "flex items-center justify-between gap-2 rounded-2xl border border-slate-800 bg-slate-950/60 px-2.5 py-2",
+    );
+    const info = el("div", "min-w-0");
+    info.append(
+      el(
+        "p",
+        "text-[10px] font-bold text-slate-200",
+        `هفته ${fa(weekNumber)} ترم • ${week === "odd" ? "یک‌ستاره (*)" : "دوستاره (**)"}`,
+      ),
+      el(
+        "p",
+        "mt-0.5 text-[9px] leading-4 text-slate-500",
+        "هفته‌های فرد و زوج خودکار از تاریخ شروع ترم حساب می‌شوند.",
       ),
     );
+    strip.append(
+      info,
+      btn("btn-icon shrink-0", svgIcon(icons.reset, "h-4 w-4"), () => openWeekAnchorModal(), {
+        "aria-label": "تنظیم شماره هفته ترم",
+        title: "تنظیم شماره هفته ترم",
+      }),
+    );
+    card.append(strip);
   }
-  card.append(switchWrap);
+
 
   // ------------------------------------------------------- day groups
   const list = el("div", "space-y-2");
@@ -160,6 +293,15 @@ export function renderClassScheduleCard(): HTMLElement {
       `این هفته ${fa(total)} جلسه داری • * و ** یعنی هفته‌های فرد و زوج`,
     ),
   );
+
+  // Timetable sharing: classes only, so importing it never touches the shuttle
+  // table on the other card.
+  const shareRow = el("div", "grid grid-cols-2 gap-2");
+  shareRow.append(
+    shareButton("کپی دروس", "کپی JSON دروس", () => void copyShareJson("courses")),
+    shareButton("دریافت دروس", "دریافت JSON دروس", () => void openShareImportModal("courses")),
+  );
+  card.append(shareRow);
 
   return card;
 }

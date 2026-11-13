@@ -2,21 +2,21 @@
  * University tab: Tabriz University of Technology shuttle schedule, next-bus
  * radar, 15-minute bus alarms, Thursday cafeteria reservation and gym reminder.
  */
-import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
+import { btn, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { fa, faWeekdayIndex, faWeekdayName, isoToday, isoTomorrow } from "../lib/fa";
 import { getState, persist, requestRender } from "../lib/store";
-import { openModal, sectionTitle, toast } from "../components/ui";
-import type { CourseSession } from "../types";
+import { sectionTitle, toast } from "../components/ui";
 import {
   cancelNotifications,
   ensureNotificationPermission,
   scheduleRepeatingNotification,
 } from "../lib/notify";
 import { softTap } from "../lib/timer";
-import { parseShuttleJson, resolveShuttle, type ScheduleGroupKey } from "../data/shuttle";
+import { resolveShuttle, type ScheduleGroupKey } from "../data/shuttle";
 import { renderClassScheduleCard } from "./uniCourses";
 import { renderLanguageStudyCard } from "./uniLanguage";
+import { copyShareJson, openShareImportModal, shareButton } from "../lib/uniShare";
 import { openShuttleAiImportModal } from "./uniShuttleAi";
 
 /** Active timetable: imported JSON when present, else the published table. */
@@ -69,7 +69,7 @@ function foodAlarmWeekday(day: number): number {
 }
 
 export const FOOD_DAY_OPTIONS: Array<{ day: number; label: string }> = [
-  { day: 2, label: "سهشنبه" },
+  { day: 2, label: "سه‌شنبه" },
   { day: 3, label: "چهارشنبه" },
   { day: 4, label: "پنجشنبه" },
   { day: 5, label: "جمعه" },
@@ -83,7 +83,6 @@ export function renderUni(): HTMLElement {
   const view = el("div", "space-y-3 animate-fade-up");
   view.append(
     uniHeroBanner(),
-    shareUniversityCard(),
     nextBusRadarCard(),
     renderClassScheduleCard(),
     renderLanguageStudyCard(),
@@ -116,172 +115,6 @@ function uniHeroBanner(): HTMLElement {
 // ---------------------------------------------------------------------------
 // Share / import the university setup with classmates
 // ---------------------------------------------------------------------------
-
-interface UniSharePayload {
-  universityName: string;
-  courses: CourseSession[];
-  customShuttleJson: string | null;
-}
-
-function sharePayload(): UniSharePayload {
-  const state = getState();
-  return {
-    universityName: state.profile.universityName,
-    courses: state.courses,
-    customShuttleJson: state.customShuttleJson,
-  };
-}
-
-function shareUniversityCard(): HTMLElement {
-  const card = el("div", "card space-y-2 border-cyan-500/25 bg-cyan-500/5");
-  card.append(
-    el("p", "text-xs font-extrabold text-slate-100", "📤 اشتراکگذاری سرویس و دروس با همدانشگاهیها"),
-    el(
-      "p",
-      "text-[10px] leading-5 text-slate-400",
-      "جدول سرویسها و برنامه کلاسهای دانشگاهت را بهصورت یک JSON فشرده توی پیامرسان بفرست یا از پیام دوستت دریافت کن.",
-    ),
-  );
-  const row = el("div", "grid grid-cols-2 gap-2");
-  row.append(
-    btn("btn-ghost py-2 text-[11px]", "📋 کپی JSON", () => void copyShareJson(), {
-      "aria-label": "کپی JSON سرویس و دروس",
-    }),
-    btn("btn-ghost py-2 text-[11px]", "📥 دریافت و اعمال", () => void openShareImportModal(), {
-      "aria-label": "دریافت برنامه سرویس و دروس",
-    }),
-  );
-  card.append(row);
-  return card;
-}
-
-async function copyShareJson(): Promise<void> {
-  const json = JSON.stringify(sharePayload());
-  let copied = false;
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(json);
-      copied = true;
-    }
-  } catch {
-    /* the WebView may deny clipboard access */
-  }
-  if (!copied) {
-    const temp = el("textarea", "sr-only");
-    temp.value = json;
-    document.body.append(temp);
-    temp.select();
-    try {
-      copied = document.execCommand("copy");
-    } catch {
-      copied = false;
-    }
-    temp.remove();
-  }
-  if (copied) toast("JSON سرویسها و دروس کپی شد؛ برای همدانشگاهیها بفرست 📤");
-  else openShareJsonModal(json, "export");
-}
-
-async function openShareImportModal(): Promise<void> {
-  let text = "";
-  try {
-    if (navigator.clipboard?.readText) text = await navigator.clipboard.readText();
-  } catch {
-    /* manual paste below */
-  }
-  openShareJsonModal(text, "import");
-}
-
-function openShareJsonModal(initial: string, mode: "export" | "import"): void {
-  const body = el("div", "space-y-2");
-  body.append(
-    el(
-      "p",
-      "text-[11px] leading-6 text-slate-400",
-      mode === "export"
-        ? "دسترسی کلیپبورد در دسترس نیست؛ متن زیر را انتخاب و بهصورت دستی کپی کن."
-        : "JSON دریافتی از همهرشتهایات را اینجا بچسبان (شامل نام دانشگاه، دروس و جدول سرویسها).",
-    ),
-  );
-  const area = el("textarea", "field h-40 w-full resize-none text-left text-[10px] leading-5");
-  area.value = initial;
-  area.readOnly = mode === "export";
-  area.setAttribute("dir", "ltr");
-  if (mode === "import") area.placeholder = '{ "universityName": "...", "courses": [], "customShuttleJson": null }';
-  body.append(area);
-
-  const footer =
-    mode === "export"
-      ? btn(
-          "btn-primary w-full",
-          "📋 انتخاب کل متن",
-          () => {
-            area.select();
-            toast("متن انتخاب شد؛ با Ctrl+C یا لمس طولانی کپی کن.");
-          },
-          { "aria-label": "انتخاب کل متن JSON" },
-        )
-      : btn(
-          "btn-primary w-full",
-          "✅ اعمال برنامه دانشگاه",
-          () => applyShareJson(area.value, () => handle.close()),
-          { "aria-label": "اعمال برنامه دانشگاه" },
-        );
-
-  const handle = openModal({
-    title: mode === "export" ? "📤 JSON سرویسها و دروس" : "📥 دریافت برنامه دانشگاه",
-    body,
-    footer,
-  });
-}
-
-/** Validates and applies a shared payload; a bad paste never corrupts state. */
-function applyShareJson(raw: string, close: () => void): void {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw.trim());
-  } catch {
-    toast("متن واردشده JSON معتبر نیست.", "error");
-    return;
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    toast("ساختار JSON باید یک شیء باشد.", "error");
-    return;
-  }
-  const data = parsed as Partial<UniSharePayload>;
-  const state = getState();
-
-  if (typeof data.universityName === "string" && data.universityName.trim()) {
-    state.profile.universityName = data.universityName.trim().slice(0, 80);
-  }
-
-  if (Array.isArray(data.courses)) {
-    const weekTypes = ["all", "odd", "even"];
-    state.courses = data.courses
-      .filter((course) => course && typeof course.name === "string" && course.name.trim())
-      .slice(0, 60)
-      .map((course) => ({
-        id: typeof course.id === "string" && course.id ? course.id : uid("course"),
-        name: String(course.name).trim().slice(0, 80),
-        professor: typeof course.professor === "string" ? course.professor.trim().slice(0, 80) : "",
-        dayOfWeek: Number.isInteger(course.dayOfWeek) ? Math.min(6, Math.max(0, course.dayOfWeek)) : 0,
-        startTime: typeof course.startTime === "string" ? course.startTime : "09:00",
-        endTime: typeof course.endTime === "string" ? course.endTime : "11:00",
-        weekType: (weekTypes.includes(String(course.weekType)) ? course.weekType : "all") as CourseSession["weekType"],
-      }));
-  }
-
-  if (data.customShuttleJson === null || data.customShuttleJson === undefined) {
-    state.customShuttleJson = null;
-  } else if (typeof data.customShuttleJson === "string" && parseShuttleJson(data.customShuttleJson)) {
-    state.customShuttleJson = data.customShuttleJson.trim();
-  }
-
-  persist(0);
-  close();
-  toast("برنامه سرویسها و دروس دانشگاه اعمال شد 🎓");
-  requestRender();
-}
 
 function parseMinutes(hhmm: string): number {
   const [hour, minute] = hhmm.split(":").map((part) => Number.parseInt(part, 10) || 0);
@@ -515,6 +348,15 @@ function shuttleScheduleCard(): HTMLElement {
       { "aria-label": "بروزرسانی سرویس‌ها با هوش مصنوعی" },
     ),
   );
+
+  // Shuttle sharing lives next to the table it exports; the class timetable has
+  // its own copy/receive pair on the class card.
+  const shareRow = el("div", "grid grid-cols-2 gap-2");
+  shareRow.append(
+    shareButton("کپی سرویس‌ها", "کپی JSON سرویس‌ها", () => void copyShareJson("shuttle")),
+    shareButton("دریافت سرویس‌ها", "دریافت JSON سرویس‌ها", () => void openShareImportModal("shuttle")),
+  );
+  card.append(shareRow);
 
   const tabs: Array<{ id: ScheduleGroupKey; label: string }> = [
     { id: "sun-wed", label: "یکشنبه تا چهارشنبه" },

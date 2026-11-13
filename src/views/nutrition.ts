@@ -20,6 +20,7 @@ import {
   stopWaterReminder,
 } from "../lib/timer";
 import { openModal, progressBar, sectionTitle, toast, type ModalHandle } from "../components/ui";
+import { aiPlanBadge, openAiDietConfigurator } from "../components/aiDietConfigurator";
 
 const RING_RADIUS = 26;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
@@ -28,6 +29,8 @@ export function renderNutrition(): HTMLElement {
   const view = el("div", "space-y-3 animate-fade-up");
 
   view.append(nutritionHero());
+  const planBadge = aiPlanBadge();
+  if (planBadge) view.append(planBadge);
   view.append(waterTrackerCard());
   view.append(dietTemplateCard());
   view.append(checklist());
@@ -315,37 +318,67 @@ async function resetDay(): Promise<void> {
 }
 
 function proteinCard(): HTMLElement {
-  const { profile } = getState();
+  const { profile, diet } = getState();
   // A target below the current weight means a cut: fewer calories, more
   // protein per kilo to keep the muscle while losing fat.
   const cutting = profile.targetWeight < profile.currentWeight;
-  const proteinTarget = Math.round(profile.currentWeight * (cutting ? 1.8 : 1.55));
-  const calories = Math.round(profile.currentWeight * (cutting ? 28 : 37));
+  // An AI-built plan wins over the body-weight formula: it knows the goal, the
+  // training window and what the student can actually buy on campus.
+  const aiProtein = diet.customProtein ?? null;
+  const aiCalories = diet.customCalories ?? null;
+  const proteinTarget = aiProtein ?? Math.round(profile.currentWeight * (cutting ? 1.8 : 1.55));
+  const calories = aiCalories ?? Math.round(profile.currentWeight * (cutting ? 28 : 37));
+  const fromAi = aiProtein !== null || aiCalories !== null;
 
   const card = el("div", "card border-emerald-500/20 bg-emerald-500/5");
+  const head = el("div", "flex items-start justify-between gap-2");
+  head.append(
+    el(
+      "p",
+      "text-xs font-extrabold text-emerald-200",
+      fromAi ? "هدف روزانه (برنامه هوش مصنوعی)" : "هدف روزانه تقریبی تو",
+    ),
+    btn("btn-icon shrink-0", svgIcon(icons.cpu, "h-4 w-4"), () => openAiDietConfigurator(), {
+      "aria-label": "ساخت برنامه تغذیه با هوش مصنوعی",
+      title: "ساخت برنامه با هوش مصنوعی",
+    }),
+  );
+  card.append(head);
   card.append(
-    el("p", "text-xs font-extrabold text-emerald-200", "🎯 هدف روزانه تقریبی تو"),
     el(
       "p",
       "mt-1 text-[10px] leading-5 text-emerald-100/60",
-      cutting
-        ? `⚖️ هدف کاهش وزن (${faNum(profile.currentWeight, 0)} ← ${faNum(profile.targetWeight, 0)} کیلو): کالری کنترل‌شده و پروتئین بالاتر برای حفظ عضله.`
-        : "قابل تامین با ۳ وعده سلف دانشگاه (بدون نیاز به میان‌وعده یا خرید اضافی).",
+      fromAi
+        ? "این اعداد را هوش مصنوعی بر اساس پروفایل، هدف و غذاهای در دسترس تو ساخته است."
+        : cutting
+          ? `هدف کاهش وزن (${faNum(profile.currentWeight, 0)} ← ${faNum(profile.targetWeight, 0)} کیلو): کالری کنترل‌شده و پروتئین بالاتر برای حفظ عضله.`
+          : "قابل تامین با ۳ وعده سلف دانشگاه (بدون نیاز به میان‌وعده یا خرید اضافی).",
     ),
   );
 
   const grid = el("div", "mt-3 grid grid-cols-2 gap-2");
-  const cell = (label: string, value: string) => {
+  const cell = (label: string, value: string, hint: string) => {
     const box = el("div", "rounded-xl bg-slate-950/50 px-3 py-2 text-center");
-    box.append(el("p", "text-base font-extrabold text-emerald-300", value), el("p", "mt-0.5 text-[9px] text-slate-500", label));
+    box.append(
+      el("p", "text-base font-extrabold text-emerald-300", value),
+      el("p", "mt-0.5 text-[9px] text-slate-500", label),
+      el("p", "mt-0.5 text-[8px] text-emerald-200/50", hint),
+    );
     return box;
   };
-  grid.append(cell("پروتئین روزانه", `${fa(proteinTarget)} گرم`), cell("کالری روزانه", `${fa(calories)} کالری`));
+  grid.append(
+    cell("پروتئین روزانه", `${fa(proteinTarget)} گرم`, aiProtein !== null ? "هوش مصنوعی" : "۱٫۵۵ گرم بر کیلو"),
+    cell("کالری روزانه", `${fa(calories)} کالری`, aiCalories !== null ? "هوش مصنوعی" : "از وزن بدن"),
+  );
   card.append(grid);
   return card;
 }
 
 function cafeteriaTable(): HTMLElement {
+  const { diet } = getState();
+  const aiRows = diet.mealTable ?? [];
+
+  // Built-in fallback: the published 3-meal cafeteria plan.
   const rows: Array<[string, string, string]> = [
     ["صبحانه سلف (املت + نان کامل)", "~۴۵۰ کالری", "~۱۲ گرم"],
     ["ناهار سلف (چلو جوجه کباب کامل)", "~۹۵۰ کالری", "~۴۵ گرم"],
@@ -355,11 +388,52 @@ function cafeteriaTable(): HTMLElement {
   ];
 
   const card = el("div", "card");
-  card.append(sectionTitle("جدول ارزش غذایی وعده‌های سلف دانشگاه"));
+  card.append(
+    sectionTitle(
+      aiRows.length > 0 ? "جدول وعده‌های برنامه هوش مصنوعی" : "جدول ارزش غذایی وعده‌های سلف دانشگاه",
+      aiRows.length > 0
+        ? btn("btn-ghost px-2 py-1 text-[10px]", "ویرایش با AI", () => openAiDietConfigurator(), {
+            "aria-label": "ویرایش جدول وعده‌ها با هوش مصنوعی",
+          })
+        : undefined,
+    ),
+  );
 
   const head = el("div", "grid grid-cols-3 gap-2 border-b border-slate-800/80 pb-1.5 text-[9px] text-slate-500");
   head.append(el("span", "", "وعده"), el("span", "text-center", "کالری"), el("span", "text-center", "پروتئین"));
   card.append(head);
+
+  if (aiRows.length > 0) {
+    const totalKcal = aiRows.reduce((sum, row) => sum + row.kcal, 0);
+    const totalProtein = aiRows.reduce((sum, row) => sum + row.protein, 0);
+    aiRows.forEach((row) => {
+      const line = el("div", "grid grid-cols-3 gap-2 border-b border-slate-800/40 py-2 text-[11px]");
+      line.append(
+        el("span", "text-slate-200", escapeHtml(row.name)),
+        el("span", "text-center text-slate-400", fa(row.kcal)),
+        el("span", "text-center font-bold text-emerald-300", `${fa(row.protein)} گرم`),
+      );
+      card.append(line);
+    });
+    const total = el(
+      "div",
+      "mt-1 grid grid-cols-3 gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-1 py-2 text-[11px]",
+    );
+    total.append(
+      el("span", "font-extrabold text-emerald-200", "مجموع روز"),
+      el("span", "text-center font-bold text-emerald-300", fa(totalKcal)),
+      el("span", "text-center font-bold text-emerald-300", `${fa(totalProtein)} گرم`),
+    );
+    card.append(total);
+    card.append(
+      el(
+        "p",
+        "mt-2 text-[10px] leading-5 text-slate-500",
+        "این جدول از پاسخ هوش مصنوعی ساخته شده و با هر بار اعمال برنامه جایگزین می‌شود.",
+      ),
+    );
+    return card;
+  }
 
   rows.forEach(([name, kcal, protein], index) => {
     const isTotal = index === rows.length - 1;
@@ -590,13 +664,37 @@ function setWaterInterval(minutes: number): void {
 
 /** Why the workout slot matters when there are only three meals. */
 function coachTipCard(): HTMLElement {
+  const { profile, diet } = getState();
+  const rules = diet.coachRules ?? [];
   const card = el("div", "card border-amber-500/25 bg-amber-500/5");
+
+  if (rules.length > 0) {
+    card.append(
+      el("p", "text-xs font-extrabold text-amber-200", "قواعد مربی (برنامه هوش مصنوعی)"),
+      el("p", "mt-1 text-[11px] font-bold leading-6 text-amber-100", escapeHtml(rules[0].headline)),
+    );
+    const list = el("ul", "mt-1.5 space-y-1");
+    rules[0].points.slice(0, 4).forEach((point) => {
+      list.append(el("li", "text-[10px] leading-5 text-amber-100/80", `• ${escapeHtml(point)}`));
+    });
+    card.append(list);
+  } else {
+    card.append(
+      el("p", "text-xs font-extrabold text-amber-200", "نکته مربی: بهترین ساعت باشگاه"),
+      el(
+        "p",
+        "mt-1 text-[11px] leading-6 text-amber-100/80",
+        `ساعت تمرین تو: ${escapeHtml(profile.trainingWindow)}. وعده بعد از تمرین همان شام سلف است، پس کالری و پروتئین روز را روی همین تایم بچین.`,
+      ),
+    );
+  }
+
   card.append(
-    el("p", "text-xs font-extrabold text-amber-200", "⏰ نکته مربی: بهترین ساعت باشگاه"),
-    el(
-      "p",
-      "mt-1 text-[11px] leading-6 text-amber-100/80",
-      "چون میان‌وعده نداری، بهترین تایم باشگاه ۱.۵ ساعت قبل از شام سلف است تا شامِ مرغ یا جوجه‌ات دقیقاً نقش وعده بعد از تمرین را بازی کند!",
+    btn(
+      "btn-ghost mt-2 w-full border-dashed py-2 text-[10px]",
+      "ساخت برنامه تغذیه با هوش مصنوعی",
+      () => openAiDietConfigurator(),
+      { "aria-label": "ساخت برنامه تغذیه با هوش مصنوعی" },
     ),
   );
   return card;

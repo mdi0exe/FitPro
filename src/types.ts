@@ -75,6 +75,20 @@ export interface DietItem {
   done: boolean;
 }
 
+/** One row of the AI-built meal table. */
+export interface MealRow {
+  name: string;
+  kcal: number;
+  protein: number;
+}
+
+/** One rule card produced by the AI coach. */
+export interface CoachRule {
+  title: string;
+  headline: string;
+  points: string[];
+}
+
 export interface DietState {
   items: DietItem[];
   lastResetDate: string;
@@ -87,6 +101,14 @@ export interface DietState {
    * Persisted so closing the app resumes the same countdown.
    */
   waterReminderNextAt: number;
+  /** AI-set daily energy target; `undefined` = computed from body weight. */
+  customCalories?: number | null;
+  /** AI-set daily protein target in grams. */
+  customProtein?: number | null;
+  /** AI meal table; empty = the built-in cafeteria table. */
+  mealTable?: MealRow[];
+  /** AI coach rules; empty = the three built-in golden rules. */
+  coachRules?: CoachRule[];
 }
 
 export type MilestoneKind = "overload" | "weight" | "system" | "goal";
@@ -96,6 +118,16 @@ export interface Milestone {
   date: string;
   text: string;
   kind: MilestoneKind | string;
+}
+
+/** One recorded session of a single exercise (top set of that day). */
+export interface ExerciseHistoryEntry {
+  /** ISO date: YYYY-MM-DD */
+  date: string;
+  weight: number;
+  reps: number;
+  /** How many sets were ticked that day. */
+  setsCompleted: number;
 }
 
 /** One day's snapshot for the weekly calendar (derived, not user-entered). */
@@ -177,6 +209,8 @@ export interface AppStateData {
   restSeconds: number;
   /** Derived per-day snapshots for the weekly calendar (newest first). */
   activityHistory: DailyActivity[];
+  /** Per-exercise progression log, keyed by exercise id (oldest first). */
+  exerciseHistory: Record<string, ExerciseHistoryEntry[]>;
   deloadActive: boolean;
   readiness: Readiness;
   personalRecords: Record<string, PersonalRecord>;
@@ -185,6 +219,14 @@ export interface AppStateData {
   /** Editable MSc timetable; seeded for saves that predate it. */
   courses: CourseSession[];
   semesterWeekType: SemesterWeekType;
+  /**
+   * Saturday (ISO) of the week that counts as semester week **1**.
+   *
+   * The odd/even half of the fortnight is derived from it — week 1 is odd,
+   * week 2 is even, and so on — so there is no manual switch any more.
+   * `null` means "anchor on the current week", i.e. this week is week 1.
+   */
+  semesterWeekAnchorDate: string | null;
   languageStudy: LanguageStudyState;
   /** Raw JSON imported from the AI shuttle template (null = built-in table). */
   customShuttleJson: string | null;

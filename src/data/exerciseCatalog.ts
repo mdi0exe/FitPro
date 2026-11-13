@@ -19,6 +19,8 @@ export interface CatalogExercise {
   muscle: string;
   /** Persian equipment label. */
   equipment: string;
+  /** One-line Persian coaching cue (form + muscle + setup). */
+  tip: string;
   /** Bundled GIF, e.g. `/gifs/catalog/cat-0314.gif`. */
   gif: string;
 }
@@ -51,6 +53,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "chest",
     muscle: "سینه",
     equipment: "هالتر",
+    tip: "وزنه را روی خط نوک سینه پایین بیاور و آرنج را حدود ۴۵ درجه باز نگه دار. سینه را در کل دامنه تحت کشش نگه دار و حرکت را از مفصل شانه هدایت کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0025.gif",
   },
   {
@@ -60,6 +63,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "chest",
     muscle: "سینه",
     equipment: "دمبل",
+    tip: "بدن را یک خط صاف نگه دار و آرنج را نزدیک تنه پایین ببر. سینه را در کل دامنه تحت کشش نگه دار و حرکت را از مفصل شانه هدایت کن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-1274.gif",
   },
   {
@@ -69,6 +73,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "chest",
     muscle: "سینه",
     equipment: "سیم‌کش",
+    tip: "وزنه را روی خط نوک سینه پایین بیاور و آرنج را حدود ۴۵ درجه باز نگه دار. سینه را در کل دامنه تحت کشش نگه دار و حرکت را از مفصل شانه هدایت کن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0151.gif",
   },
   {
@@ -78,6 +83,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "chest",
     muscle: "سینه",
     equipment: "هالتر",
+    tip: "وزنه را روی خط نوک سینه پایین بیاور و آرنج را حدود ۴۵ درجه باز نگه دار. سینه را در کل دامنه تحت کشش نگه دار و حرکت را از مفصل شانه هدایت کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0033.gif",
   },
   {
@@ -87,6 +93,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "chest",
     muscle: "سینه",
     equipment: "دمبل",
+    tip: "وزنه را روی خط نوک سینه پایین بیاور و آرنج را حدود ۴۵ درجه باز نگه دار. سینه را در کل دامنه تحت کشش نگه دار و حرکت را از مفصل شانه هدایت کن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0289.gif",
   },
   {
@@ -96,6 +103,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "chest",
     muscle: "سینه",
     equipment: "سیم‌کش",
+    tip: "با آرنج کمی خم باز و بسته کن و در بسته شدن سینه را فشرده نگه دار. سینه را در کل دامنه تحت کشش نگه دار و حرکت را از مفصل شانه هدایت کن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0158.gif",
   },
   {
@@ -105,6 +113,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "chest",
     muscle: "سینه",
     equipment: "دستگاه",
+    tip: "تنه را کمی جلو ببر و تا زاویه ۹۰ درجه آرنج پایین برو. سینه را در کل دامنه تحت کشش نگه دار و حرکت را از مفصل شانه هدایت کن. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-0009.gif",
   },
   {
@@ -114,6 +123,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "chest",
     muscle: "سینه",
     equipment: "اسمیت",
+    tip: "وزنه را روی خط نوک سینه پایین بیاور و آرنج را حدود ۴۵ درجه باز نگه دار. سینه را در کل دامنه تحت کشش نگه دار و حرکت را از مفصل شانه هدایت کن. قفل ایمنی را تنظیم کن و مسیر هادی را دنبال کن.",
     gif: "/gifs/catalog/cat-0748.gif",
   },
   {
@@ -123,6 +133,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "chest",
     muscle: "سینه",
     equipment: "وزن بدن",
+    tip: "بدن را یک خط صاف نگه دار و آرنج را نزدیک تنه پایین ببر. سینه را در کل دامنه تحت کشش نگه دار و حرکت را از مفصل شانه هدایت کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3294.gif",
   },
   {
@@ -132,6 +143,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "chest",
     muscle: "سینه",
     equipment: "کتل‌بل",
+    tip: "مسیر وزنه را ثابت نگه دار و در پایین دامنه کنترل کامل داشته باش. سینه را در کل دامنه تحت کشش نگه دار و حرکت را از مفصل شانه هدایت کن. دسته را محکم بگیر و مچ را خنثی نگه دار.",
     gif: "/gifs/catalog/cat-0519.gif",
   },
   {
@@ -141,6 +153,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "back",
     muscle: "زیربغل",
     equipment: "هالتر",
+    tip: "تنه را ثابت نگه دار و آرنج را به سمت لگن بکش، نه به سمت شانه. اول کتف را جمع کن و بعد بکش؛ حرکت باید از پشت شروع شود نه از بازو. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0027.gif",
   },
   {
@@ -150,6 +163,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "back",
     muscle: "زیربغل",
     equipment: "دمبل",
+    tip: "تنه را ثابت نگه دار و آرنج را به سمت لگن بکش، نه به سمت شانه. اول کتف را جمع کن و بعد بکش؛ حرکت باید از پشت شروع شود نه از بازو. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0293.gif",
   },
   {
@@ -159,6 +173,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "back",
     muscle: "زیربغل",
     equipment: "سیم‌کش",
+    tip: "اول کتف را پایین بیاور، بعد آرنج را به سمت پهلو بکش. اول کتف را جمع کن و بعد بکش؛ حرکت باید از پشت شروع شود نه از بازو. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0007.gif",
   },
   {
@@ -168,6 +183,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "back",
     muscle: "زیربغل",
     equipment: "هالتر",
+    tip: "تنه را ثابت نگه دار و آرنج را به سمت لگن بکش، نه به سمت شانه. اول کتف را جمع کن و بعد بکش؛ حرکت باید از پشت شروع شود نه از بازو. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0049.gif",
   },
   {
@@ -177,6 +193,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "back",
     muscle: "زیربغل",
     equipment: "دمبل",
+    tip: "تنه را ثابت نگه دار و آرنج را به سمت لگن بکش، نه به سمت شانه. اول کتف را جمع کن و بعد بکش؛ حرکت باید از پشت شروع شود نه از بازو. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0327.gif",
   },
   {
@@ -186,6 +203,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "back",
     muscle: "زیربغل",
     equipment: "سیم‌کش",
+    tip: "اول کتف را پایین بیاور، بعد آرنج را به سمت پهلو بکش. اول کتف را جمع کن و بعد بکش؛ حرکت باید از پشت شروع شود نه از بازو. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0150.gif",
   },
   {
@@ -195,6 +213,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "back",
     muscle: "زیربغل",
     equipment: "دستگاه",
+    tip: "از آویزان کامل شروع کن و بدون تاب دادن بدن چانه را بالا ببر. اول کتف را جمع کن و بعد بکش؛ حرکت باید از پشت شروع شود نه از بازو. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-0017.gif",
   },
   {
@@ -204,6 +223,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "back",
     muscle: "زیربغل",
     equipment: "اسمیت",
+    tip: "تنه را ثابت نگه دار و آرنج را به سمت لگن بکش، نه به سمت شانه. اول کتف را جمع کن و بعد بکش؛ حرکت باید از پشت شروع شود نه از بازو. قفل ایمنی را تنظیم کن و مسیر هادی را دنبال کن.",
     gif: "/gifs/catalog/cat-1359.gif",
   },
   {
@@ -213,6 +233,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "back",
     muscle: "زیربغل",
     equipment: "هالتر خم",
+    tip: "تنه را ثابت نگه دار و آرنج را به سمت لگن بکش، نه به سمت شانه. اول کتف را جمع کن و بعد بکش؛ حرکت باید از پشت شروع شود نه از بازو. دسته‌های خم میله را بگیر تا فشار از مچ برداشته شود.",
     gif: "/gifs/catalog/cat-1344.gif",
   },
   {
@@ -222,6 +243,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "back",
     muscle: "زیربغل",
     equipment: "وزن بدن",
+    tip: "از آویزان کامل شروع کن و بدون تاب دادن بدن چانه را بالا ببر. اول کتف را جمع کن و بعد بکش؛ حرکت باید از پشت شروع شود نه از بازو. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3293.gif",
   },
   {
@@ -231,6 +253,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "shoulders",
     muscle: "سرشانه",
     equipment: "هالتر",
+    tip: "وزنه را تا سطح چشم بالا بیاور و در بالا شانه را جمع نکن. وزن را با دلت کنترل کن و از کمک گرفتن با کمر پرهیز کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0041.gif",
   },
   {
@@ -240,6 +263,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "shoulders",
     muscle: "سرشانه",
     equipment: "دمبل",
+    tip: "مسیر وزنه را ثابت نگه دار و در پایین دامنه کنترل کامل داشته باش. وزن را با دلت کنترل کن و از کمک گرفتن با کمر پرهیز کن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0286.gif",
   },
   {
@@ -249,6 +273,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "shoulders",
     muscle: "سرشانه",
     equipment: "سیم‌کش",
+    tip: "بدون قوس دادن کمر، وزنه را از خط چانه بالا ببر و در بالا شانه را جمع نکن. وزن را با دلت کنترل کن و از کمک گرفتن با کمر پرهیز کن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0148.gif",
   },
   {
@@ -258,6 +283,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "shoulders",
     muscle: "سرشانه",
     equipment: "هالتر",
+    tip: "تنه را خم نگه دار و با فشردن کتف‌ها وزنه را باز کن. وزن را با دلت کنترل کن و از کمک گرفتن با کمر پرهیز کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0075.gif",
   },
   {
@@ -267,6 +293,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "shoulders",
     muscle: "سرشانه",
     equipment: "دمبل",
+    tip: "مسیر وزنه را ثابت نگه دار و در پایین دامنه کنترل کامل داشته باش. وزن را با دلت کنترل کن و از کمک گرفتن با کمر پرهیز کن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-2137.gif",
   },
   {
@@ -276,6 +303,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "shoulders",
     muscle: "سرشانه",
     equipment: "سیم‌کش",
+    tip: "با آرنج کمی خم باز و بسته کن و در بسته شدن سینه را فشرده نگه دار. وزن را با دلت کنترل کن و از کمک گرفتن با کمر پرهیز کن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0154.gif",
   },
   {
@@ -285,6 +313,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "shoulders",
     muscle: "سرشانه",
     equipment: "دستگاه",
+    tip: "شانه را مستقیم به سمت گوش بالا ببر و در بالا یک ثانیه نگه دار. وزن را با دلت کنترل کن و از کمک گرفتن با کمر پرهیز کن. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-0580.gif",
   },
   {
@@ -294,6 +323,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "shoulders",
     muscle: "سرشانه",
     equipment: "اسمیت",
+    tip: "شانه را مستقیم به سمت گوش بالا ببر و در بالا یک ثانیه نگه دار. وزن را با دلت کنترل کن و از کمک گرفتن با کمر پرهیز کن. قفل ایمنی را تنظیم کن و مسیر هادی را دنبال کن.",
     gif: "/gifs/catalog/cat-0746.gif",
   },
   {
@@ -303,6 +333,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "shoulders",
     muscle: "سرشانه",
     equipment: "هالتر خم",
+    tip: "مسیر وزنه را ثابت نگه دار و در پایین دامنه کنترل کامل داشته باش. وزن را با دلت کنترل کن و از کمک گرفتن با کمر پرهیز کن. دسته‌های خم میله را بگیر تا فشار از مچ برداشته شود.",
     gif: "/gifs/catalog/cat-0445.gif",
   },
   {
@@ -312,6 +343,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "shoulders",
     muscle: "سرشانه",
     equipment: "وزن بدن",
+    tip: "وزن را با دلت کنترل کن و از کمک گرفتن با کمر پرهیز کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3012.gif",
   },
   {
@@ -321,6 +353,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "biceps",
     muscle: "جلو بازو",
     equipment: "هالتر",
+    tip: "آرنج را کنار تنه ثابت نگه دار و در پایین دامنه کامل باز کن. آرنج ثابت بماند و بازگشت آرام‌تر از بالا آمدن باشد. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0023.gif",
   },
   {
@@ -330,6 +363,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "biceps",
     muscle: "جلو بازو",
     equipment: "دمبل",
+    tip: "آرنج را کنار تنه ثابت نگه دار و در پایین دامنه کامل باز کن. آرنج ثابت بماند و بازگشت آرام‌تر از بالا آمدن باشد. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0285.gif",
   },
   {
@@ -339,6 +373,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "biceps",
     muscle: "جلو بازو",
     equipment: "سیم‌کش",
+    tip: "آرنج را کنار تنه ثابت نگه دار و در پایین دامنه کامل باز کن. آرنج ثابت بماند و بازگشت آرام‌تر از بالا آمدن باشد. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-1630.gif",
   },
   {
@@ -348,6 +383,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "biceps",
     muscle: "جلو بازو",
     equipment: "هالتر",
+    tip: "آرنج را کنار تنه ثابت نگه دار و در پایین دامنه کامل باز کن. آرنج ثابت بماند و بازگشت آرام‌تر از بالا آمدن باشد. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0031.gif",
   },
   {
@@ -357,6 +393,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "biceps",
     muscle: "جلو بازو",
     equipment: "دمبل",
+    tip: "پشت بازو را روی میز لاری بچسبان و دامنه کامل را طی کن. آرنج ثابت بماند و بازگشت آرام‌تر از بالا آمدن باشد. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-1646.gif",
   },
   {
@@ -366,6 +403,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "biceps",
     muscle: "جلو بازو",
     equipment: "سیم‌کش",
+    tip: "آرنج را روی ران تکیه بده و در بالا یک ثانیه فشرده کن. آرنج ثابت بماند و بازگشت آرام‌تر از بالا آمدن باشد. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-1631.gif",
   },
   {
@@ -375,6 +413,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "biceps",
     muscle: "جلو بازو",
     equipment: "دستگاه",
+    tip: "آرنج را کنار تنه ثابت نگه دار و در پایین دامنه کامل باز کن. آرنج ثابت بماند و بازگشت آرام‌تر از بالا آمدن باشد. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-0575.gif",
   },
   {
@@ -384,6 +423,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "biceps",
     muscle: "جلو بازو",
     equipment: "اسمیت",
+    tip: "آرنج را کنار تنه ثابت نگه دار و در پایین دامنه کامل باز کن. آرنج ثابت بماند و بازگشت آرام‌تر از بالا آمدن باشد. قفل ایمنی را تنظیم کن و مسیر هادی را دنبال کن.",
     gif: "/gifs/catalog/cat-1683.gif",
   },
   {
@@ -393,6 +433,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "biceps",
     muscle: "جلو بازو",
     equipment: "هالتر خم",
+    tip: "آرنج را کنار تنه ثابت نگه دار و در پایین دامنه کامل باز کن. آرنج ثابت بماند و بازگشت آرام‌تر از بالا آمدن باشد. دسته‌های خم میله را بگیر تا فشار از مچ برداشته شود.",
     gif: "/gifs/catalog/cat-0446.gif",
   },
   {
@@ -402,6 +443,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "biceps",
     muscle: "جلو بازو",
     equipment: "وزن بدن",
+    tip: "آرنج را روی ران تکیه بده و در بالا یک ثانیه فشرده کن. آرنج ثابت بماند و بازگشت آرام‌تر از بالا آمدن باشد. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-1770.gif",
   },
   {
@@ -411,6 +453,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "triceps",
     muscle: "پشت بازو",
     equipment: "هالتر",
+    tip: "وزنه را روی خط نوک سینه پایین بیاور و آرنج را حدود ۴۵ درجه باز نگه دار. آرنج را ثابت نگه دار و در پایان دامنه عضله را کاملاً فشرده کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0030.gif",
   },
   {
@@ -420,6 +463,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "triceps",
     muscle: "پشت بازو",
     equipment: "دمبل",
+    tip: "مسیر وزنه را ثابت نگه دار و در پایین دامنه کنترل کامل داشته باش. آرنج را ثابت نگه دار و در پایان دامنه عضله را کاملاً فشرده کن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-1731.gif",
   },
   {
@@ -429,6 +473,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "triceps",
     muscle: "پشت بازو",
     equipment: "سیم‌کش",
+    tip: "در پایان دامنه آرنج را کامل باز کن و عضله را فشرده نگه دار. آرنج را ثابت نگه دار و در پایان دامنه عضله را کاملاً فشرده کن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0149.gif",
   },
   {
@@ -438,6 +483,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "triceps",
     muscle: "پشت بازو",
     equipment: "هالتر",
+    tip: "مسیر وزنه را ثابت نگه دار و در پایین دامنه کنترل کامل داشته باش. آرنج را ثابت نگه دار و در پایان دامنه عضله را کاملاً فشرده کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0048.gif",
   },
   {
@@ -447,6 +493,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "triceps",
     muscle: "پشت بازو",
     equipment: "سیم‌کش",
+    tip: "آرنج را ثابت نگه دار و در پایان دامنه عضله را کاملاً فشرده کن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0152.gif",
   },
   {
@@ -456,6 +503,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "triceps",
     muscle: "پشت بازو",
     equipment: "دستگاه",
+    tip: "بدون تاب دادن بدن پایین برو و در بالا آرنج را کامل باز کن. آرنج را ثابت نگه دار و در پایان دامنه عضله را کاملاً فشرده کن. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-0019.gif",
   },
   {
@@ -465,6 +513,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "triceps",
     muscle: "پشت بازو",
     equipment: "اسمیت",
+    tip: "وزنه را روی خط نوک سینه پایین بیاور و آرنج را حدود ۴۵ درجه باز نگه دار. آرنج را ثابت نگه دار و در پایان دامنه عضله را کاملاً فشرده کن. قفل ایمنی را تنظیم کن و مسیر هادی را دنبال کن.",
     gif: "/gifs/catalog/cat-0751.gif",
   },
   {
@@ -474,6 +523,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "triceps",
     muscle: "پشت بازو",
     equipment: "هالتر خم",
+    tip: "مسیر وزنه را ثابت نگه دار و در پایین دامنه کنترل کامل داشته باش. آرنج را ثابت نگه دار و در پایان دامنه عضله را کاملاً فشرده کن. دسته‌های خم میله را بگیر تا فشار از مچ برداشته شود.",
     gif: "/gifs/catalog/cat-1749.gif",
   },
   {
@@ -483,6 +533,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "triceps",
     muscle: "پشت بازو",
     equipment: "وزن بدن",
+    tip: "تنه را کمی جلو ببر و تا زاویه ۹۰ درجه آرنج پایین برو. آرنج را ثابت نگه دار و در پایان دامنه عضله را کاملاً فشرده کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-0129.gif",
   },
   {
@@ -492,6 +543,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "triceps",
     muscle: "پشت بازو",
     equipment: "هالتر المپیک",
+    tip: "در پایان دامنه آرنج را کامل باز کن و عضله را فشرده نگه دار. آرنج را ثابت نگه دار و در پایان دامنه عضله را کاملاً فشرده کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0637.gif",
   },
   {
@@ -501,6 +553,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "quads",
     muscle: "چهارسر ران",
     equipment: "هالتر",
+    tip: "تا موازی شدن ران پایین برو و کمر را در تمام دامنه خنثی نگه دار. وزن را روی کل کف پا پخش کن و زانو را در راستای پنجه نگه دار. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0024.gif",
   },
   {
@@ -510,6 +563,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "quads",
     muscle: "چهارسر ران",
     equipment: "دمبل",
+    tip: "وزنه را نزدیک قفسه سینه نگه دار و در پایین کمر را صاف نگه دار. وزن را روی کل کف پا پخش کن و زانو را در راستای پنجه نگه دار. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-1760.gif",
   },
   {
@@ -519,6 +573,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "quads",
     muscle: "چهارسر ران",
     equipment: "هالتر",
+    tip: "تا موازی شدن ران پایین برو و کمر را در تمام دامنه خنثی نگه دار. وزن را روی کل کف پا پخش کن و زانو را در راستای پنجه نگه دار. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0026.gif",
   },
   {
@@ -528,6 +583,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "quads",
     muscle: "چهارسر ران",
     equipment: "دمبل",
+    tip: "وزن را روی پای جلو نگه دار و تنه را تقریباً عمود نگه دار. وزن را روی کل کف پا پخش کن و زانو را در راستای پنجه نگه دار. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0410.gif",
   },
   {
@@ -537,6 +593,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "quads",
     muscle: "چهارسر ران",
     equipment: "هالتر",
+    tip: "میله را نزدیک بدن نگه دار و در گرفتن با پا فشار بده. وزن را روی کل کف پا پخش کن و زانو را در راستای پنجه نگه دار. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0028.gif",
   },
   {
@@ -546,6 +603,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "quads",
     muscle: "چهارسر ران",
     equipment: "دمبل",
+    tip: "با پای روی سکو فشار بده و زانو را به داخل نچرخان. وزن را روی کل کف پا پخش کن و زانو را در راستای پنجه نگه دار. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-2796.gif",
   },
   {
@@ -555,6 +613,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "quads",
     muscle: "چهارسر ران",
     equipment: "دستگاه",
+    tip: "کمر و باسن را به تکیه‌گاه بچسبان و زانو را در راستای پنجه نگه دار. وزن را روی کل کف پا پخش کن و زانو را در راستای پنجه نگه دار. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-2287.gif",
   },
   {
@@ -564,6 +623,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "quads",
     muscle: "چهارسر ران",
     equipment: "اسمیت",
+    tip: "تا موازی شدن ران پایین برو و کمر را در تمام دامنه خنثی نگه دار. وزن را روی کل کف پا پخش کن و زانو را در راستای پنجه نگه دار. قفل ایمنی را تنظیم کن و مسیر هادی را دنبال کن.",
     gif: "/gifs/catalog/cat-0750.gif",
   },
   {
@@ -573,6 +633,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "quads",
     muscle: "چهارسر ران",
     equipment: "وزن بدن",
+    tip: "تا موازی شدن ران پایین برو و کمر را در تمام دامنه خنثی نگه دار. وزن را روی کل کف پا پخش کن و زانو را در راستای پنجه نگه دار. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-1489.gif",
   },
   {
@@ -582,6 +643,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "quads",
     muscle: "چهارسر ران",
     equipment: "با وزنه",
+    tip: "تا موازی شدن ران پایین برو و کمر را در تمام دامنه خنثی نگه دار. وزن را روی کل کف پا پخش کن و زانو را در راستای پنجه نگه دار.",
     gif: "/gifs/catalog/cat-0851.gif",
   },
   {
@@ -591,6 +653,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "hamstrings",
     muscle: "همسترینگ",
     equipment: "هالتر",
+    tip: "وزنه را نزدیک ساق نگه دار و با فشار پا بلند شو، نه با کشیدن کمر. حرکت را از لگن شروع کن و کشش پشت ران را حس کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0116.gif",
   },
   {
@@ -600,6 +663,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "hamstrings",
     muscle: "همسترینگ",
     equipment: "دمبل",
+    tip: "حرکت را کنترل‌شده انجام بده و در جمع شدن یک ثانیه فشرده نگه دار. حرکت را از لگن شروع کن و کشش پشت ران را حس کن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0339.gif",
   },
   {
@@ -609,6 +673,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "hamstrings",
     muscle: "همسترینگ",
     equipment: "دستگاه",
+    tip: "حرکت را کنترل‌شده انجام بده و در جمع شدن یک ثانیه فشرده نگه دار. حرکت را از لگن شروع کن و کشش پشت ران را حس کن. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-0582.gif",
   },
   {
@@ -618,6 +683,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "hamstrings",
     muscle: "همسترینگ",
     equipment: "هالتر",
+    tip: "حرکت را از لگن شروع کن و کشش پشت ران را حس کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0044.gif",
   },
   {
@@ -627,6 +693,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "hamstrings",
     muscle: "همسترینگ",
     equipment: "دستگاه",
+    tip: "حرکت را کنترل‌شده انجام بده و در جمع شدن یک ثانیه فشرده نگه دار. حرکت را از لگن شروع کن و کشش پشت ران را حس کن. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-0586.gif",
   },
   {
@@ -636,6 +703,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "hamstrings",
     muscle: "همسترینگ",
     equipment: "هالتر",
+    tip: "میله را نزدیک بدن نگه دار و در گرفتن با پا فشار بده. حرکت را از لگن شروع کن و کشش پشت ران را حس کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0648.gif",
   },
   {
@@ -645,6 +713,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "hamstrings",
     muscle: "همسترینگ",
     equipment: "سیم‌کش",
+    tip: "حرکت را کنترل‌شده انجام بده و در جمع شدن یک ثانیه فشرده نگه دار. حرکت را از لگن شروع کن و کشش پشت ران را حس کن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-3235.gif",
   },
   {
@@ -654,6 +723,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "hamstrings",
     muscle: "همسترینگ",
     equipment: "وزن بدن",
+    tip: "حرکت را کنترل‌شده انجام بده و در جمع شدن یک ثانیه فشرده نگه دار. حرکت را از لگن شروع کن و کشش پشت ران را حس کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3193.gif",
   },
   {
@@ -663,6 +733,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "hamstrings",
     muscle: "همسترینگ",
     equipment: "کتل‌بل",
+    tip: "میله را نزدیک بدن نگه دار و در گرفتن با پا فشار بده. حرکت را از لگن شروع کن و کشش پشت ران را حس کن. دسته را محکم بگیر و مچ را خنثی نگه دار.",
     gif: "/gifs/catalog/cat-0535.gif",
   },
   {
@@ -672,6 +743,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "hamstrings",
     muscle: "همسترینگ",
     equipment: "کمکی",
+    tip: "حرکت را از لگن شروع کن و کشش پشت ران را حس کن.",
     gif: "/gifs/catalog/cat-0016.gif",
   },
   {
@@ -681,6 +753,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "glutes",
     muscle: "باسن",
     equipment: "هالتر",
+    tip: "تا موازی شدن ران پایین برو و کمر را در تمام دامنه خنثی نگه دار. در پایان دامنه باسن را فشرده نگه دار و کمر را درگیر نکن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0029.gif",
   },
   {
@@ -690,6 +763,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "glutes",
     muscle: "باسن",
     equipment: "دمبل",
+    tip: "تا موازی شدن ران پایین برو و کمر را در تمام دامنه خنثی نگه دار. در پایان دامنه باسن را فشرده نگه دار و کمر را درگیر نکن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0291.gif",
   },
   {
@@ -699,6 +773,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "glutes",
     muscle: "باسن",
     equipment: "سیم‌کش",
+    tip: "وزنه را نزدیک ساق نگه دار و با فشار پا بلند شو، نه با کشیدن کمر. در پایان دامنه باسن را فشرده نگه دار و کمر را درگیر نکن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0157.gif",
   },
   {
@@ -708,6 +783,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "glutes",
     muscle: "باسن",
     equipment: "هالتر",
+    tip: "وزنه را نزدیک ساق نگه دار و با فشار پا بلند شو، نه با کشیدن کمر. در پایان دامنه باسن را فشرده نگه دار و کمر را درگیر نکن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0032.gif",
   },
   {
@@ -717,6 +793,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "glutes",
     muscle: "باسن",
     equipment: "دمبل",
+    tip: "زانوی عقب را تا نزدیک زمین پایین ببر و تنه را عمود نگه دار. در پایان دامنه باسن را فشرده نگه دار و کمر را درگیر نکن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-3635.gif",
   },
   {
@@ -726,6 +803,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "glutes",
     muscle: "باسن",
     equipment: "سیم‌کش",
+    tip: "در پایان دامنه باسن را فشرده نگه دار و کمر را درگیر نکن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0228.gif",
   },
   {
@@ -735,6 +813,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "glutes",
     muscle: "باسن",
     equipment: "دستگاه",
+    tip: "وزنه را نزدیک ساق نگه دار و با فشار پا بلند شو، نه با کشیدن کمر. در پایان دامنه باسن را فشرده نگه دار و کمر را درگیر نکن. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-0578.gif",
   },
   {
@@ -744,6 +823,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "glutes",
     muscle: "باسن",
     equipment: "اسمیت",
+    tip: "وزنه را نزدیک ساق نگه دار و با فشار پا بلند شو، نه با کشیدن کمر. در پایان دامنه باسن را فشرده نگه دار و کمر را درگیر نکن. قفل ایمنی را تنظیم کن و مسیر هادی را دنبال کن.",
     gif: "/gifs/catalog/cat-0752.gif",
   },
   {
@@ -753,6 +833,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "glutes",
     muscle: "باسن",
     equipment: "وزن بدن",
+    tip: "در پایان دامنه باسن را فشرده نگه دار و کمر را درگیر نکن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-0130.gif",
   },
   {
@@ -762,6 +843,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "glutes",
     muscle: "باسن",
     equipment: "دستگاه اسلیج",
+    tip: "کمر و باسن را به تکیه‌گاه بچسبان و زانو را در راستای پنجه نگه دار. در پایان دامنه باسن را فشرده نگه دار و کمر را درگیر نکن.",
     gif: "/gifs/catalog/cat-0739.gif",
   },
   {
@@ -771,6 +853,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "calves",
     muscle: "ساق پا",
     equipment: "دمبل",
+    tip: "در پایین دامنه کشش کامل و در بالا یک ثانیه توقف کن. دامنه کامل را طی کن: کشش کامل در پایین و انقباض کامل در بالا. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-1379.gif",
   },
   {
@@ -780,6 +863,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "calves",
     muscle: "ساق پا",
     equipment: "دستگاه",
+    tip: "دامنه کامل را طی کن: کشش کامل در پایین و انقباض کامل در بالا. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-2289.gif",
   },
   {
@@ -789,6 +873,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "calves",
     muscle: "ساق پا",
     equipment: "اسمیت",
+    tip: "دامنه کامل را طی کن: کشش کامل در پایین و انقباض کامل در بالا. قفل ایمنی را تنظیم کن و مسیر هادی را دنبال کن.",
     gif: "/gifs/catalog/cat-0763.gif",
   },
   {
@@ -798,6 +883,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "calves",
     muscle: "ساق پا",
     equipment: "دمبل",
+    tip: "در پایین دامنه کشش کامل و در بالا یک ثانیه توقف کن. دامنه کامل را طی کن: کشش کامل در پایین و انقباض کامل در بالا. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0409.gif",
   },
   {
@@ -807,6 +893,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "calves",
     muscle: "ساق پا",
     equipment: "دستگاه",
+    tip: "در پایین دامنه کشش کامل و در بالا یک ثانیه توقف کن. دامنه کامل را طی کن: کشش کامل در پایین و انقباض کامل در بالا. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-1253.gif",
   },
   {
@@ -816,6 +903,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "calves",
     muscle: "ساق پا",
     equipment: "هالتر",
+    tip: "در پایین دامنه کشش کامل و در بالا یک ثانیه توقف کن. دامنه کامل را طی کن: کشش کامل در پایین و انقباض کامل در بالا. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-1370.gif",
   },
   {
@@ -825,6 +913,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "calves",
     muscle: "ساق پا",
     equipment: "سیم‌کش",
+    tip: "در پایین دامنه کشش کامل و در بالا یک ثانیه توقف کن. دامنه کامل را طی کن: کشش کامل در پایین و انقباض کامل در بالا. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-1375.gif",
   },
   {
@@ -834,6 +923,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "calves",
     muscle: "ساق پا",
     equipment: "وزن بدن",
+    tip: "در پایین دامنه کشش کامل و در بالا یک ثانیه توقف کن. دامنه کامل را طی کن: کشش کامل در پایین و انقباض کامل در بالا. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-1373.gif",
   },
   {
@@ -843,6 +933,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "calves",
     muscle: "ساق پا",
     equipment: "دستگاه اسلیج",
+    tip: "در پایین دامنه کشش کامل و در بالا یک ثانیه توقف کن. دامنه کامل را طی کن: کشش کامل در پایین و انقباض کامل در بالا.",
     gif: "/gifs/catalog/cat-1383.gif",
   },
   {
@@ -852,6 +943,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "calves",
     muscle: "ساق پا",
     equipment: "با وزنه",
+    tip: "در پایین دامنه کشش کامل و در بالا یک ثانیه توقف کن. دامنه کامل را طی کن: کشش کامل در پایین و انقباض کامل در بالا.",
     gif: "/gifs/catalog/cat-0833.gif",
   },
   {
@@ -861,6 +953,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "abs",
     muscle: "شکم",
     equipment: "دمبل",
+    tip: "بدون کشیدن گردن، دامنه را کامل و کنترل‌شده طی کن. با بازدم منقبض شو و کمر را در وضعیت خنثی نگه دار. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0407.gif",
   },
   {
@@ -870,6 +963,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "abs",
     muscle: "شکم",
     equipment: "سیم‌کش",
+    tip: "با بازدم بالا بیا و کمر را از زمین جدا نکن. با بازدم منقبض شو و کمر را در وضعیت خنثی نگه دار. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0175.gif",
   },
   {
@@ -879,6 +973,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "abs",
     muscle: "شکم",
     equipment: "وزن بدن",
+    tip: "با کنترل بالا بیا و از کشیدن گردن با دست پرهیز کن. با بازدم منقبض شو و کمر را در وضعیت خنثی نگه دار. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-0001.gif",
   },
   {
@@ -888,6 +983,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "abs",
     muscle: "شکم",
     equipment: "دمبل",
+    tip: "با بازدم منقبض شو و کمر را در وضعیت خنثی نگه دار. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0777.gif",
   },
   {
@@ -897,6 +993,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "abs",
     muscle: "شکم",
     equipment: "سیم‌کش",
+    tip: "با بازدم بالا بیا و کمر را از زمین جدا نکن. با بازدم منقبض شو و کمر را در وضعیت خنثی نگه دار. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0873.gif",
   },
   {
@@ -906,6 +1003,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "abs",
     muscle: "شکم",
     equipment: "وزن بدن",
+    tip: "بدن را یک خط صاف نگه دار و باسن را بالا یا پایین نبر. با بازدم منقبض شو و کمر را در وضعیت خنثی نگه دار. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3544.gif",
   },
   {
@@ -915,6 +1013,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "abs",
     muscle: "شکم",
     equipment: "هالتر",
+    tip: "با کنترل بالا بیا و از کشیدن گردن با دست پرهیز کن. با بازدم منقبض شو و کمر را در وضعیت خنثی نگه دار. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0071.gif",
   },
   {
@@ -924,6 +1023,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "abs",
     muscle: "شکم",
     equipment: "دستگاه",
+    tip: "حرکت را از کمر انجام بده نه از لگن، و در بالا بیش از حد قوس نده. با بازدم منقبض شو و کمر را در وضعیت خنثی نگه دار. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-0573.gif",
   },
   {
@@ -933,6 +1033,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "abs",
     muscle: "شکم",
     equipment: "اسمیت",
+    tip: "با فشار باسن بالا بیا و در بالا یک ثانیه نگه دار. با بازدم منقبض شو و کمر را در وضعیت خنثی نگه دار. قفل ایمنی را تنظیم کن و مسیر هادی را دنبال کن.",
     gif: "/gifs/catalog/cat-0756.gif",
   },
   {
@@ -942,6 +1043,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "abs",
     muscle: "شکم",
     equipment: "کتل‌بل",
+    tip: "مسیر وزنه را ثابت نگه دار و در پایین دامنه کنترل کامل داشته باش. با بازدم منقبض شو و کمر را در وضعیت خنثی نگه دار. دسته را محکم بگیر و مچ را خنثی نگه دار.",
     gif: "/gifs/catalog/cat-0524.gif",
   },
   {
@@ -951,6 +1053,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "forearms",
     muscle: "ساعد",
     equipment: "هالتر",
+    tip: "ساعد را ثابت روی ران نگه دار و فقط مچ را حرکت بده. مچ را در راستای ساعد نگه دار و دامنه را کامل طی کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0082.gif",
   },
   {
@@ -960,6 +1063,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "forearms",
     muscle: "ساعد",
     equipment: "دمبل",
+    tip: "مچ را در راستای ساعد نگه دار و دامنه را کامل طی کن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-1437.gif",
   },
   {
@@ -969,6 +1073,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "forearms",
     muscle: "ساعد",
     equipment: "سیم‌کش",
+    tip: "ساعد را ثابت روی ران نگه دار و فقط مچ را حرکت بده. مچ را در راستای ساعد نگه دار و دامنه را کامل طی کن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0210.gif",
   },
   {
@@ -978,6 +1083,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "forearms",
     muscle: "ساعد",
     equipment: "هالتر",
+    tip: "ساعد را ثابت روی ران نگه دار و فقط مچ را حرکت بده. مچ را در راستای ساعد نگه دار و دامنه را کامل طی کن. قفل‌های میله را ببند و مسیر میله را ثابت نگه دار.",
     gif: "/gifs/catalog/cat-0104.gif",
   },
   {
@@ -987,6 +1093,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "forearms",
     muscle: "ساعد",
     equipment: "دمبل",
+    tip: "ساعد را ثابت روی ران نگه دار و فقط مچ را حرکت بده. مچ را در راستای ساعد نگه دار و دامنه را کامل طی کن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-0364.gif",
   },
   {
@@ -996,6 +1103,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "forearms",
     muscle: "ساعد",
     equipment: "سیم‌کش",
+    tip: "ساعد را ثابت روی ران نگه دار و فقط مچ را حرکت بده. مچ را در راستای ساعد نگه دار و دامنه را کامل طی کن. کشش سیم‌کش را در کل دامنه حفظ کن؛ کشش نباید شل شود.",
     gif: "/gifs/catalog/cat-0224.gif",
   },
   {
@@ -1005,6 +1113,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "forearms",
     muscle: "ساعد",
     equipment: "دستگاه",
+    tip: "فشار را تدریجی زیاد کن و در پایان یک ثانیه نگه دار. مچ را در راستای ساعد نگه دار و دامنه را کامل طی کن. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-2288.gif",
   },
   {
@@ -1014,6 +1123,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "forearms",
     muscle: "ساعد",
     equipment: "اسمیت",
+    tip: "ساعد را ثابت روی ران نگه دار و فقط مچ را حرکت بده. مچ را در راستای ساعد نگه دار و دامنه را کامل طی کن. قفل ایمنی را تنظیم کن و مسیر هادی را دنبال کن.",
     gif: "/gifs/catalog/cat-1426.gif",
   },
   {
@@ -1023,6 +1133,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "forearms",
     muscle: "ساعد",
     equipment: "وزن بدن",
+    tip: "بدن را یک خط صاف نگه دار و آرنج را نزدیک تنه پایین ببر. مچ را در راستای ساعد نگه دار و دامنه را کامل طی کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-1421.gif",
   },
   {
@@ -1032,6 +1143,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "forearms",
     muscle: "ساعد",
     equipment: "کتل‌بل",
+    tip: "میله را نزدیک بدن نگه دار و در گرفتن با پا فشار بده. مچ را در راستای ساعد نگه دار و دامنه را کامل طی کن. دسته را محکم بگیر و مچ را خنثی نگه دار.",
     gif: "/gifs/catalog/cat-0518.gif",
   },
   {
@@ -1041,6 +1153,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "cardio",
     muscle: "هوازی",
     equipment: "دمبل",
+    tip: "ضربان را در محدوده هدف نگه دار و تنفس را منظم کن. دو دمبل را قرینه و همزمان کنترل کن.",
     gif: "/gifs/catalog/cat-1201.gif",
   },
   {
@@ -1050,6 +1163,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "cardio",
     muscle: "هوازی",
     equipment: "دستگاه",
+    tip: "ضربان را در محدوده هدف نگه دار و تنفس را منظم کن. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-2331.gif",
   },
   {
@@ -1059,6 +1173,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "cardio",
     muscle: "هوازی",
     equipment: "وزن بدن",
+    tip: "ضربان را در محدوده هدف نگه دار و تنفس را منظم کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-1160.gif",
   },
   {
@@ -1068,6 +1183,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "cardio",
     muscle: "هوازی",
     equipment: "دستگاه",
+    tip: "ضربان را در محدوده هدف نگه دار و تنفس را منظم کن. صندلی و دسته دستگاه را روی مفصل خودت تنظیم کن.",
     gif: "/gifs/catalog/cat-3666.gif",
   },
   {
@@ -1077,6 +1193,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "cardio",
     muscle: "هوازی",
     equipment: "وزن بدن",
+    tip: "زانوی عقب را تا نزدیک زمین پایین ببر و تنه را عمود نگه دار. ضربان را در محدوده هدف نگه دار و تنفس را منظم کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3655.gif",
   },
   {
@@ -1086,6 +1203,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "cardio",
     muscle: "هوازی",
     equipment: "وزن بدن",
+    tip: "تا موازی شدن ران پایین برو و کمر را در تمام دامنه خنثی نگه دار. ضربان را در محدوده هدف نگه دار و تنفس را منظم کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3222.gif",
   },
   {
@@ -1095,6 +1213,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "cardio",
     muscle: "هوازی",
     equipment: "وزن بدن",
+    tip: "ضربان را در محدوده هدف نگه دار و تنفس را منظم کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3672.gif",
   },
   {
@@ -1104,6 +1223,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "cardio",
     muscle: "هوازی",
     equipment: "وزن بدن",
+    tip: "ضربان را در محدوده هدف نگه دار و تنفس را منظم کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3636.gif",
   },
   {
@@ -1113,6 +1233,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "cardio",
     muscle: "هوازی",
     equipment: "وزن بدن",
+    tip: "ضربان را در محدوده هدف نگه دار و تنفس را منظم کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3638.gif",
   },
   {
@@ -1122,6 +1243,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleKey: "cardio",
     muscle: "هوازی",
     equipment: "وزن بدن",
+    tip: "ضربان را در محدوده هدف نگه دار و تنفس را منظم کن. بدون تاب دادن بدن، کنترل کامل روی دامنه داشته باش.",
     gif: "/gifs/catalog/cat-3224.gif",
   },
 ];

@@ -17,7 +17,8 @@
     "android:icons": "node scripts/gen-android-icons.mjs",
     "gifs": "node scripts/download-dataset-gifs.mjs",
     "library": "node scripts/build-exercise-library.mjs",
-    "icons": "node scripts/gen-icons.mjs"
+    "icons": "node scripts/gen-icons.mjs",
+    "keystore": "node scripts/ensure-keystore.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",

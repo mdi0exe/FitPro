@@ -208,7 +208,7 @@ export function renderLanguageStudyCard(): HTMLElement {
       current.completedDates.push(day);
       persist(0);
     }
-    toast(`🎉 جلسه ${current.title} تمام شد! خسته نباشی 📚`);
+    toast(`جلسه ${current.title} ثبت شد.`);
     requestRender();
   };
   card.append(timerBox);

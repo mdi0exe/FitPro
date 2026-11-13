@@ -115,8 +115,11 @@ const goToUni = async (page) => {
   // Read after the frame: `scrollY` right after `scrollTo` is not reliable.
   const scrollBefore = await page.evaluate(() => Math.round(window.scrollY));
 
-  // This button triggers a full `requestRender()` from inside the same tab.
+  // The swap button opens the picker; its curated row then triggers a full
+  // `requestRender()` from inside the same tab.
   await clickSelector(page, 'button[aria-label="حرکت جایگزین"]');
+  await wait(400);
+  await clickSelector(page, 'button[aria-label="جایگزین پیشنهادی"]');
   await wait(700);
 
   const after = await page.evaluate(() => {
@@ -169,11 +172,25 @@ const goToUni = async (page) => {
   const editButtons = await page.$$('button[aria-label^="ویرایش "]');
   check("every session has an edit button", editButtons.length === 6, String(editButtons.length));
 
-  // Switch to the even (**) week: the odd-only VLSI class must grey out.
-  await clickText(page, "هفته دوستاره");
+  // Move to the even (**) week: the odd-only VLSI class must grey out.
+  // The manual switch is gone — parity now comes from the term anchor date, so
+  // the test advances the anchor by one week instead.
+  const openedAnchor = await clickSelector(page, 'button[aria-label="تنظیم شماره هفته ترم"]');
+  check("term week modal opens", openedAnchor === true);
+  await wait(400);
+  await clickSelector(page, 'button[aria-label="هفته بعد"]');
+  await wait(250);
+  // The modal lives in `#overlay-root`, outside `#app`, so the text search has
+  // to be scoped to it.
+  await clickText(page, "ذخیره", await page.$("#overlay-root"));
   await wait(600);
   saved = await readState(page);
-  check("week switch is saved", saved.semesterWeekType === "even", saved.semesterWeekType);
+  check(
+    "term anchor date is stored",
+    typeof saved.semesterWeekAnchorDate === "string" && saved.semesterWeekAnchorDate.length === 10,
+    String(saved.semesterWeekAnchorDate),
+  );
+  check("week parity is derived", saved.semesterWeekType === "even", saved.semesterWeekType);
   const evenText = await page.$eval("#view", (node) => node.textContent);
   check("odd-week class is marked as not this week", evenText.includes("این هفته تشکیل نمی‌شود"));
 

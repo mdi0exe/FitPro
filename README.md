@@ -173,6 +173,8 @@ adb install -r app-universal-debug.apk
 ```bash
 node scripts/gen-icons.mjs       # رندر SVG با Edge + تمام آیکون‌ها (PNG/ICO/ICNS/mipmap)
 node scripts/patch-android-manifest.mjs  # افزودن مجوزهای آلارم دقیق به مانیفست تولیدشده
+node scripts/ensure-keystore.mjs # ساخت کلید ثابت دیباگ در src-tauri/keystore (یک‌بار؛ در گیت کامیت می‌شود)
+node scripts/build-exercise-library.mjs  # ساخت کاتالوگ ۱۲۰ حرکتی + GIF + نکته فارسی هر حرکت
 node scripts/serve-dist.mjs      # سرور استاتیک dist روی 127.0.0.1:4400
 node scripts/verify-ui.mjs       # اسکرین‌شات هر تب با Edge headless + گزارش خطاها
 node scripts/e2e-check.mjs       # تست عملکردی: ثبت ست، تایمر، افزایش وزنه، ویرایش، ذخیره‌سازی
@@ -181,6 +183,7 @@ node scripts/e2e-water.mjs       # تست تغذیه، شمارنده آب و م
 node scripts/e2e-audio.mjs       # تست صداهای MP3، گین‌ها، ویبره و مسیر جایگزین
 node scripts/e2e-calendar.mjs    # تست تقویم هفته، کارنامه روزانه و اتصال نوتیفیکیشن
 node scripts/e2e-uni.mjs         # تست تب دانشگاه، رادار سرویس و ابزارهای باشگاه
+node scripts/e2e-v5.mjs          # تست کلید APK، هدر SVG، هفته خودکار، اشتراک تفکیک‌شده، AI، تاریخچه
 ```
 
 `verify-ui.mjs` و `e2e-check.mjs` از `puppeteer-core` و مرورگر Edge نصب‌شده روی ویندوز استفاده می‌کنند (بدون دانلود مرورگر جداگانه).

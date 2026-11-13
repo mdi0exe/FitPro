@@ -8,6 +8,12 @@ import { fa, faNum, isoToday } from "./fa";
 import { getState, persist, requestRender } from "./store";
 import type { Exercise, Readiness, WorkoutDay } from "../types";
 import { openModal, toast } from "../components/ui";
+import {
+  CATALOG_MUSCLES,
+  catalogByMuscle,
+  EXERCISE_CATALOG,
+  type CatalogExercise,
+} from "../data/exerciseCatalog";
 import { beep, softTap, vibrate } from "./timer";
 
 // ---------------------------------------------------------------------------
@@ -308,6 +314,179 @@ export function restoreOriginalExercise(exercise: Exercise): void {
 }
 
 /**
+ * Which catalog muscle group an exercise belongs to.
+ *
+ * Exact name matches are reliable for the bundled programme, but a custom
+ * exercise ("پرس سینه دستگاه") only shares words, so the fallback scores every
+ * catalog entry by word overlap and takes the muscle that wins most often.
+ */
+function guessMuscleKey(exercise: Exercise): string {
+  const direct =
+    EXERCISE_CATALOG.find((item) => item.name === exercise.name) ??
+    EXERCISE_CATALOG.find(
+      (item) => exercise.query && item.english.toLowerCase() === exercise.query.toLowerCase(),
+    );
+  if (direct) return direct.muscleKey;
+
+  const words = exercise.name.split(/\s+/).filter((word) => word.length > 2);
+  const scores = new Map<string, number>();
+  for (const item of EXERCISE_CATALOG) {
+    let hits = 0;
+    for (const word of words) {
+      if (item.name.includes(word)) hits += 1;
+    }
+    if (hits === 0) continue;
+    // Squared so a two-word match clearly beats two one-word matches.
+    scores.set(item.muscleKey, (scores.get(item.muscleKey) ?? 0) + hits * hits);
+  }
+
+  let best = "chest";
+  let bestScore = 0;
+  for (const [key, value] of scores) {
+    if (value > bestScore) {
+      best = key;
+      bestScore = value;
+    }
+  }
+  return best;
+}
+
+/** Applies a catalog movement as today's substitute, remembering the original. */
+function applyCatalogSwap(exercise: Exercise, item: CatalogExercise): void {
+  // Only capture the original on the first swap of the day, otherwise a second
+  // pick would store the substitute as "the original".
+  if (!exercise.originalName) {
+    exercise.originalName = exercise.name;
+    exercise.originalQuery = exercise.query;
+    exercise.originalGifUrl = exercise.gifUrl ?? null;
+    exercise.originalTip = exercise.tip;
+  }
+  exercise.swappedDate = isoToday();
+  exercise.name = item.name;
+  exercise.query = item.english;
+  exercise.gifUrl = item.gif;
+  exercise.tip = item.tip;
+
+  softTap();
+  persist(0);
+  toast(`حرکت امروز: «${item.name}» — فردا خودکار به حرکت اصلی برمی‌گردد.`);
+  requestRender();
+}
+
+/**
+ * Busy-machine picker.
+ *
+ * The old one-tap swap jumped to a single hardcoded alternative, which is
+ * useless when that machine is *also* busy. This lists every same-muscle
+ * movement from the 120-item catalog with its GIF and its coaching cue, so the
+ * student can pick whatever is actually free — plus the curated one-tap
+ * suggestion, plus a way back to the programmed movement.
+ */
+export function openSwapExerciseModal(exercise: Exercise): void {
+  const swapped = isExerciseSwapped(exercise);
+  const muscleKey = guessMuscleKey(exercise);
+  const muscle = CATALOG_MUSCLES.find((entry) => entry.key === muscleKey);
+  const curated = ALTERNATIVE_MOVES[exercise.id];
+  const options = catalogByMuscle(muscleKey).filter(
+    (item) => item.name !== exercise.name && item.name !== exercise.originalName,
+  );
+
+  const body = el("div", "space-y-2");
+  body.append(
+    el(
+      "p",
+      "text-[11px] leading-6 text-slate-400",
+      `دستگاه شلوغ است؟ یک حرکت از گروه «${escapeHtml(muscle?.label ?? "هم‌گروه")}» انتخاب کن. جایگزینی فقط برای امروز است و فردا خودکار به برنامه برمی‌گردد.`,
+    ),
+  );
+
+  const handle = openModal({
+    title: "جایگزین حرکت امروز",
+    subtitle: swapped ? `در حال اجرا: ${exercise.name}` : exercise.name,
+    body,
+    footer: btn("btn-ghost w-full", "بستن", () => handle.close()),
+  });
+
+  // Curated one-tap suggestion first: it is the only option that ships with a
+  // hand-picked demo GIF and a matching cue.
+  if (curated) {
+    const quick = btn(
+      "flex w-full items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-right transition active:scale-[0.99]",
+      "",
+      () => {
+        if (isExerciseSwapped(exercise)) restoreOriginalExercise(exercise);
+        swapBusyExercise(exercise);
+        handle.close();
+      },
+      { "aria-label": "جایگزین پیشنهادی" },
+    );
+    const info = el("div", "min-w-0 flex-1");
+    info.append(
+      el("p", "text-[10px] font-bold text-emerald-300", "پیشنهاد آماده (یک لمس)"),
+      el("p", "mt-0.5 text-[11px] font-extrabold text-slate-100", escapeHtml(curated.name)),
+      el("p", "mt-0.5 text-[10px] leading-5 text-slate-400", escapeHtml(curated.tip)),
+    );
+    quick.append(info);
+    body.append(quick);
+  }
+
+  body.append(
+    el("p", "mt-1 text-[10px] font-bold text-slate-300", `همه حرکت‌های ${escapeHtml(muscle?.label ?? "")}`),
+  );
+
+  if (options.length === 0) {
+    body.append(
+      el(
+        "div",
+        "rounded-xl border border-dashed border-slate-800 bg-slate-900/40 px-3 py-4 text-center text-[10px] text-slate-500",
+        "برای این گروه حرکتی در کتابخانه پیدا نشد.",
+      ),
+    );
+  }
+
+  const list = el("div", "max-h-[42vh] space-y-1.5 overflow-y-auto pr-1");
+  for (const item of options) {
+    const row = btn(
+      "flex w-full items-start gap-2 rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-right transition active:scale-[0.99]",
+      "",
+      () => {
+        applyCatalogSwap(exercise, item);
+        handle.close();
+      },
+      { "aria-label": `انتخاب ${item.name}` },
+    );
+    const img = el("img", "h-12 w-12 shrink-0 rounded-lg bg-slate-900 object-cover");
+    img.src = item.gif;
+    img.alt = item.name;
+    img.loading = "lazy";
+    img.decoding = "async";
+    const info = el("div", "min-w-0 flex-1");
+    info.append(
+      el("p", "text-[11px] font-extrabold leading-5 text-slate-100", escapeHtml(item.name)),
+      el("p", "mt-0.5 text-[9px] text-slate-500", `${escapeHtml(item.equipment)} • ${escapeHtml(item.muscle)}`),
+      el("p", "mt-1 text-[10px] leading-5 text-slate-400", escapeHtml(item.tip)),
+    );
+    row.append(img, info);
+    list.append(row);
+  }
+  body.append(list);
+
+  if (swapped) {
+    body.append(
+      btn(
+        "btn-ghost mt-1 w-full py-2 text-[11px]",
+        "بازگشت به حرکت اصلی",
+        () => {
+          restoreOriginalExercise(exercise);
+          handle.close();
+        },
+        { "aria-label": "بازگشت به حرکت برنامه" },
+      ),
+    );
+  }
+}
+
+/**
  * Restores every exercise that was swapped on an earlier calendar day.
  * Returns `true` when something changed so the caller can persist + re-render.
  */
@@ -575,10 +754,10 @@ export function openWorkoutFinishModal(day: WorkoutDay): void {
   vibrate([200, 80, 200, 80, 400]);
 
   const handle = openModal({
-    title: "🎉 خسته نباشی قهرمان!",
+    title: "عملکرد امروز ثبت شد",
     subtitle: "خلاصه عملکرد امروز",
     body,
-    footer: btn("btn-primary w-full", "بستن 💪", () => handle.close()),
+    footer: btn("btn-primary w-full", "بستن", () => handle.close()),
   });
 }
 

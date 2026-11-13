@@ -207,7 +207,15 @@ check(
 );
 
 const nameBefore = saved.days[0].exercises[0].name;
+// The button now opens the same-muscle picker; its first row is the curated
+// one-tap suggestion, which is the old behaviour.
 await clickExact("🔄 دستگاه شلوغه / جایگزین");
+await wait(500);
+const pickedQuick = await page.$eval(
+  'button[aria-label="جایگزین پیشنهادی"]',
+  (node) => node.click() || true,
+).catch(() => false);
+check("swap picker opens with a curated option", pickedQuick === true);
 await wait(700);
 saved = await state();
 check(
@@ -238,7 +246,7 @@ check(
 await clickExact("🏁 ثبت پایان تمرین امروز");
 await wait(800);
 const finishText = await overlayText();
-check("finish celebration opens", finishText.includes("خسته نباشی"), finishText.slice(0, 60));
+check("finish celebration opens", finishText.includes("عملکرد امروز"), finishText.slice(0, 60));
 check("finish modal reports tonnage", finishText.includes("حجم کل"), finishText.slice(0, 80));
 await page.keyboard.press("Escape");
 await wait(400);

@@ -29,9 +29,14 @@ import {
   personalRecordFor,
   renderReadinessAndToolsBar,
   restoreOriginalExercise,
-  swapBusyExercise,
+  openSwapExerciseModal,
 } from "../lib/workoutTools";
 import { syncLogs } from "../lib/localBackend";
+import { openExerciseHistoryModal, recordExerciseHistory } from "../components/exerciseHistory";
+import {
+  openDoubleProgressionModal,
+  reachedTopOfRange,
+} from "../components/doubleProgression";
 
 const OVERLOAD_CYCLE_DAYS = 14;
 const collapsedDays = new Set<string>();
@@ -232,7 +237,7 @@ async function runOverload(): Promise<void> {
   try {
     const next = await applyProgressiveOverload();
     setState(next);
-    toast("چرخه افزایش وزنه اعمال شد. سنگین‌تر بزن! 💪");
+    toast("چرخه افزایش وزنه اعمال شد.");
     // beep() owns its vibration now; no second vibrate() here.
     beep(3, 1480, 0.15);
     requestRender();
@@ -560,6 +565,10 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
         },
       }),
     ),
+    btn("btn-icon", svgIcon(icons.chart, "h-4 w-4"), () => openExerciseHistoryModal(exercise), {
+      "aria-label": "تاریخچه این حرکت",
+      title: "روند وزن و تکرار این حرکت",
+    }),
     btn("btn-icon", svgIcon(icons.more, "h-4 w-4"), () => openExerciseMenu(day, exercise, index), {
       "aria-label": "گزینه‌های حرکت",
     }),
@@ -580,7 +589,7 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
       : btn(
           "rounded-xl border border-slate-800 bg-slate-950 px-2 py-1.5 text-[10px] font-bold text-slate-300 transition active:scale-95",
           "🔄 دستگاه شلوغه / جایگزین",
-          () => swapBusyExercise(exercise),
+          () => openSwapExerciseModal(exercise),
           { "aria-label": "حرکت جایگزین" },
         ),
     btn(
@@ -758,6 +767,10 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     }`;
 
     if (log.done) {
+      // Fold today's top set into the per-exercise progression log before the
+      // audio cue: the chart and the double-progression step both read it.
+      recordExerciseHistory(exercise);
+
       // Record the PR before the audio cue; a re-render puts the 🏆 chip up.
       if (checkAndUpdatePR(exercise, log.weight, log.reps)) {
         persist(0);
@@ -768,8 +781,11 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
       // the regular bell, so the two real MP3s never overlap.
       const allDone =
         exercise.logs.length > 0 && exercise.logs.every((entry) => entry.done);
-      if (allDone) chord();
-      else beep(2, 1320, 0.12);
+      if (allDone) {
+        chord();
+        // Once per exercise per day: ask what the next session should be.
+        offerDoubleProgression(exercise);
+      } else beep(2, 1320, 0.12);
       startRest();
     }
     refreshProgress(day, exercise);
@@ -782,6 +798,17 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
 
   row.append(label, weight.element, reps.element, check);
   return row;
+}
+
+/** Exercises already asked about today (in-memory: one prompt per session). */
+const progressionAsked = new Set<string>();
+
+/** Asks the double-progression question once per exercise per day. */
+function offerDoubleProgression(exercise: Exercise): void {
+  const key = `${exercise.id}:${isoToday()}`;
+  if (progressionAsked.has(key)) return;
+  progressionAsked.add(key);
+  openDoubleProgressionModal(exercise, reachedTopOfRange(exercise));
 }
 
 /** One tap sets the same weight (or reps) for every set of the exercise. */

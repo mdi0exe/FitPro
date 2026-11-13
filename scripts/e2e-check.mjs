@@ -85,8 +85,10 @@ check("bodyweight reps incremented", repsText.some((t) => t.includes("تا")) ||
 
 // --- 4. exercise editing ---------------------------------------------------
 const cards = await page.$$("[data-exercise]");
-const menuButtons = await cards[0].$$(".btn-icon");
-await menuButtons[1].click();
+// Addressed by aria-label: the card now carries a history button too, so the
+// index of the overflow menu is not stable.
+const menuButton = await cards[0].$('.btn-icon[aria-label="گزینه‌های حرکت"]');
+await menuButton.click();
 await wait(400);
 const openedEditor = await clickByText("button", "ویرایش حرکت");
 check("exercise menu opens editor", openedEditor);

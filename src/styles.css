@@ -125,8 +125,18 @@
     @apply btn border border-rose-500/40 bg-rose-500/10 text-rose-300;
   }
 
+  /* Square icon button. `p-0` + `leading-none` + a block-level SVG are what make
+     the glyph optically dead-centre: any line-height or padding on the flex box
+     shifts the icon a pixel or two off axis, which is very visible next to the
+     weight chip. */
   .btn-icon {
-    @apply inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-900/70 text-slate-300 transition active:scale-90;
+    @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-900/70 p-0 leading-none text-slate-300 transition active:scale-90;
+  }
+
+  .btn-icon > svg {
+    display: block;
+    margin: auto;
+    flex: none;
   }
 
   .field {

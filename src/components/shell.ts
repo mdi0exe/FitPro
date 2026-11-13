@@ -44,18 +44,28 @@ export function renderHeader(): HTMLElement {
 
   const row = el("div", "flex items-center justify-between gap-2");
   const titles = el("div", "min-w-0 flex-1");
-  titles.append(
+  // Formal header: no emoji in the greeting. The active mode is carried by the
+  // subtitle line, which uses a real stroke icon instead of a pictogram.
+  const subtitle = el(
+    "p",
+    "flex items-center gap-1.5 truncate text-[10px] font-medium text-emerald-400/80",
+  );
+  subtitle.append(svgIcon(uniOnly ? icons.graduation : icons.dumbbell, "h-3 w-3 shrink-0"));
+  subtitle.append(
     el(
-      "p",
-      "truncate text-[10px] font-medium text-emerald-400/80",
+      "span",
+      "truncate",
       uniOnly
-        ? `🎓 ${escapeHtml(profile.universityName)} • برنامهریزی دانشگاه`
+        ? `${escapeHtml(profile.universityName)} • برنامه‌ریزی دانشگاه`
         : `هایپرتروفی دانشجویی • ${program.daysPerWeekLabel}`,
     ),
+  );
+  titles.append(
+    subtitle,
     el(
       "h1",
       "truncate text-base font-extrabold text-slate-50",
-      `سلام ${escapeHtml(profile.name)} ${uniOnly ? "🎓" : "💪"}`,
+      `سلام ${escapeHtml(profile.name)}`,
     ),
   );
 
@@ -68,8 +78,8 @@ export function renderHeader(): HTMLElement {
     { title: "ثبت وزن", "aria-label": "ثبت وزن" },
   );
   const themeBtn = btn(
-    "btn-icon h-9 w-9 shrink-0 text-base",
-    state.theme === "light" ? "🌙" : "☀️",
+    "btn-icon shrink-0",
+    svgIcon(state.theme === "light" ? icons.moon : icons.sun, "h-5 w-5"),
     () => {
       state.theme = state.theme === "light" ? "dark" : "light";
       applyTheme();
@@ -79,8 +89,8 @@ export function renderHeader(): HTMLElement {
     { title: "تغییر حالت روشن / تیره", "aria-label": "تغییر حالت روشن یا تیره" },
   );
   const settingsBtn = btn(
-    "btn-icon h-9 w-9 shrink-0 text-base",
-    "⚙️",
+    "btn-icon shrink-0",
+    svgIcon(icons.settings, "h-5 w-5"),
     () => openOnboardingModal(),
     { title: "تنظیم پروفایل و حالت برنامه", "aria-label": "تنظیم پروفایل و حالت برنامه" },
   );
@@ -96,12 +106,20 @@ export function renderHeader(): HTMLElement {
       "div",
       "mt-2 flex items-center justify-between gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/5 px-2.5 py-1.5",
     );
+    const langTitle = el(
+      "span",
+      "flex min-w-0 items-center gap-1.5 text-[10px] font-bold text-cyan-300",
+    );
+    langTitle.append(
+      svgIcon(icons.book, "h-3 w-3 shrink-0"),
+      el("span", "truncate", escapeHtml(lang.title)),
+    );
     infoRow.append(
-      el("span", "truncate text-[10px] font-bold text-cyan-300", `📚 ${escapeHtml(lang.title)}`),
+      langTitle,
       el(
         "span",
         "shrink-0 text-[9px] text-slate-400",
-        `${doneToday ? "✅ انجام شد" : "⏳ امروز"} • ${fa(lang.targetMinutes)} دقیقه`,
+        `${doneToday ? "انجام شد" : "امروز"} • ${fa(lang.targetMinutes)} دقیقه`,
       ),
     );
     inner.append(row, infoRow);
@@ -243,7 +261,7 @@ async function submit(value: number, close: () => void): Promise<void> {
     const next = await logBodyWeight(value);
     setState(next);
     close();
-    toast("وزن ثبت شد ✅");
+    toast("وزن ثبت شد.");
     requestRender();
   } catch (error) {
     toast(error instanceof Error ? error.message : "ثبت وزن ناموفق بود.", "error");

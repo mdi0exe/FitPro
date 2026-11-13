@@ -136,7 +136,7 @@ export function openOnboardingModal(): void {
   const nameInput = el("input", "field text-right text-sm");
   nameInput.type = "text";
   nameInput.placeholder = "نام شما (مثلاً: مهدی)";
-  nameInput.value = state.profile.name || "دانشجوی ورزشکار";
+  nameInput.value = state.profile.name || "کاربر";
 
   const uniInput = el("input", "field text-right text-sm");
   uniInput.type = "text";
@@ -257,7 +257,7 @@ export function openOnboardingModal(): void {
     "✅ ذخیره و ورود به برنامه",
     () => {
       state.appMode = appMode;
-      state.profile.name = nameInput.value.trim() || "دانشجوی ورزشکار";
+      state.profile.name = nameInput.value.trim() || "کاربر";
       state.profile.universityName = uniInput.value.trim() || "دانشگاه من";
       state.profile.currentWeight = currentWeight;
       state.profile.startWeight = currentWeight;

@@ -11,40 +11,76 @@ import type { AppStateData } from "../types";
 import { confirmDialog, sectionTitle, toast } from "../components/ui";
 import { renderBackupRestoreCard } from "../components/progressPhotos";
 import { openOnboardingModal } from "../components/onboarding";
+import { hasAiDietPlan, openAiDietConfigurator } from "../components/aiDietConfigurator";
 
 export function renderCoach(): HTMLElement {
   const view = el("div", "space-y-3 animate-fade-up");
 
+  // The intro card must describe what is actually below it: three fixed rules
+  // for a fresh install, or however many the AI wrote.
+  const aiRules = getState().diet.coachRules ?? [];
   view.append(
     el(
       "div",
       "card border-amber-500/25 bg-gradient-to-bl from-amber-500/10 via-slate-900/60 to-transparent",
       `<p class="text-[10px] font-bold text-amber-300/90">دفترچه مربی</p>
-       <p class="mt-1 text-base font-extrabold text-slate-50">۳ قانون طلایی که رشدت را تعیین می‌کند</p>
-       <p class="mt-1 text-[11px] leading-6 text-slate-400">
-         تمرین فقط محرک است؛ رشد در تغذیه، خواب و ریکاوری اتفاق می‌افتد. این سه قانون را هر روز رعایت کن.
-       </p>`,
+       <p class="mt-1 text-base font-extrabold text-slate-50">${
+         aiRules.length > 0
+           ? `قواعد مربی برنامه تو (${fa(aiRules.length)} مورد)`
+           : "۳ قانون طلایی که رشدت را تعیین می‌کند"
+       }</p>
+       <p class="mt-1 text-[11px] leading-6 text-slate-400">${
+         aiRules.length > 0
+           ? "این قواعد را هوش مصنوعی بر اساس هدف، ساعت تمرین و غذاهای در دسترس تو نوشته است."
+           : "تمرین فقط محرک است؛ رشد در تغذیه، خواب و ریکاوری اتفاق می‌افتد. این سه قانون را هر روز رعایت کن."
+       }</p>`,
     ),
   );
 
-  view.append(ruleCard("⏰", "بهترین زمان تمرین", "۱٫۵ ساعت قبل از شام سلف", [
-    "چون میان‌وعده نداری، بهترین تایم باشگاه ۱.۵ ساعت قبل از شام سلف است تا شامِ مرغ یا جوجه‌ات دقیقاً نقش وعده بعد از تمرین را بازی کند!",
-    "با این تایم، ناهار سلف هم گلیکوژن لازم برای تمرین را تامین می‌کند.",
-    "صبح ناشتا تمرین نکن؛ بدن در آن حالت برای تامین انرژی سراغ عضله می‌رود.",
-  ], "amber"));
+  // An AI-built plan replaces the three built-in rules: they were
+  // written for one specific campus diet and do not fit every student.
+  if (aiRules.length > 0) {
+    aiRules.forEach((rule, index) => {
+      view.append(
+        ruleCard(
+          "",
+          rule.title,
+          rule.headline,
+          rule.points,
+          index === 0 ? "amber" : index === 1 ? "cyan" : "emerald",
+        ),
+      );
+    });
+  } else {
+    view.append(ruleCard("⏰", "بهترین زمان تمرین", "۱٫۵ ساعت قبل از شام سلف", [
+      "چون میان‌وعده نداری، بهترین تایم باشگاه ۱.۵ ساعت قبل از شام سلف است تا شامِ مرغ یا جوجه‌ات دقیقاً نقش وعده بعد از تمرین را بازی کند!",
+      "با این تایم، ناهار سلف هم گلیکوژن لازم برای تمرین را تامین می‌کند.",
+      "صبح ناشتا تمرین نکن؛ بدن در آن حالت برای تامین انرژی سراغ عضله می‌رود.",
+    ], "amber"));
 
-  view.append(ruleCard("🚿", "قانون دوش بعد از تمرین", "فقط آب ولرم رو به گرم", [
-    "دوش آب سرد یا یخ بعد از بدنسازی، التهاب مفید عضله را خاموش می‌کند.",
-    "همین التهاب کنترل‌شده موتور هایپرتروفی است؛ با سرما آن را می‌کشی.",
-    "آب گرم عضلات را شل می‌کند، کوفتگی را کم می‌کند و خواب را بهتر می‌کند.",
-  ], "cyan"));
+    view.append(ruleCard("🚿", "قانون دوش بعد از تمرین", "فقط آب ولرم رو به گرم", [
+      "دوش آب سرد یا یخ بعد از بدنسازی، التهاب مفید عضله را خاموش می‌کند.",
+      "همین التهاب کنترل‌شده موتور هایپرتروفی است؛ با سرما آن را می‌کشی.",
+      "آب گرم عضلات را شل می‌کند، کوفتگی را کم می‌کند و خواب را بهتر می‌کند.",
+    ], "cyan"));
 
-  view.append(ruleCard("🔥", "قانون گرم کردن", "پویا، نه کشش ایستا", [
-    "هرگز قبل از وزنه زدن، کشش ایستا (ثابت نگه داشتن عضله) انجام نده؛ قدرت را کم می‌کند.",
-    "فقط گرم کردن پویا که بالای هر روز تمرینی برایت گذاشته شده را اجرا کن.",
-    "۲ ست گرم‌کردنی از حرکت اول با ۵۰٪ وزنه کاری، بهترین محافظ مفاصل است.",
-  ], "emerald"));
+    view.append(ruleCard("🔥", "قانون گرم کردن", "پویا، نه کشش ایستا", [
+      "هرگز قبل از وزنه زدن، کشش ایستا (ثابت نگه داشتن عضله) انجام نده؛ قدرت را کم می‌کند.",
+      "فقط گرم کردن پویا که بالای هر روز تمرینی برایت گذاشته شده را اجرا کن.",
+      "۲ ست گرم‌کردنی از حرکت اول با ۵۰٪ وزنه کاری، بهترین محافظ مفاصل است.",
+    ], "emerald"));
+  }
 
+  view.append(
+    btn(
+      "btn-ghost w-full border-dashed py-2 text-[11px]",
+      hasAiDietPlan()
+        ? "ویرایش برنامه تغذیه و قواعد مربی با هوش مصنوعی"
+        : "ساخت برنامه تغذیه و قواعد مربی با هوش مصنوعی",
+      () => openAiDietConfigurator(),
+      { "aria-label": "ساخت برنامه تغذیه و قواعد مربی با هوش مصنوعی" },
+    ),
+  );
   view.append(overloadCard());
   view.append(settingsCard());
   view.append(renderBackupRestoreCard());
@@ -72,8 +108,9 @@ function ruleCard(
 
   const card = el("div", `card ${toneMap[tone]}`);
   const head = el("div", "flex items-start gap-3");
+  // AI-built rules carry no emoji; the text block then takes the full width.
+  if (emoji) head.append(el("span", "text-xl leading-none", emoji));
   head.append(
-    el("span", "text-xl leading-none", emoji),
     el("div", "min-w-0 flex-1", `<p class="text-xs font-extrabold text-slate-100">${escapeHtml(title)}</p>
        <p class="mt-1 text-[11px] font-bold ${headMap[tone]}">${escapeHtml(headline)}</p>`),
   );

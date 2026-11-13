@@ -52,7 +52,7 @@ pub fn default_program_id() -> String {
 impl Default for UserProfile {
     fn default() -> Self {
         Self {
-            name: "دانشجوی ورزشکار".to_string(),
+            name: "کاربر".to_string(),
             age: 25,
             height_cm: 179.0,
             start_weight: 65.0,
@@ -247,6 +247,42 @@ pub struct DietState {
     /// Persisted so closing the app never restarts the countdown.
     #[serde(default)]
     pub water_reminder_next_at: i64,
+    /// AI-set daily energy target; `None` = computed from body weight.
+    #[serde(default)]
+    pub custom_calories: Option<u32>,
+    /// AI-set daily protein target (grams).
+    #[serde(default)]
+    pub custom_protein: Option<u32>,
+    /// AI meal table; empty = the built-in cafeteria table.
+    #[serde(default)]
+    pub meal_table: Vec<MealRow>,
+    /// AI coach rules; empty = the three built-in golden rules.
+    #[serde(default)]
+    pub coach_rules: Vec<CoachRule>,
+}
+
+/// One row of the AI-built meal table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MealRow {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub kcal: u32,
+    #[serde(default)]
+    pub protein: u32,
+}
+
+/// One rule card produced by the AI coach.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoachRule {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub headline: String,
+    #[serde(default)]
+    pub points: Vec<String>,
 }
 
 /// Default smart-reminder interval (minutes).
@@ -297,6 +333,22 @@ pub struct Milestone {
     pub text: String,
     /// "overload" | "weight" | "system" | "goal"
     pub kind: String,
+}
+
+/// One recorded session of a single exercise (top set of that day).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ExerciseHistoryEntry {
+    /// ISO date: YYYY-MM-DD
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub weight: f64,
+    #[serde(default)]
+    pub reps: u32,
+    /// How many sets were ticked that day.
+    #[serde(default)]
+    pub sets_completed: u32,
 }
 
 /// One day's snapshot for the weekly calendar.
@@ -435,6 +487,24 @@ fn is_hhmm(value: &str) -> bool {
     let hour = value[0..2].parse::<u32>().unwrap_or(99);
     let minute = value[3..5].parse::<u32>().unwrap_or(99);
     hour < 24 && minute < 60
+}
+
+/// `YYYY-MM-DD`, the only date shape the app stores.
+fn is_iso_date(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+        return false;
+    }
+    let digits_ok = bytes
+        .iter()
+        .enumerate()
+        .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit());
+    if !digits_ok {
+        return false;
+    }
+    let month = value[5..7].parse::<u32>().unwrap_or(0);
+    let day = value[8..10].parse::<u32>().unwrap_or(0);
+    (1..=12).contains(&month) && (1..=31).contains(&day)
 }
 
 // ---------------------------------------------------------------------------
@@ -581,6 +651,9 @@ pub struct AppStateData {
     /// `serde(default)` keeps every older saved file loading unchanged.
     #[serde(default)]
     pub activity_history: Vec<DailyActivity>,
+    /// Per-exercise progression log, keyed by exercise id (oldest first).
+    #[serde(default)]
+    pub exercise_history: std::collections::HashMap<String, Vec<ExerciseHistoryEntry>>,
     /// Deload week is on (weights were lowered for recovery).
     #[serde(default)]
     pub deload_active: bool,
@@ -601,6 +674,10 @@ pub struct AppStateData {
     /// `odd` (`*`) or `even` (`**`): which half of the fortnight is showing.
     #[serde(default = "default_semester_week")]
     pub semester_week_type: String,
+    /// ISO date of the Saturday that starts semester week 1. `None` anchors
+    /// on the current week, so a fresh install starts on an odd week.
+    #[serde(default)]
+    pub semester_week_anchor_date: Option<String>,
     #[serde(default)]
     pub language_study: LanguageStudyState,
     /// Raw JSON imported from the AI shuttle-schedule template.
@@ -657,6 +734,23 @@ impl AppStateData {
         }
 
         // Calendar history: drop junk, keep the newest 90 days, clamp counters.
+        self.exercise_history
+            .retain(|key, rows| !key.is_empty() && !rows.is_empty());
+        for rows in self.exercise_history.values_mut() {
+            rows.retain(|row| !row.date.is_empty());
+            rows.sort_by(|a, b| a.date.cmp(&b.date));
+            // Keep the newest ~4 months per movement.
+            let overflow = rows.len().saturating_sub(120);
+            if overflow > 0 {
+                rows.drain(0..overflow);
+            }
+            for row in rows.iter_mut() {
+                row.weight = (row.weight * 10.0).round() / 10.0;
+                row.weight = row.weight.clamp(0.0, 500.0);
+                row.reps = row.reps.min(200);
+                row.sets_completed = row.sets_completed.min(30);
+            }
+        }
         self.activity_history.retain(|entry| !entry.date.is_empty());
         self.activity_history.sort_by(|a, b| b.date.cmp(&a.date));
         self.activity_history.truncate(90);
@@ -690,6 +784,13 @@ impl AppStateData {
         // ------------------------------------------------- class schedule
         if !matches!(self.semester_week_type.as_str(), "odd" | "even") {
             self.semester_week_type = default_semester_week();
+        }
+        // A malformed anchor would make the week parity jump around, so an
+        // unparseable value is dropped and re-anchored on the current week.
+        if let Some(anchor) = self.semester_week_anchor_date.as_deref() {
+            if !is_iso_date(anchor) {
+                self.semester_week_anchor_date = None;
+            }
         }
         self.courses.retain(|course| !course.name.trim().is_empty());
         for course in self.courses.iter_mut() {
@@ -794,6 +895,34 @@ impl AppStateData {
             }
         }
         self.diet.water_glasses = self.diet.water_glasses.min(20);
+        // AI plan: clamp the numbers so a bad paste cannot make the
+        // dashboard meaningless, and drop empty rows entirely.
+        self.diet.custom_calories = self
+            .diet
+            .custom_calories
+            .filter(|value| (1200..=5000).contains(value));
+        self.diet.custom_protein = self
+            .diet
+            .custom_protein
+            .filter(|value| (60..=320).contains(value));
+        self.diet.meal_table.retain(|row| !row.name.trim().is_empty());
+        self.diet.meal_table.truncate(10);
+        for row in self.diet.meal_table.iter_mut() {
+            row.name = clean_text(&row.name, 80);
+            row.kcal = row.kcal.min(3000);
+            row.protein = row.protein.min(200);
+        }
+        self.diet.coach_rules.retain(|rule| !rule.title.trim().is_empty());
+        self.diet.coach_rules.truncate(4);
+        for rule in self.diet.coach_rules.iter_mut() {
+            rule.title = clean_text(&rule.title, 60);
+            rule.headline = clean_text(&rule.headline, 120);
+            rule.points.retain(|point| !point.trim().is_empty());
+            rule.points.truncate(6);
+            for point in rule.points.iter_mut() {
+                *point = clean_text(point, 220);
+            }
+        }
         if self.diet.water_reminder_minutes < 15 || self.diet.water_reminder_minutes > 240 {
             self.diet.water_reminder_minutes = default_water_interval();
         }
@@ -1090,6 +1219,10 @@ mod tests {
                 water_reminder_enabled: false,
                 water_reminder_minutes: default_water_interval(),
                 water_reminder_next_at: 0,
+                custom_calories: None,
+                custom_protein: None,
+                meal_table: Vec::new(),
+                coach_rules: Vec::new(),
             },
             milestones: Vec::new(),
             last_overload_date: String::new(),
@@ -1097,6 +1230,7 @@ mod tests {
             active_day: 0,
             rest_seconds: DEFAULT_REST_SECONDS,
             activity_history: Vec::new(),
+            exercise_history: std::collections::HashMap::new(),
             deload_active: false,
             readiness: String::new(),
             personal_records: std::collections::HashMap::new(),
@@ -1104,6 +1238,7 @@ mod tests {
             uni_reminders: UniReminders::default(),
             courses: Vec::new(),
             semester_week_type: default_semester_week(),
+            semester_week_anchor_date: None,
             language_study: LanguageStudyState::default(),
             custom_shuttle_json: None,
             theme: default_theme(),
@@ -1268,6 +1403,105 @@ mod tests {
         value.as_object_mut().unwrap().remove("activityHistory");
         let state: AppStateData = serde_json::from_value(value).unwrap();
         assert!(state.activity_history.is_empty());
+    }
+
+    #[test]
+    fn legacy_state_without_exercise_history_loads() {
+        // Saves written before per-exercise history existed must still open.
+        let mut value = serde_json::to_value(crate::storage::seed()).unwrap();
+        value.as_object_mut().unwrap().remove("exerciseHistory");
+        let state: AppStateData = serde_json::from_value(value).unwrap();
+        assert!(state.exercise_history.is_empty());
+    }
+
+    #[test]
+    fn exercise_history_is_sorted_and_capped() {
+        let mut state = crate::storage::seed();
+        let mut rows = Vec::new();
+        // 130 out-of-order days: the newest 120 must survive, oldest first.
+        for day in (0..130).rev() {
+            rows.push(ExerciseHistoryEntry {
+                date: format!("2026-01-{:02}", (day % 28) + 1),
+                weight: 900.0,
+                reps: 500,
+                sets_completed: 99,
+            });
+        }
+        rows.push(ExerciseHistoryEntry {
+            date: "2026-06-01".to_string(),
+            weight: 42.5,
+            reps: 10,
+            sets_completed: 3,
+        });
+        state
+            .exercise_history
+            .insert("d1e1".to_string(), rows.clone());
+        state
+            .exercise_history
+            .insert(String::new(), rows.clone());
+        state.normalize();
+
+        let kept = state.exercise_history.get("d1e1").expect("kept");
+        assert!(kept.len() <= 120, "len {}", kept.len());
+        assert!(kept.windows(2).all(|pair| pair[0].date <= pair[1].date));
+        assert!(kept.iter().all(|row| row.weight <= 500.0));
+        assert!(kept.iter().all(|row| row.reps <= 200));
+        assert!(kept.iter().all(|row| row.sets_completed <= 30));
+        // An empty key is dropped entirely.
+        assert!(!state.exercise_history.contains_key(""));
+    }
+
+    #[test]
+    fn ai_diet_plan_is_clamped() {
+        let mut state = crate::storage::seed();
+        state.diet.custom_calories = Some(90_000);
+        state.diet.custom_protein = Some(3);
+        state.diet.meal_table = vec![
+            MealRow {
+                name: "  ناهار سلف  ".to_string(),
+                kcal: 900,
+                protein: 40,
+            },
+            MealRow {
+                name: "   ".to_string(),
+                kcal: 100,
+                protein: 1,
+            },
+        ];
+        state.diet.coach_rules = vec![CoachRule {
+            title: "قاعده".to_string(),
+            headline: "خلاصه".to_string(),
+            points: vec!["نکته".to_string(), "  ".to_string()],
+        }];
+        state.normalize();
+
+        // Out-of-range targets are dropped, not silently kept as garbage.
+        assert_eq!(state.diet.custom_calories, None);
+        assert_eq!(state.diet.custom_protein, None);
+        assert_eq!(state.diet.meal_table.len(), 1);
+        assert_eq!(state.diet.meal_table[0].name, "ناهار سلف");
+        assert_eq!(state.diet.coach_rules.len(), 1);
+        assert_eq!(state.diet.coach_rules[0].points.len(), 1);
+    }
+
+    #[test]
+    fn semester_week_anchor_date_is_validated() {
+        let mut state = crate::storage::seed();
+        state.semester_week_anchor_date = Some("2026-09-05".to_string());
+        state.normalize();
+        assert_eq!(
+            state.semester_week_anchor_date.as_deref(),
+            Some("2026-09-05")
+        );
+
+        state.semester_week_anchor_date = Some("فردا".to_string());
+        state.normalize();
+        assert_eq!(state.semester_week_anchor_date, None);
+
+        // A month of 13 is not a date, even though the shape is right.
+        state.semester_week_anchor_date = Some("2026-13-01".to_string());
+        state.normalize();
+        assert_eq!(state.semester_week_anchor_date, None);
     }
 
     #[test]

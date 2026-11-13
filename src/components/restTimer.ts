@@ -85,13 +85,13 @@ export function mountRestTimer(): void {
   };
   restTimer.onDone = () => {
     if (caption) {
-      caption.textContent = "استراحت تمام شد — برو ست بعد! 💪";
+      caption.textContent = "استراحت تمام شد. ست بعدی را آغاز کنید.";
       caption.className = "text-[10px] font-bold text-emerald-300";
     }
-    if (timeLabel) timeLabel.textContent = "برو!";
+    if (timeLabel) timeLabel.textContent = "ست بعدی";
     alarm();
     // Reach the user even when the screen is off or another app is open.
-    void pushSystemNotification("💪 استراحت تمام شد!", "وقت اجرای ست بعدی است.");
+    void pushSystemNotification("استراحت تمام شد", "زمان اجرای ست بعدی است.");
     hideHandle = window.setTimeout(() => stopRest(), 3200);
   };
 

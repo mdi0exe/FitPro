@@ -185,14 +185,24 @@ await goNutrition();
 saved = await state();
 const deadline1 = saved.diet.waterReminderNextAt;
 check("reminder stores an absolute deadline", deadline1 > Date.now(), `${deadline1} vs ${Date.now()}`);
+// `+45 min` can land inside the quiet window (00:00–09:00), in which case the
+// reminder is pushed to 09:00 — both outcomes are correct, so the expectation
+// follows the current clock instead of assuming it is daytime.
+const quietPush = new Date(Date.now() + 45 * 60_000).getHours() < 9;
+const remainingMin = Math.round((deadline1 - Date.now()) / 60_000);
 check(
-  "deadline is ~45 minutes ahead",
-  deadline1 > Date.now() + 43 * 60_000 && deadline1 <= Date.now() + 45 * 60_000,
-  String(Math.round((deadline1 - Date.now()) / 60_000)),
+  quietPush ? "deadline is pushed past the quiet window" : "deadline is ~45 minutes ahead",
+  quietPush ? remainingMin > 45 : remainingMin >= 43 && remainingMin <= 45,
+  `${remainingMin} min (quietPush=${quietPush})`,
 );
 
 const before = await countdownSeconds();
-check("countdown reflects the deadline", before > 43 * 60 && before <= 45 * 60, `${before}s`);
+const expectedSeconds = Math.round((deadline1 - Date.now()) / 1000);
+check(
+  "countdown reflects the deadline",
+  Math.abs(before - expectedSeconds) <= 90,
+  `${before}s vs ${expectedSeconds}s`,
+);
 
 await reloadApp();
 await wait(900);

@@ -490,6 +490,10 @@ fn seed_diet() -> DietState {
         water_reminder_enabled: false,
         water_reminder_minutes: default_water_interval(),
         water_reminder_next_at: 0,
+        custom_calories: None,
+        custom_protein: None,
+        meal_table: Vec::new(),
+        coach_rules: Vec::new(),
     }
 }
 
@@ -516,6 +520,7 @@ pub fn seed() -> AppStateData {
         active_day: 0,
         rest_seconds: DEFAULT_REST_SECONDS,
         activity_history: Vec::new(),
+        exercise_history: std::collections::HashMap::new(),
         deload_active: false,
         readiness: "normal".to_string(),
         personal_records: std::collections::HashMap::new(),
@@ -523,6 +528,7 @@ pub fn seed() -> AppStateData {
         uni_reminders: crate::models::UniReminders::default(),
         courses: crate::models::seed_default_courses(),
         semester_week_type: "odd".to_string(),
+        semester_week_anchor_date: None,
         language_study: crate::models::LanguageStudyState::default(),
         custom_shuttle_json: None,
         // A genuine fresh install opens the setup wizard. The browser fallback

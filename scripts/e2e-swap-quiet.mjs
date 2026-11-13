@@ -101,6 +101,11 @@ async function patchStateOnReload(page, mutate) {
   const swapButton = await page.$('button[aria-label="حرکت جایگزین"]');
   check("swap button is rendered", Boolean(swapButton));
   await swapButton.click();
+  await wait(500);
+  // The picker opens first; its first row is the curated one-tap suggestion.
+  const quick = await page.$('button[aria-label="جایگزین پیشنهادی"]');
+  check("swap picker lists a curated suggestion", Boolean(quick));
+  if (quick) await quick.click();
   await wait(700);
 
   let saved = await readState(page);

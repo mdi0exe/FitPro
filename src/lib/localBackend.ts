@@ -56,6 +56,28 @@ export function normalizeState(input: AppStateData): AppStateData {
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 90);
 
+  // Per-exercise progression log. A saved file from before this existed simply
+  // has no key, and a corrupted row must never break the chart.
+  const rawHistory = state.exerciseHistory;
+  const history: typeof state.exerciseHistory = {};
+  if (rawHistory && typeof rawHistory === "object" && !Array.isArray(rawHistory)) {
+    for (const [id, rows] of Object.entries(rawHistory)) {
+      if (!id || !Array.isArray(rows)) continue;
+      const clean = rows
+        .filter((row) => row && typeof row.date === "string" && row.date.length > 0)
+        .map((row) => ({
+          date: row.date,
+          weight: Math.max(0, Math.min(500, Number(row.weight) || 0)),
+          reps: Math.max(0, Math.min(200, Math.round(Number(row.reps) || 0))),
+          setsCompleted: Math.max(0, Math.min(30, Math.round(Number(row.setsCompleted) || 0))),
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-120);
+      if (clean.length > 0) history[id] = clean;
+    }
+  }
+  state.exerciseHistory = history;
+
   // ---------------------------------------------------------- look & modules
   // Runs before the `days.length === 0` short-circuit: a student who turned
   // the gym off still needs a valid theme, mode and university name.
@@ -130,6 +152,12 @@ export function normalizeState(input: AppStateData): AppStateData {
   if (state.semesterWeekType !== "odd" && state.semesterWeekType !== "even") {
     state.semesterWeekType = "odd";
   }
+  // `null`/garbage both mean "anchor on the current week".
+  state.semesterWeekAnchorDate =
+    typeof state.semesterWeekAnchorDate === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(state.semesterWeekAnchorDate)
+      ? state.semesterWeekAnchorDate
+      : null;
 
   const lang = state.languageStudy ?? seed.languageStudy;
   state.languageStudy = {

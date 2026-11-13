@@ -379,7 +379,7 @@ export function createSeedState(): AppStateData {
   return {
     version: 1,
     profile: {
-      name: "دانشجوی ورزشکار",
+      name: "کاربر",
       age: 25,
       heightCm: 179,
       startWeight: 65,
@@ -399,6 +399,10 @@ export function createSeedState(): AppStateData {
       waterReminderEnabled: false,
       waterReminderMinutes: 60,
       waterReminderNextAt: 0,
+      customCalories: null,
+      customProtein: null,
+      mealTable: [],
+      coachRules: [],
     },
     milestones: [
       {
@@ -413,6 +417,7 @@ export function createSeedState(): AppStateData {
     activeDay: 0,
     restSeconds: 90,
     activityHistory: [],
+    exerciseHistory: {},
     deloadActive: false,
     readiness: "normal",
     personalRecords: {},
@@ -427,6 +432,8 @@ export function createSeedState(): AppStateData {
     },
     courses: defaultCourses(),
     semesterWeekType: "odd",
+    // `null` = the current week is semester week 1.
+    semesterWeekAnchorDate: null,
     languageStudy: {
       reminderEnabled: true,
       reminderTime: "20:30",

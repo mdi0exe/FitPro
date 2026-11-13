@@ -22,7 +22,8 @@ const item = (id: string, text: string, hint: string): DietItem => ({
   done: false,
 });
 
-const waterRow = () =>
+/** Exported so the AI configurator can re-append the water row. */
+export const waterRow = () =>
   item(
     "diet-4",
     "نوشیدن حداقل ۸ تا ۱۰ لیوان آب در طول روز و در باشگاه",
