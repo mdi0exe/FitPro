@@ -2,6 +2,7 @@
 import { btn, el, escapeHtml } from "../lib/dom";
 import { en, fa, faNum, faReps } from "../lib/fa";
 import type { Exercise } from "../types";
+import { catalogPicker } from "./exerciseCatalogPicker";
 import { openValuePicker, stepper } from "./stepper";
 import { openModal, toast } from "./ui";
 
@@ -192,7 +193,34 @@ export function openExerciseEditor(options: {
   const gifField = field("لینک مستقیم گیف (اختیاری)");
   gifField.append(gifInput);
 
-  body.append(nameField, setsField, repsField, weightField, tipField, queryField, gifField);
+  // -------------------------------------------------------- library picker
+  // Inserted before the name field so the obvious first action is "pick a
+  // movement" — tapping one fills the name, the GIF and the search phrase.
+  const catalog = catalogPicker({
+    onPick: (item) => {
+      nameInput.value = item.name;
+      gifInput.value = item.gif;
+      queryInput.value = `${item.english} gif`;
+      if (!tipInput.value.trim()) tipInput.value = item.muscle;
+      nameInput.focus();
+    },
+  });
+  const catalogField = field(
+    "کتابخانه حرکات",
+    "حرکت را از کتابخانه انتخاب کن تا گیف و نامش خودکار پر شود.",
+  );
+  catalogField.append(catalog.element);
+
+  body.append(
+    catalogField,
+    nameField,
+    setsField,
+    repsField,
+    weightField,
+    tipField,
+    queryField,
+    gifField,
+  );
 
   const submit = () => {
     const name = nameInput.value.trim();

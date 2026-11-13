@@ -48,6 +48,24 @@ export function parseNum(raw: string | number | null | undefined): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+/**
+ * Float from a numeric field: Persian (`۶۷٫۵`), Arabic-Indic (`٦٧.٥`), latin
+ * (`67.5`) and unit-suffixed text (`۶۷ کیلو`) all collapse to a number.
+ *
+ * `٬` (Persian thousands) and ZWNJ are stripped, and `fallback` is returned
+ * when the field holds no digit at all — that is what keeps an emptied input
+ * from silently saving `0` over the user's real weight.
+ */
+export function parseFaFloat(raw: string | null | undefined, fallback = 0): number {
+  if (raw === null || raw === undefined) return fallback;
+  const text = en(String(raw))
+    .replace(/[٬\s\u200c]/g, "")
+    .replace(/٫/g, ".");
+  if (!/\d/.test(text)) return fallback;
+  const value = Number.parseFloat(text.replace(/[^\d.]/g, ""));
+  return Number.isFinite(value) ? value : fallback;
+}
+
 /** First integer inside a rep prescription, after digit normalisation. */
 export function firstNumber(raw: string | null | undefined): number {
   const match = /\d+/.exec(en(raw ?? ""));
@@ -100,8 +118,7 @@ export function faDate(iso: string, opts: { withYear?: boolean; withWeekday?: bo
     withYear ? ` ${fa(jy)}` : ""
   }`;
   if (!withWeekday) return base;
-  const weekday = WEEKDAYS[new Date(`${iso}T12:00:00`).getDay()] ?? "";
-  return `${weekday}، ${base}`;
+  return `${faWeekdayName(iso)}، ${base}`;
 }
 
 /** Short numeric Jalali date: `"۱۴۰۵/۰۸/۲۱"` */
@@ -112,9 +129,45 @@ export function faDateShort(iso: string): string {
 }
 
 export function isoToday(): string {
-  const now = new Date();
+  return isoFromDate(new Date());
+}
+
+/**
+ * `"2026-11-13"` → a Date on the **local** calendar (noon, so a DST shift can
+ * never roll the day over).
+ *
+ * `new Date("2026-11-13")` is parsed as UTC midnight by the language spec: in
+ * Tehran that is 03:30 of the same day, but anywhere west of Greenwich it is
+ * still the *previous* day — which is exactly how the app ended up announcing
+ * "tomorrow is Friday" on a Friday. Building the date from its parts keeps
+ * every weekday / "N days ago" calculation on the user's own calendar.
+ */
+export function localDateFromIso(iso: string): Date {
+  const [y, m, d] = isoParts(iso);
+  return new Date(y, m - 1, d, 12, 0, 0, 0);
+}
+
+/** Inverse of `localDateFromIso`: a Date → local `YYYY-MM-DD`. */
+export function isoFromDate(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** Shifts an ISO date by whole days on the local calendar. */
+export function isoAddDays(iso: string, days: number): string {
+  const date = localDateFromIso(iso);
+  date.setDate(date.getDate() + days);
+  return isoFromDate(date);
+}
+
+/** Tomorrow's local ISO date (the shuttle radar's "what runs next" input). */
+export function isoTomorrow(referenceIso = isoToday()): string {
+  return isoAddDays(referenceIso, 1);
+}
+
+/** `0` = Sunday … `6` = Saturday, resolved in the user's own timezone. */
+export function faWeekdayIndex(iso: string): number {
+  return localDateFromIso(iso).getDay();
 }
 
 /** Compact weekday labels for the 7-column calendar strip (Sunday first). */
@@ -123,13 +176,13 @@ const WEEKDAY_SHORT = ["یک", "دو", "سه", "چهار", "پنج", "جم", "ش
 /** Persian weekday name for an ISO date. */
 export function faWeekdayName(iso: string): string {
   if (!iso) return "";
-  return WEEKDAYS[new Date(`${iso}T12:00:00`).getDay()] ?? "";
+  return WEEKDAYS[faWeekdayIndex(iso)] ?? "";
 }
 
 /** Compact weekday label for narrow calendar cells. */
 export function faWeekdayShort(iso: string): string {
   if (!iso) return "";
-  return WEEKDAY_SHORT[new Date(`${iso}T12:00:00`).getDay()] ?? "";
+  return WEEKDAY_SHORT[faWeekdayIndex(iso)] ?? "";
 }
 
 /**
@@ -137,25 +190,24 @@ export function faWeekdayShort(iso: string): string {
  * `referenceIso`. `getDay()` is Sunday-based, so Saturday is offset 0.
  */
 export function currentPersianWeekIsos(referenceIso = isoToday()): string[] {
-  const ref = new Date(`${referenceIso}T12:00:00`);
+  const ref = localDateFromIso(referenceIso);
   const offsetFromSaturday = (ref.getDay() + 1) % 7;
   const saturday = new Date(ref);
   saturday.setDate(ref.getDate() - offsetFromSaturday);
 
-  const pad = (n: number) => String(n).padStart(2, "0");
   const days: string[] = [];
   for (let i = 0; i < 7; i += 1) {
     const cur = new Date(saturday);
     cur.setDate(saturday.getDate() + i);
-    days.push(`${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}`);
+    days.push(isoFromDate(cur));
   }
   return days;
 }
 
 /** Whole days from `fromIso` to `toIso` (positive when `toIso` is later). */
 export function daysBetween(fromIso: string, toIso: string): number {
-  const from = Date.parse(`${fromIso}T00:00:00`);
-  const to = Date.parse(`${toIso}T00:00:00`);
+  const from = localDateFromIso(fromIso).getTime();
+  const to = localDateFromIso(toIso).getTime();
   if (Number.isNaN(from) || Number.isNaN(to)) return 0;
   return Math.round((to - from) / 86_400_000);
 }
@@ -185,6 +237,99 @@ export function clock(totalSeconds: number): string {
   const seconds = safe % 60;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
+
+// ---------------------------------------------------------------------------
+// Live Persian digits in text inputs
+// ---------------------------------------------------------------------------
+
+export interface PersianNumericInputOptions {
+  /** Allow one decimal separator (`٫`). Defaults to `true`. */
+  decimals?: boolean;
+  /** Called after every accepted keystroke with the parsed value. */
+  onValue?: (value: number) => void;
+}
+
+/**
+ * Makes a plain text input show **Persian digits while typing**, keeping the
+ * caret where the user left it.
+ *
+ * Why not `type="number"`: an Android numeric keyboard always emits latin
+ * digits, the element refuses `٫`, and `input.value` comes back empty for
+ * anything it considers invalid — the app then reads `0` and overwrites a real
+ * weight. A text input with `inputMode="decimal"` still opens the numeric
+ * keypad, but we own the value, so Backspace, selection, paste and the caret
+ * all behave exactly like a normal field.
+ *
+ * Invalid characters are dropped rather than the whole value being rejected:
+ * the caret is moved left by the number of dropped characters before it, which
+ * is the part naive implementations get wrong (restoring the caret by raw
+ * string length jumps to the end whenever a letter is deleted).
+ */
+export function makePersianNumericInput(
+  input: HTMLInputElement,
+  options: PersianNumericInputOptions = {},
+): HTMLInputElement {
+  const { decimals = true, onValue } = options;
+
+  input.type = "text";
+  input.inputMode = decimals ? "decimal" : "numeric";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.dir = "ltr";
+
+  const rewrite = (notify: boolean) => {
+    const raw = input.value;
+    const caret = input.selectionStart ?? raw.length;
+    let out = "";
+    let nextCaret = caret;
+    let seenSeparator = false;
+
+    for (let i = 0; i < raw.length; i += 1) {
+      const ch = raw[i];
+      let kept: string | null = null;
+
+      if (ch >= "0" && ch <= "9") kept = FA_DIGITS[Number(ch)];
+      else if (/[۰-۹]/.test(ch)) kept = ch;
+      else if (decimals && (ch === "." || ch === "٫")) {
+        if (!seenSeparator) {
+          seenSeparator = true;
+          kept = "٫";
+        }
+      }
+
+      if (kept === null) {
+        if (i < caret) nextCaret -= 1;
+        continue;
+      }
+      out += kept;
+    }
+
+    if (out !== raw) {
+      input.value = out;
+      const safe = Math.max(0, Math.min(out.length, nextCaret));
+      try {
+        input.setSelectionRange(safe, safe);
+      } catch {
+        /* detached or non-focusable element — the value is still correct */
+      }
+    }
+
+    if (notify) onValue?.(parseFaFloat(out));
+  };
+
+  input.addEventListener("input", () => rewrite(true));
+  // Normalise a value that was written programmatically (e.g. `faNum`), but do
+  // not fire `onValue` for it: callers usually already know the initial value.
+  rewrite(false);
+
+  return input;
+}
+
+/**
+ * Alias kept for call sites that read better as "attach a behaviour to an
+ * input I already created".
+ */
+export const attachPersianNumericInput = makePersianNumericInput;
 
 function isoParts(iso: string): [number, number, number] {
   const [y, m, d] = iso.split("-").map((part) => Number.parseInt(part, 10));

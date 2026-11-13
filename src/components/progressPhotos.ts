@@ -4,6 +4,7 @@
 import { btn, el, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { faDate, faNum, isoToday } from "../lib/fa";
+import { saveBackupFile } from "../lib/api";
 import { getState, persist, requestRender, setState } from "../lib/store";
 import { normalizeState } from "../lib/localBackend";
 import type { AppStateData, ProgressPhoto } from "../types";
@@ -182,12 +183,12 @@ function compressImageFile(file: File, maxDim: number, quality: number): Promise
 
 export function renderBackupRestoreCard(): HTMLElement {
   const card = el("div", "card space-y-3");
-  card.append(sectionTitle("💾 پشتیبان‌گیری و بازیابی"));
+  card.append(sectionTitle("💾 پشتیبان‌گیری و اشتراک‌گذاری اطلاعات"));
   card.append(
     el(
       "p",
       "text-[11px] leading-6 text-slate-400",
-      "از رکوردها، تاریخچه وزن، عکس‌ها و تنظیماتت فایل پشتیبان بگیر تا با تعویض گوشی چیزی از دست نرود.",
+      "از رکوردها، تاریخچه وزن، عکس‌ها و تنظیماتت فایل پشتیبان بگیر تا با تعویض گوشی چیزی از دست نرود. فایل را می‌توانی مستقیم در تلگرام بفرستی یا در پوشه Download ذخیره کنی.",
     ),
   );
 
@@ -219,24 +220,107 @@ export function renderBackupRestoreCard(): HTMLElement {
     reader.readAsText(file);
   });
 
-  const row = el("div", "grid grid-cols-2 gap-2");
+  // Result of the last save/share, kept on screen so the path stays readable.
+  const hint = el("p", "hidden text-[10px] leading-5 text-emerald-300");
+
+  const row = el("div", "space-y-2");
   row.append(
-    btn("btn-primary text-xs", "📤 دانلود پشتیبان", () => downloadBackup()),
-    btn("btn-ghost text-xs", "📥 بازیابی از فایل", () => fileInput.click()),
+    btn("btn-primary w-full text-xs", "📤 ارسال به تلگرام / اشتراک‌گذاری فایل", () => {
+      void shareBackup(hint);
+    }),
+    btn("btn-ghost w-full text-xs", "📁 ذخیره مستقیم در پوشه Download", () => {
+      void saveBackupToDownloads(hint);
+    }),
+    btn("btn-ghost w-full text-xs", "📥 بازیابی از فایل", () => fileInput.click()),
   );
 
-  card.append(row, fileInput);
+  card.append(row, hint, fileInput);
   return card;
 }
 
-function downloadBackup(): void {
+/** File name used by every backup entry point. */
+function backupFileName(): string {
+  return `hypertrophy-backup-${isoToday()}.json`;
+}
+
+function backupJson(): string {
+  return JSON.stringify(getState(), null, 2);
+}
+
+function setHint(target: HTMLElement, text: string, tone: "ok" | "error" = "ok"): void {
+  target.textContent = text;
+  target.className = `text-[10px] leading-5 ${tone === "ok" ? "text-emerald-300" : "text-rose-300"}`;
+}
+
+/**
+ * Hands the backup to Android's share sheet (Telegram, Drive, email…).
+ *
+ * `navigator.share` with `files` is the only way to attach a real `.json` to
+ * another app from a WebView. Devices that expose the API without file support
+ * still get the JSON as text, and anything older falls back to a saved copy.
+ */
+async function shareBackup(hint: HTMLElement): Promise<void> {
+  const name = backupFileName();
+  const json = backupJson();
+  const nav = typeof navigator === "undefined" ? undefined : navigator;
+
   try {
-    const json = JSON.stringify(getState(), null, 2);
+    const file = new File([json], name, { type: "application/json" });
+    const canShareFiles =
+      typeof nav?.canShare === "function" && nav.canShare({ files: [file] });
+    if (nav?.share && canShareFiles) {
+      await nav.share({ files: [file], title: "پشتیبان فیت‌پرو" });
+      setHint(hint, "فایل پشتیبان به اشتراک گذاشته شد 📤");
+      return;
+    }
+    if (nav?.share) {
+      await nav.share({ title: name, text: json });
+      setHint(hint, "محتوای پشتیبان به اشتراک گذاشته شد 📤");
+      return;
+    }
+    throw new Error("share API unavailable");
+  } catch (error) {
+    // Dismissing the sheet is not a failure.
+    if ((error as Error | undefined)?.name === "AbortError") return;
+    console.warn("share failed, saving a copy instead", error);
+    await saveBackupToDownloads(hint);
+  }
+}
+
+/** Writes the JSON with the native command (or a download in the browser). */
+async function saveBackupToDownloads(hint: HTMLElement): Promise<void> {
+  const name = backupFileName();
+  const json = backupJson();
+
+  try {
+    const saved = await saveBackupFile(name, json);
+    if (!saved) {
+      downloadBackup(name, json);
+      setHint(hint, "فایل از طریق مرورگر دانلود شد 📁");
+      return;
+    }
+    setHint(
+      hint,
+      saved.directory === "downloads"
+        ? `ذخیره شد در ${saved.path}`
+        : `اندروید اجازه نوشتن در Download را نداد؛ نسخه پشتیبان در حافظه برنامه ذخیره شد: ${saved.path}`,
+    );
+    toast("فایل پشتیبان ذخیره شد 💾");
+  } catch (error) {
+    console.warn("native backup write failed", error);
+    toast("ذخیره فایل ناموفق بود؛ از گزینه اشتراک‌گذاری استفاده کن.", "error");
+    setHint(hint, "ذخیره فایل ناموفق بود؛ از دکمه اشتراک‌گذاری استفاده کن.", "error");
+  }
+}
+
+/** Browser fallback: a blob download with the same name. */
+function downloadBackup(name = backupFileName(), json = backupJson()): void {
+  try {
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `hypertrophy-backup-${isoToday()}.json`;
+    anchor.download = name;
     anchor.click();
     // Revoking immediately can cancel the download in some browsers.
     window.setTimeout(() => URL.revokeObjectURL(url), 1500);

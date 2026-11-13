@@ -4,7 +4,7 @@
  */
 import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { fa } from "../lib/fa";
+import { fa, faWeekdayIndex, faWeekdayName, isoToday, isoTomorrow } from "../lib/fa";
 import { getState, persist, requestRender } from "../lib/store";
 import { openModal, sectionTitle, toast } from "../components/ui";
 import type { CourseSession } from "../types";
@@ -33,12 +33,16 @@ const GROUP_WEEKDAYS: Record<ScheduleGroupKey, number[]> = {
   suburbs: [1, 2, 3, 4],
 };
 
-function detectTodayScheduleKey(): Exclude<ScheduleGroupKey, "suburbs"> {
-  const day = new Date().getDay(); // 0 = Sunday … 6 = Saturday
+function scheduleKeyForDate(iso: string): Exclude<ScheduleGroupKey, "suburbs"> {
+  const day = faWeekdayIndex(iso); // 0 = Sunday … 6 = Saturday, local time
   if (day === 6) return "sat";
   if (day === 4) return "thu";
   if (day === 5) return "fri";
   return "sun-wed";
+}
+
+function detectTodayScheduleKey(): Exclude<ScheduleGroupKey, "suburbs"> {
+  return scheduleKeyForDate(isoToday());
 }
 
 let activeGroup: ScheduleGroupKey = detectTodayScheduleKey();
@@ -338,10 +342,17 @@ function nextBusRadarCard(): HTMLElement {
   );
   card.append(grid);
 
-  const tomorrow = detectTodayScheduleKey();
-  if (tomorrow === "fri") {
+  // `detectTodayScheduleKey()` answers "what runs today", so asking it about
+  // tomorrow announced "tomorrow is Friday" the whole of Friday. Ask the real
+  // tomorrow, and say it in the user's own timezone.
+  const tomorrowIso = isoTomorrow();
+  if (scheduleKeyForDate(tomorrowIso) === "fri") {
     card.append(
-      el("p", "text-center text-[10px] text-amber-300", "فردا جمعه است؛ برنامه تعطیلات اعمال می‌شود."),
+      el(
+        "p",
+        "text-center text-[10px] text-amber-300",
+        `فردا (${faWeekdayName(tomorrowIso)}) برنامه تعطیلات اعمال می‌شود.`,
+      ),
     );
   }
 

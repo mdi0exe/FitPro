@@ -228,10 +228,24 @@ html.theme-light .bg-slate-900\/60,
 html.theme-light .bg-slate-900\/70,
 html.theme-light .bg-slate-900\/80,
 html.theme-light .bg-slate-900\/90,
+html.theme-light .bg-slate-800,
+html.theme-light .bg-slate-800\/30,
 html.theme-light .bg-slate-800\/50,
-html.theme-light .bg-slate-800\/60 {
+html.theme-light .bg-slate-800\/60,
+html.theme-light .bg-slate-800\/80 {
   background-color: #f8fafc !important;
   border-color: #cbd5e1 !important;
+}
+/* The exercise number square and the milestone icons are *meant* to stand out
+   from their card, so they get the slightly darker tint instead of #f8fafc. */
+html.theme-light .bg-slate-800,
+html.theme-light .bg-slate-800\/80 {
+  background-color: #e2e8f0 !important;
+}
+/* Pressed state of the stepper ± buttons: without this the button flashes the
+   dark theme's slate while a light-mode user is holding it. */
+html.theme-light .active\:bg-slate-800:active {
+  background-color: #cbd5e1 !important;
 }
 
 /* `index.html` puts `bg-slate-950` on <body>; that utility has a higher
@@ -346,6 +360,42 @@ html.theme-light .border-slate-800\/80 {
 
 html.theme-light .divider {
   background: linear-gradient(to left, transparent, #cbd5e1, transparent) !important;
+}
+
+html.theme-light details {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Status bar shield
+
+   Tauri draws the WebView edge-to-edge, so a scrolling list slides under the
+   phone's clock and battery icons. The sticky header only covers them with an
+   85%-opaque backdrop, which is enough for dark mode but lets dark text bleed
+   through in light mode. This fixed strip is painted with the page background
+   and sits above the header, so nothing ever shows behind the system bar.
+   --------------------------------------------------------------------------- */
+#status-shield {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 60;
+  height: var(--safe-top);
+  pointer-events: none;
+  background-color: #020617;
+  /* Same fixed gradients as `body`, so the shield is invisible against the page
+     instead of leaving a flat band at the top of the screen. */
+  background-image:
+    radial-gradient(900px 420px at 88% -8%, rgba(16, 185, 129, 0.18), transparent 62%),
+    radial-gradient(680px 380px at 2% 4%, rgba(34, 211, 238, 0.1), transparent 58%);
+  background-attachment: fixed;
+}
+
+html.theme-light #status-shield {
+  background-color: #f1f5f9;
+  background-image:
+    radial-gradient(900px 420px at 88% -8%, rgba(16, 185, 129, 0.14), transparent 62%),
+    radial-gradient(680px 380px at 2% 4%, rgba(6, 182, 212, 0.1), transparent 58%);
 }
 
 @media (prefers-reduced-motion: reduce) {

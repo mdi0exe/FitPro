@@ -27,6 +27,7 @@ on:
       - "scripts/gen-icons.mjs"
       - "scripts/gen-android-icons.mjs"
       - "scripts/patch-android-manifest.mjs"
+      - "scripts/inject-main-activity.mjs"
       - "src-tauri/icons/**"
       - "public/**"
       - ".github/workflows/android-apk.yml"
@@ -39,6 +40,7 @@ on:
       - "scripts/gen-icons.mjs"
       - "scripts/gen-android-icons.mjs"
       - "scripts/patch-android-manifest.mjs"
+      - "scripts/inject-main-activity.mjs"
       - "src-tauri/icons/**"
       - "public/**"
       - ".github/workflows/android-apk.yml"
@@ -227,6 +229,18 @@ jobs:
           set -euo pipefail
           node scripts/patch-android-manifest.mjs
           grep -n "uses-permission" src-tauri/gen/android/app/src/main/AndroidManifest.xml
+
+      # The notification plugin launches the activity for the water reminder's
+      # action button, which drags the whole app to the foreground just to log a
+      # glass. `MainActivity` is patched to read the action extra and send the
+      # task back with `moveTaskToBack(true)`. Same reason as above: the file is
+      # regenerated on every run, so it is injected instead of committed.
+      - name: Inject background water action into MainActivity
+        run: |
+          set -euo pipefail
+          node scripts/inject-main-activity.mjs
+          grep -n "fitpro-background-water\|moveTaskToBack" \
+            src-tauri/gen/android/app/src/main/java/ir/student/hypertrophy/MainActivity.kt
 
       # `tauri android init` scaffolds the project with Tauri's default launcher
       # icons. The committed Android set is built by `scripts/gen-android-icons.mjs`

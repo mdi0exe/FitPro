@@ -20,6 +20,7 @@ import {
 import { WORKOUT_PROGRAMS } from "../data/programs";
 import { applyDeveloperPreset, applyProgram } from "../lib/appSettings";
 import { openModal, toast, type ModalHandle } from "./ui";
+import { idealWeightCalculatorCard } from "./idealWeight";
 import { softTap } from "../lib/timer";
 import type { AppMode } from "../types";
 
@@ -59,7 +60,7 @@ export function openOnboardingModal(): void {
   let programId = state.profile.workoutProgramId || "upper-lower-4";
   let currentWeight = state.profile.currentWeight || 65;
   let targetWeight = state.profile.targetWeight || 75;
-  const heightCm = state.profile.heightCm || 179;
+  let heightCm = state.profile.heightCm || 179;
   const age = state.profile.age || 25;
 
   const body = el("div", "space-y-4");
@@ -189,6 +190,8 @@ export function openOnboardingModal(): void {
 
   // Touch steppers for current / target weight.
   const weightBox = el("div", "grid grid-cols-2 gap-2");
+  // Filled by `paintWeights()` with the ideal-weight calculator.
+  const idealSlot = el("div");
   const paintWeights = () => {
     weightBox.innerHTML = "";
     const makeStepper = (label: string, value: number, onChange: (next: number) => void) => {
@@ -218,6 +221,24 @@ export function openOnboardingModal(): void {
       makeStepper("وزن فعلی", currentWeight, (value) => (currentWeight = value)),
       makeStepper("وزن هدف", targetWeight, (value) => (targetWeight = value)),
     );
+
+    // The calculator compares against the *draft* weights, so it is rebuilt
+    // whenever one of them changes instead of capturing the first values.
+    idealSlot.replaceChildren(
+      idealWeightCalculatorCard({
+        compact: true,
+        height: heightCm,
+        currentWeight,
+        onHeightChange: (value) => {
+          heightCm = value;
+          paintWeights();
+        },
+        onApply: (target) => {
+          targetWeight = target;
+          paintWeights();
+        },
+      }),
+    );
   };
   paintWeights();
 
@@ -225,6 +246,7 @@ export function openOnboardingModal(): void {
     el("label", "label", "۳. انتخاب برنامه تمرینی و وزن هدف"),
     progList,
     weightBox,
+    idealSlot,
   );
   paintProgramVisibility();
   body.append(gymSection);

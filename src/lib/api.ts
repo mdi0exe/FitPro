@@ -95,6 +95,29 @@ export async function resetToDefaults(): Promise<AppStateData> {
   return localReset();
 }
 
+/** Where the native backup writer put the file. */
+export interface SavedBackup {
+  /** Absolute path of the written file. */
+  path: string;
+  /** `downloads` for the shared Download folder, `app` for the private copy. */
+  directory: "downloads" | "app" | string;
+}
+
+/**
+ * Writes a backup JSON straight to the filesystem.
+ *
+ * A WebView can only *download* a blob, and on Android that lands in a sandbox
+ * the file manager never shows — so the Rust side writes it instead. Returns
+ * `null` in the browser, where the caller falls back to a normal download.
+ */
+export async function saveBackupFile(
+  fileName: string,
+  contents: string,
+): Promise<SavedBackup | null> {
+  if (!isTauri()) return null;
+  return invoke<SavedBackup>("save_backup_file", { fileName, contents });
+}
+
 /**
  * Opens an external URL in the system browser.
  *

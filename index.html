@@ -28,6 +28,9 @@
     </div>
 
     <!-- Fixed layers: rendered once, never re-created by view re-renders -->
+    <!-- Paints the phone's status-bar strip with the page colour so scrolled
+         content never shows behind the clock (see #status-shield in styles.css). -->
+    <div id="status-shield" aria-hidden="true"></div>
     <div id="overlay-root"></div>
     <div id="toast-root" class="pointer-events-none fixed inset-x-0 top-[calc(var(--safe-top)+0.5rem)] z-[80] flex flex-col items-center gap-2 px-4"></div>
 

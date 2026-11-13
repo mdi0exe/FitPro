@@ -1,7 +1,7 @@
 /** Coach tab: golden rules, overload science and app settings. */
 import { btn, clamp, el, escapeHtml, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { fa, faNum, parseNum } from "../lib/fa";
+import { fa, faNum, makePersianNumericInput, parseFaFloat } from "../lib/fa";
 import { resetToDefaults, storageMode } from "../lib/api";
 import { ensureNotificationPermission, pushSystemNotification } from "../lib/notify";
 import { alarm, waterAlert } from "../lib/timer";
@@ -131,23 +131,22 @@ function profileEditor(state: AppStateData): HTMLElement {
   nameInput.value = state.profile.name;
   nameWrap.append(nameInput);
 
-  const numberField = (label: string, value: number, step = "1") => {
+  const numberField = (label: string, value: number) => {
     const box = el("div", "space-y-1");
     box.append(el("label", "label", label));
     const input = el("input", "field field-sm");
-    input.type = "text";
-    input.step = step;
-    input.inputMode = "decimal";
-    input.autocomplete = "off";
     input.value = faNum(value, 1);
+    // Text input + `inputMode="decimal"`: the keyboard is still numeric, but the
+    // value stays readable and every keystroke is echoed in Persian digits.
+    makePersianNumericInput(input);
     box.append(input);
     return { box, input };
   };
 
   const age = numberField("سن", state.profile.age);
   const height = numberField("قد (سانتی‌متر)", state.profile.heightCm);
-  const start = numberField("وزن شروع (کیلو)", state.profile.startWeight, "0.1");
-  const target = numberField("وزن هدف (کیلو)", state.profile.targetWeight, "0.1");
+  const start = numberField("وزن شروع (کیلو)", state.profile.startWeight);
+  const target = numberField("وزن هدف (کیلو)", state.profile.targetWeight);
 
   const grid = el("div", "grid grid-cols-2 gap-2");
   grid.append(age.box, height.box, start.box, target.box);
@@ -155,10 +154,27 @@ function profileEditor(state: AppStateData): HTMLElement {
   const save = btn("btn-ghost w-full py-2 text-xs", "ذخیره مشخصات", () => {
     const name = nameInput.value.trim();
     if (name) state.profile.name = name;
-    state.profile.age = clamp(Math.round(parseNum(age.input.value)) || state.profile.age, 12, 99);
-    state.profile.heightCm = clamp(parseNum(height.input.value) || state.profile.heightCm, 120, 230);
-    state.profile.startWeight = clamp(parseNum(start.input.value) || state.profile.startWeight, 30, 300);
-    state.profile.targetWeight = clamp(parseNum(target.input.value) || state.profile.targetWeight, 30, 300);
+    // `parseFaFloat(..., fallback)` keeps a cleared field from wiping the value.
+    state.profile.age = clamp(
+      Math.round(parseFaFloat(age.input.value, state.profile.age)),
+      12,
+      99,
+    );
+    state.profile.heightCm = clamp(
+      Math.round(parseFaFloat(height.input.value, state.profile.heightCm)),
+      120,
+      230,
+    );
+    state.profile.startWeight = clamp(
+      parseFaFloat(start.input.value, state.profile.startWeight),
+      30,
+      300,
+    );
+    state.profile.targetWeight = clamp(
+      parseFaFloat(target.input.value, state.profile.targetWeight),
+      30,
+      300,
+    );
 
     persist(0);
     toast("مشخصات ذخیره شد.");

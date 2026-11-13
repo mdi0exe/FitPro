@@ -16,6 +16,7 @@
     "android:manifest": "node scripts/patch-android-manifest.mjs",
     "android:icons": "node scripts/gen-android-icons.mjs",
     "gifs": "node scripts/download-dataset-gifs.mjs",
+    "library": "node scripts/build-exercise-library.mjs",
     "icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {

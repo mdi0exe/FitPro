@@ -9,11 +9,50 @@ mod models;
 mod storage;
 mod timeutil;
 
-use tauri::AppHandle;
+use std::path::PathBuf;
+
+use tauri::{AppHandle, Manager};
 
 use models::{
     apply_overload, to_persian_digits, AppStateData, WeightEntry, OVERLOAD_CYCLE_DAYS,
 };
+
+/// Where `save_backup_file` managed to put the JSON.
+#[derive(serde::Serialize)]
+pub struct SavedBackup {
+    /// Absolute path of the written file.
+    pub path: String,
+    /// `downloads` when it landed in the shared Download folder, `app` when the
+    /// OS refused that and the app-private backup folder was used instead.
+    pub directory: String,
+}
+
+/// Keeps a user-supplied file name safe for the filesystem.
+///
+/// The name comes from the WebView, so `..`, `/` and every non-ASCII byte are
+/// replaced: a backup must never be able to escape the folder it is written to.
+fn sanitize_backup_name(raw: &str) -> String {
+    let cleaned: String = raw
+        .chars()
+        .take(80)
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let trimmed = cleaned.trim_matches(&['-', '.'][..]).to_string();
+    if trimmed.is_empty() {
+        return "hypertrophy-backup.json".to_string();
+    }
+    if trimmed.ends_with(".json") {
+        trimmed
+    } else {
+        format!("{trimmed}.json")
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Commands
@@ -169,6 +208,61 @@ fn overload_status(app: AppHandle) -> Result<i64, String> {
 }
 
 // ---------------------------------------------------------------------------
+// Backup file
+// ---------------------------------------------------------------------------
+
+/// Writes a JSON backup the user can actually find on their phone.
+///
+/// The WebView can only *download* a blob, which on Android lands in a sandbox
+/// the file manager never shows. This command writes the file with `std::fs`
+/// instead, trying the shared `Download` folder first and falling back to the
+/// app's own `backups/` directory when the OS refuses (Android 10+ scoped
+/// storage blocks writes into `Download` unless the app owns the file).
+#[tauri::command]
+fn save_backup_file(
+    app: AppHandle,
+    file_name: String,
+    contents: String,
+) -> Result<SavedBackup, String> {
+    if contents.trim().is_empty() {
+        return Err("محتوای فایل پشتیبان خالی است.".to_string());
+    }
+
+    let safe_name = sanitize_backup_name(&file_name);
+
+    let mut candidates: Vec<(PathBuf, &str)> = Vec::new();
+    if let Ok(dir) = app.path().download_dir() {
+        candidates.push((dir, "downloads"));
+    }
+    if let Ok(dir) = app.path().document_dir() {
+        candidates.push((dir, "downloads"));
+    }
+    if let Ok(dir) = app.path().app_data_dir() {
+        candidates.push((dir.join("backups"), "app"));
+    }
+
+    let mut last_error = String::new();
+    for (dir, kind) in candidates {
+        if let Err(err) = std::fs::create_dir_all(&dir) {
+            last_error = format!("{}: {err}", dir.display());
+            continue;
+        }
+        let target = dir.join(&safe_name);
+        match std::fs::write(&target, contents.as_bytes()) {
+            Ok(()) => {
+                return Ok(SavedBackup {
+                    path: target.display().to_string(),
+                    directory: kind.to_string(),
+                })
+            }
+            Err(err) => last_error = format!("{}: {err}", target.display()),
+        }
+    }
+
+    Err(format!("ذخیره فایل پشتیبان ناموفق بود ({last_error})"))
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -183,7 +277,8 @@ pub fn run() {
             apply_progressive_overload,
             log_body_weight,
             reset_to_defaults,
-            overload_status
+            overload_status,
+            save_backup_file
         ])
         .setup(|app| {
             // Seed the state file on first launch so the UI never has to wait.
@@ -195,4 +290,33 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running the hypertrophy tracker");
+}
+
+#[cfg(test)]
+mod backup_tests {
+    use super::sanitize_backup_name;
+
+    #[test]
+    fn keeps_a_normal_backup_name() {
+        assert_eq!(
+            sanitize_backup_name("hypertrophy-backup-2026-11-13.json"),
+            "hypertrophy-backup-2026-11-13.json"
+        );
+    }
+
+    #[test]
+    fn strips_path_traversal_and_unicode() {
+        let name = sanitize_backup_name("../../etc/passwd");
+        assert!(!name.contains('/'), "slash survived: {name}");
+        assert!(!name.starts_with('.'), "leading dot survived: {name}");
+        assert!(name.ends_with(".json"), "missing extension: {name}");
+    }
+
+    #[test]
+    fn always_ends_up_with_a_json_file() {
+        // A fully non-ASCII name collapses to nothing, so the default is used.
+        assert_eq!(sanitize_backup_name("پشتیبان من"), "hypertrophy-backup.json");
+        assert_eq!(sanitize_backup_name(""), "hypertrophy-backup.json");
+        assert_eq!(sanitize_backup_name("backup"), "backup.json");
+    }
 }

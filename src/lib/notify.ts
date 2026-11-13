@@ -183,10 +183,19 @@ export function addWaterGlass(count = 1): number {
   return next;
 }
 
-/** Action-button handler: adds a glass and refreshes whatever tab is open. */
+/**
+ * Action-button handler: adds a glass and refreshes whatever tab is open.
+ *
+ * Android delivers the tap while the app is in the background (the activity is
+ * pushed back by `moveTaskToBack`, see `scripts/inject-main-activity.mjs`), so a
+ * toast would never be seen and a full re-render would only burn battery. When
+ * the document is hidden the glass is simply saved; the next time the app comes
+ * forward it renders the new count anyway.
+ */
 export function incrementWaterGlassFromNotification(): void {
   try {
     const glasses = addWaterGlass(1);
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     toast(`💧 نوش جان! آب امروز: ${fa(glasses)} لیوان`);
     requestRender();
   } catch (error) {

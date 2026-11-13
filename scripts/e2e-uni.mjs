@@ -258,7 +258,7 @@ check(
 await go("مربی");
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 await wait(400);
-check("backup card renders", (await mainText()).includes("پشتیبان‌گیری و بازیابی"));
+check("backup card renders", (await mainText()).includes("پشتیبان‌گیری و اشتراک‌گذاری اطلاعات"));
 
 console.log("\n--- runtime errors ---");
 console.log(errors.length ? errors.join("\n") : "none");
