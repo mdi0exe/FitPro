@@ -38,7 +38,7 @@ export function renderHeader(): HTMLElement {
 
   const header = el(
     "header",
-    "sticky top-0 z-40 border-b border-slate-800/70 bg-slate-950/85 backdrop-blur-xl",
+    "sticky top-0 z-40 border-b border-slate-800/70 bg-slate-950/95",
   );
   const inner = el("div", "mx-auto max-w-2xl px-4 pb-2.5 pt-[calc(var(--safe-top)+0.5rem)]");
 
@@ -126,7 +126,7 @@ export function renderNav(): HTMLElement {
   const allowed = visibleTabs(getState().appMode);
   const nav = el(
     "nav",
-    "fixed inset-x-0 bottom-0 z-50 border-t border-slate-800/80 bg-slate-950/95 backdrop-blur-xl",
+    "fixed inset-x-0 bottom-0 z-50 border-t border-slate-800/80 bg-slate-950/95",
   );
   const inner = el(
     "div",

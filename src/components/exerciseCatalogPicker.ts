@@ -124,6 +124,7 @@ export function catalogPicker(options: CatalogPickerOptions): CatalogPicker {
       img.src = item.gif;
       img.alt = "";
       img.loading = "lazy";
+      img.decoding = "async";
       img.width = 44;
       img.height = 44;
       const text = el("span", "min-w-0 flex-1");

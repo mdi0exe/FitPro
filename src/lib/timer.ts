@@ -343,6 +343,23 @@ function readWaterNextAt(): number {
   }
 }
 
+/**
+ * Deadline from memory only — no `localStorage`.
+ *
+ * The countdown ticks once a second and `localStorage.getItem` is a synchronous
+ * disk read, so calling it on every tick is a guaranteed main-thread hitch while
+ * the user is scrolling. The mirror is only needed on boot, before the state has
+ * loaded, which is what `readWaterNextAt` is for.
+ */
+function readWaterNextAtFromState(): number {
+  try {
+    const value = getState().diet.waterReminderNextAt;
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
 function writeWaterNextAt(nextAt: number): void {
   const value = Number.isFinite(nextAt) && nextAt > 0 ? Math.trunc(nextAt) : 0;
   try {
@@ -391,15 +408,24 @@ export function onWaterTimerTick(
   listener: ((remainingSec: number, totalSec: number) => void) | null,
 ): void {
   waterTickListener = listener;
+  // A visible countdown needs 1 s; with nobody watching, the loop drops to 10 s.
+  if (waterLoop !== null) ensureWaterLoopRunning();
 }
 
 let waterLoop: number | null = null;
+let waterLoopInterval = 0;
+
+/** 1 s while the nutrition countdown is on screen… */
+const WATER_TICK_ACTIVE_MS = 1000;
+/** …and 10 s when the user is on another tab (no DOM to update, no timer to show). */
+const WATER_TICK_IDLE_MS = 10_000;
 
 function stopWaterLoop(): void {
   if (waterLoop !== null) {
     window.clearInterval(waterLoop);
     waterLoop = null;
   }
+  waterLoopInterval = 0;
 }
 
 /** Alerts once, then advances the deadline to the next full interval. */
@@ -428,7 +454,7 @@ function tickWater(): void {
   }
 
   const totalSec = getWaterIntervalSeconds();
-  const nextAt = readWaterNextAt();
+  const nextAt = readWaterNextAtFromState();
   const now = Date.now();
 
   if (nextAt > 0 && nextAt <= now) {
@@ -443,9 +469,17 @@ function tickWater(): void {
 }
 
 function ensureWaterLoopRunning(): void {
+  const wanted = waterTickListener ? WATER_TICK_ACTIVE_MS : WATER_TICK_IDLE_MS;
+  // Already running at the right cadence: just re-check instead of tearing the
+  // interval down and rebuilding it (which is what made re-renders expensive).
+  if (waterLoop !== null && waterLoopInterval === wanted) {
+    tickWater();
+    return;
+  }
   stopWaterLoop();
   tickWater();
-  waterLoop = window.setInterval(tickWater, 1000);
+  waterLoopInterval = wanted;
+  waterLoop = window.setInterval(tickWater, wanted);
 }
 
 /** Starts a brand-new cycle. Only called from an explicit user action. */

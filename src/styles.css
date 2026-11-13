@@ -18,7 +18,9 @@
 
   html {
     -webkit-text-size-adjust: 100%;
-    scroll-behavior: smooth;
+    /* No `scroll-behavior: smooth`: on Android it fights the native fling
+       scroller (and the in-place re-render restore), so the page felt like it
+       was dragging behind the finger. */
   }
 
   body {
@@ -26,7 +28,10 @@
     background-image:
       radial-gradient(900px 420px at 88% -8%, rgba(16, 185, 129, 0.18), transparent 62%),
       radial-gradient(680px 380px at 2% 4%, rgba(34, 211, 238, 0.1), transparent 58%);
-    background-attachment: fixed;
+    /* NO `background-attachment: fixed` — an attached background forces the
+       WebView to repaint the whole viewport on every scroll frame instead of
+       letting the GPU compositor move a pre-painted layer. The top glow is kept
+       by the fixed #status-shield instead. */
     overscroll-behavior-y: none;
   }
 
@@ -55,15 +60,37 @@
   button {
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* The sticky header and the fixed bottom bar are repainted on every scroll
+     frame while they are translucent; promoting them to their own layer means
+     the compositor moves them instead of the main thread re-rasterising them. */
+  header,
+  nav {
+    transform: translateZ(0);
+    will-change: transform;
+    backface-visibility: hidden;
+  }
 }
 
 @layer components {
+  /* No `backdrop-blur-md` here: there are 10+ cards per tab, the page behind
+     them is a flat colour, and a 12px blur on every one of them is the single
+     most expensive thing the GPU had to do while scrolling. A denser background
+     looks the same without the shader. */
   .card {
-    @apply rounded-3xl border border-slate-800/80 bg-slate-900/55 p-4 shadow-card backdrop-blur-md;
+    @apply rounded-3xl border border-slate-800/80 bg-slate-900/90 p-4 shadow-md;
   }
 
   .card-tight {
     @apply rounded-2xl border border-slate-800/80 bg-slate-900/60 p-3;
+  }
+
+  /* Cards that are off-screen are skipped entirely (layout + paint + GIF
+     decode) until they scroll into view. `contain-intrinsic-size` keeps the
+     scrollbar honest so the page does not jump when they materialise. */
+  [data-exercise] {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 420px;
   }
 
   .chip {
@@ -206,7 +233,7 @@ html.theme-light body {
 
 html.theme-light header,
 html.theme-light nav {
-  background-color: rgba(255, 255, 255, 0.92) !important;
+  background-color: rgba(255, 255, 255, 0.97) !important;
   border-color: #cbd5e1 !important;
 }
 
@@ -388,7 +415,6 @@ html.theme-light details {
   background-image:
     radial-gradient(900px 420px at 88% -8%, rgba(16, 185, 129, 0.18), transparent 62%),
     radial-gradient(680px 380px at 2% 4%, rgba(34, 211, 238, 0.1), transparent 58%);
-  background-attachment: fixed;
 }
 
 html.theme-light #status-shield {

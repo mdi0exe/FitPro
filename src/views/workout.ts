@@ -604,7 +604,10 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
     const img = el("img", "h-44 w-44 object-contain");
     img.src = exercise.gifUrl;
     img.alt = exercise.name;
+    // `lazy` keeps off-screen GIFs from downloading; `async` keeps the GIF
+    // frame decode off the main thread so it never stutters a scroll.
     img.loading = "lazy";
+    img.decoding = "async";
     img.referrerPolicy = "no-referrer";
 
     // Stored demo → its own offline file → plain explanation. The picture is

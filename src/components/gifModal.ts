@@ -30,6 +30,7 @@ export function openGifModal(options: GifModalOptions): void {
       img.src = url;
       img.alt = options.title;
       img.loading = "lazy";
+      img.decoding = "async";
       img.referrerPolicy = "no-referrer";
       let triedFallback = false;
       img.addEventListener("error", () => {
