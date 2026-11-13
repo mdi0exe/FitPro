@@ -17,9 +17,10 @@ export interface GifModalOptions {
 export function openGifModal(options: GifModalOptions): void {
   const body = el("div", "space-y-4");
 
+  // The dataset demos are 180×180 on white: a white stage keeps them crisp.
   const preview = el(
     "div",
-    "relative flex min-h-[180px] items-center justify-center overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70",
+    "relative flex min-h-[180px] items-center justify-center overflow-hidden rounded-2xl border border-slate-800 bg-white p-3",
   );
 
   const renderPreview = (url?: string | null) => {
@@ -56,8 +57,8 @@ export function openGifModal(options: GifModalOptions): void {
       iconWrap.append(svgIcon(icons.film, "h-10 w-10"));
       placeholder.append(
         iconWrap,
-        el("p", "text-xs font-bold text-slate-300", "گیف ذخیره‌شده‌ای برای این حرکت نداریم"),
-        el("p", "mt-1 text-[11px] leading-6 text-slate-500", "با دکمه‌های پایین جستجو کن یا لینک مستقیم .gif را پایین بچسبان."),
+        el("p", "text-xs font-bold text-slate-700", "دموی ذخیره‌شده‌ای برای این حرکت نداریم"),
+        el("p", "mt-1 text-[11px] leading-6 text-slate-500", "با دکمه‌های پایین جستجو کن یا لینک مستقیم تصویر را پایین بچسبان."),
       );
       preview.append(placeholder);
     }

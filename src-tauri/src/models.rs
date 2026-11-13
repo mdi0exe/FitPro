@@ -366,6 +366,7 @@ fn gif_needs_replacement(url: Option<&str>) -> bool {
                 || trimmed.contains("fitnessprogramer.com")
                 || trimmed.contains("giphy.com")
                 || trimmed.contains("imgur.com")
+                || trimmed.ends_with(".svg")
         }
     }
 }
@@ -729,7 +730,18 @@ impl AppStateData {
                 // stored prescription in ASCII digits so increment_reps works.
                 exercise.reps = to_ascii_digits(&exercise.reps);
                 if gif_needs_replacement(exercise.gif_url.as_deref()) {
-                    exercise.gif_url = gifs.exercises.get(&exercise.id).cloned();
+                    // A swapped movement shows its own substitute demo; the
+                    // programmed one stays in `original_gif_url` for the reset.
+                    exercise.gif_url = if exercise.is_swapped() {
+                        Some(format!("/gifs/{}-alt.gif", exercise.id))
+                    } else {
+                        gifs.exercises.get(&exercise.id).cloned()
+                    };
+                }
+                if exercise.is_swapped()
+                    && gif_needs_replacement(exercise.original_gif_url.as_deref())
+                {
+                    exercise.original_gif_url = Some(format!("/gifs/{}.gif", exercise.id));
                 }
                 exercise.sync_logs();
             }
@@ -1013,17 +1025,17 @@ mod tests {
 
         assert_eq!(
             state.days[0].exercises[0].gif_url.as_deref(),
-            Some("/gifs/d1e1.svg")
+            Some("/gifs/d1e1.gif")
         );
-        // Day 1 warm-ups use the upper-body bundle.
+        // Day 1 warm-ups use the upper-body set.
         assert_eq!(
             state.days[0].warmups[0].gif_url.as_deref(),
-            Some("/gifs/wu-upper-1.svg")
+            Some("/gifs/wu-u1.gif")
         );
-        // Day 4 warm-ups use the lower-body bundle.
+        // Day 4 warm-ups use the lower-body set.
         assert_eq!(
             state.days[3].warmups[0].gif_url.as_deref(),
-            Some("/gifs/wu-lower-1.svg")
+            Some("/gifs/wu-l1.gif")
         );
     }
 
@@ -1042,11 +1054,11 @@ mod tests {
 
         assert_eq!(
             state.days[0].exercises[0].gif_url.as_deref(),
-            Some("/gifs/d1e1.svg")
+            Some("/gifs/d1e1.gif")
         );
         assert_eq!(
             state.days[0].exercises[1].gif_url.as_deref(),
-            Some("/gifs/d1e2.svg")
+            Some("/gifs/d1e2.gif")
         );
         // A user-supplied direct link is left alone.
         assert_eq!(
@@ -1055,7 +1067,7 @@ mod tests {
         );
         assert_eq!(
             state.days[1].warmups[0].gif_url.as_deref(),
-            Some("/gifs/wu-lower-1.svg")
+            Some("/gifs/wu-l1.gif")
         );
     }
 
@@ -1088,6 +1100,28 @@ mod tests {
         assert!(!exercise.is_swapped());
         assert!(exercise.swapped_date.is_none());
         assert!(exercise.original_name.is_none());
+    }
+
+    #[test]
+    fn swapped_exercise_shows_the_alternative_demo() {
+        let mut state = crate::storage::seed();
+        state.normalize();
+        let original = state.days[0].exercises[0].clone();
+        {
+            let exercise = &mut state.days[0].exercises[0];
+            exercise.swapped_date = Some(crate::timeutil::today_iso());
+            exercise.original_name = Some(original.name.clone());
+            exercise.name = "حرکت جایگزین".to_string();
+            // A save from the previous (SVG) bundle.
+            exercise.gif_url = Some("/gifs/d1e1.svg".to_string());
+            exercise.original_gif_url = Some("/gifs/d1e1.svg".to_string());
+        }
+
+        state.normalize();
+
+        let exercise = &state.days[0].exercises[0];
+        assert_eq!(exercise.gif_url.as_deref(), Some("/gifs/d1e1-alt.gif"));
+        assert_eq!(exercise.original_gif_url.as_deref(), Some("/gifs/d1e1.gif"));
     }
 
     #[test]

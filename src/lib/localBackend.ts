@@ -23,7 +23,8 @@ function gifNeedsReplacement(url: string | null | undefined): boolean {
     value.length === 0 ||
     value.includes("fitnessprogramer.com") ||
     value.includes("giphy.com") ||
-    value.includes("imgur.com")
+    value.includes("imgur.com") ||
+    value.endsWith(".svg")
   );
 }
 
@@ -159,7 +160,15 @@ export function normalizeState(input: AppStateData): AppStateData {
       // Same rule as models.rs: keep prescriptions in ASCII digits.
       exercise.reps = en(exercise.reps ?? "");
       if (gifNeedsReplacement(exercise.gifUrl)) {
-        exercise.gifUrl = exerciseGifs[exercise.id] ?? null;
+        // A swapped movement shows its own substitute demo; the programmed one
+        // stays in `originalGifUrl` so the daily reset restores it.
+        const swapped = Boolean(exercise.swappedDate && exercise.originalName);
+        exercise.gifUrl = swapped
+          ? `/gifs/${exercise.id}-alt.gif`
+          : (exerciseGifs[exercise.id] ?? null);
+      }
+      if (exercise.swappedDate && exercise.originalName && gifNeedsReplacement(exercise.originalGifUrl)) {
+        exercise.originalGifUrl = `/gifs/${exercise.id}.gif`;
       }
       exercise.logs = syncLogs(exercise);
     }

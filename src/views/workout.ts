@@ -593,16 +593,25 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
   card.append(tools);
 
   if (exercise.gifUrl) {
-    // Demos are bundled offline (`/gifs/<id>.svg`): contain (not cover) so the
-    // athlete is never cropped. If a stale remote link sneaks through, fall back
-    // to the bundled file instead of deleting the picture.
-    const img = el("img", "h-48 w-full rounded-2xl border border-slate-800 bg-slate-950 object-contain");
+    // The dataset GIFs are 180×180 on a white background, so they sit in a white
+    // card at their natural square size instead of being stretched full width.
+    // Hug the artwork: a full-width white bar leaves ~100px of empty white on
+    // each side of the 180px GIF.
+    const wrap = el(
+      "div",
+      "mx-auto flex w-fit items-center justify-center overflow-hidden rounded-2xl border border-slate-800 bg-white p-2",
+    );
+    const img = el("img", "h-44 w-44 object-contain");
     img.src = exercise.gifUrl;
     img.alt = exercise.name;
     img.loading = "lazy";
     img.referrerPolicy = "no-referrer";
 
-    const localDemo = `/gifs/${exercise.id}.svg`;
+    // Stored demo → its own offline file → plain explanation. The picture is
+    // never deleted from the card.
+    const localDemo = exercise.swappedDate && exercise.originalName
+      ? `/gifs/${exercise.id}-alt.gif`
+      : `/gifs/${exercise.id}.gif`;
     let fellBack = exercise.gifUrl === localDemo;
     img.addEventListener("error", () => {
       if (!fellBack) {
@@ -610,8 +619,7 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
         img.src = localDemo;
         return;
       }
-      // Even the bundled file is unreadable: keep the box, explain it.
-      img.replaceWith(
+      wrap.replaceWith(
         el(
           "div",
           "flex h-48 w-full items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 px-4 text-center text-[11px] leading-6 text-slate-500",
@@ -619,7 +627,9 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
         ),
       );
     });
-    card.append(img);
+
+    wrap.append(img);
+    card.append(wrap);
   }
 
   if (exercise.tip) {

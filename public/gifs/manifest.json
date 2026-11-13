@@ -1,0 +1,315 @@
+{
+  "source": "hasaneyldrm/exercises-dataset",
+  "movements": {
+    "d1e1": {
+      "id": "0314",
+      "name": "dumbbell incline bench press",
+      "file": "videos/0314-ns0SIbU.gif"
+    },
+    "d1e1-alt": {
+      "id": "0047",
+      "name": "barbell incline bench press",
+      "file": "videos/0047-3TZduzM.gif"
+    },
+    "d1e2": {
+      "id": "2330",
+      "name": "cable lat pulldown full range of motion",
+      "file": "videos/2330-LEprlgG.gif"
+    },
+    "d1e2-alt": {
+      "id": "0293",
+      "name": "dumbbell bent over row",
+      "file": "videos/0293-BJ0Hz5L.gif"
+    },
+    "d1e3": {
+      "id": "0577",
+      "name": "lever chest press",
+      "file": "videos/0577-T0yTjgW.gif"
+    },
+    "d1e3-alt": {
+      "id": "0025",
+      "name": "barbell bench press",
+      "file": "videos/0025-EIeI8Vf.gif"
+    },
+    "d1e4": {
+      "id": "0180",
+      "name": "cable low seated row",
+      "file": "videos/0180-hvV79Si.gif"
+    },
+    "d1e4-alt": {
+      "id": "0027",
+      "name": "barbell bent over row",
+      "file": "videos/0027-eZyBC3j.gif"
+    },
+    "d1e5": {
+      "id": "0334",
+      "name": "dumbbell lateral raise",
+      "file": "videos/0334-DsgkuIt.gif"
+    },
+    "d1e5-alt": {
+      "id": "0178",
+      "name": "cable lateral raise",
+      "file": "videos/0178-goJ6ezq.gif"
+    },
+    "d1e6": {
+      "id": "0447",
+      "name": "ez barbell curl",
+      "file": "videos/0447-6TG6x2w.gif"
+    },
+    "d1e6-alt": {
+      "id": "0285",
+      "name": "dumbbell alternate biceps curl",
+      "file": "videos/0285-BU15nH4.gif"
+    },
+    "d1e7": {
+      "id": "0200",
+      "name": "cable pushdown (with rope attachment)",
+      "file": "videos/0200-dU605di.gif"
+    },
+    "d1e7-alt": {
+      "id": "0201",
+      "name": "cable pushdown",
+      "file": "videos/0201-3ZflifB.gif"
+    },
+    "d2e1": {
+      "id": "1463",
+      "name": "sled 45° leg press (side pov)",
+      "file": "videos/1463-2Qh2J1e.gif"
+    },
+    "d2e1-alt": {
+      "id": "0043",
+      "name": "barbell full squat",
+      "file": "videos/0043-qXTaZnJ.gif"
+    },
+    "d2e2": {
+      "id": "3281",
+      "name": "smith full squat",
+      "file": "videos/3281-NNoHCEA.gif"
+    },
+    "d2e2-alt": {
+      "id": "1760",
+      "name": "dumbbell goblet squat",
+      "file": "videos/1760-yn8yg1r.gif"
+    },
+    "d2e3": {
+      "id": "0585",
+      "name": "lever leg extension",
+      "file": "videos/0585-my33uHU.gif"
+    },
+    "d2e3-alt": {
+      "id": "0410",
+      "name": "dumbbell single leg split squat",
+      "file": "videos/0410-qx4fgX7.gif"
+    },
+    "d2e4": {
+      "id": "0586",
+      "name": "lever lying leg curl",
+      "file": "videos/0586-17lJ1kr.gif"
+    },
+    "d2e4-alt": {
+      "id": "1459",
+      "name": "dumbbell romanian deadlift",
+      "file": "videos/1459-rR0LJzx.gif"
+    },
+    "d2e5": {
+      "id": "0594",
+      "name": "lever seated calf raise",
+      "file": "videos/0594-bOOdeyc.gif"
+    },
+    "d2e5-alt": {
+      "id": "0108",
+      "name": "barbell standing leg calf raise",
+      "file": "videos/0108-rGwhJ5o.gif"
+    },
+    "d2e6": {
+      "id": "0472",
+      "name": "hanging leg raise",
+      "file": "videos/0472-I3tsCnC.gif"
+    },
+    "d2e6-alt": {
+      "id": "0001",
+      "name": "3/4 sit-up",
+      "file": "videos/0001-2gPfomN.gif"
+    },
+    "d3e1": {
+      "id": "0405",
+      "name": "dumbbell seated shoulder press",
+      "file": "videos/0405-znQUdHY.gif"
+    },
+    "d3e1-alt": {
+      "id": "0603",
+      "name": "lever shoulder press",
+      "file": "videos/0603-67n3r98.gif"
+    },
+    "d3e2": {
+      "id": "0245",
+      "name": "cable underhand pulldown",
+      "file": "videos/0245-xBYcQHj.gif"
+    },
+    "d3e2-alt": {
+      "id": "0238",
+      "name": "cable straight arm pulldown",
+      "file": "videos/0238-x69MAlq.gif"
+    },
+    "d3e3": {
+      "id": "0596",
+      "name": "lever seated fly",
+      "file": "videos/0596-v3xmPAR.gif"
+    },
+    "d3e3-alt": {
+      "id": "0188",
+      "name": "cable middle fly",
+      "file": "videos/0188-xLYSdtg.gif"
+    },
+    "d3e4": {
+      "id": "0606",
+      "name": "lever t bar row",
+      "file": "videos/0606-aaXr7ld.gif"
+    },
+    "d3e4-alt": {
+      "id": "0327",
+      "name": "dumbbell incline row",
+      "file": "videos/0327-7vG5o25.gif"
+    },
+    "d3e5": {
+      "id": "0602",
+      "name": "lever seated reverse fly",
+      "file": "videos/0602-myfUsKf.gif"
+    },
+    "d3e5-alt": {
+      "id": "0380",
+      "name": "dumbbell rear lateral raise",
+      "file": "videos/0380-v1qBec9.gif"
+    },
+    "d3e6": {
+      "id": "0592",
+      "name": "lever preacher curl",
+      "file": "videos/0592-b6hQYMb.gif"
+    },
+    "d3e6-alt": {
+      "id": "0297",
+      "name": "dumbbell concentration curl",
+      "file": "videos/0297-gvsWLQw.gif"
+    },
+    "d3e7": {
+      "id": "0591",
+      "name": "lever overhand triceps dip",
+      "file": "videos/0591-D5yqP2p.gif"
+    },
+    "d3e7-alt": {
+      "id": "0060",
+      "name": "barbell lying triceps extension skull crusher",
+      "file": "videos/0060-h8LFzo9.gif"
+    },
+    "d4e1": {
+      "id": "1459",
+      "name": "dumbbell romanian deadlift",
+      "file": "videos/1459-rR0LJzx.gif"
+    },
+    "d4e1-alt": {
+      "id": "0085",
+      "name": "barbell romanian deadlift",
+      "file": "videos/0085-wQ2c4XD.gif"
+    },
+    "d4e2": {
+      "id": "0046",
+      "name": "barbell hack squat",
+      "file": "videos/0046-5VCj6iH.gif"
+    },
+    "d4e2-alt": {
+      "id": "1463",
+      "name": "sled 45° leg press (side pov)",
+      "file": "videos/1463-2Qh2J1e.gif"
+    },
+    "d4e3": {
+      "id": "0336",
+      "name": "dumbbell lunge",
+      "file": "videos/0336-RRWFUcw.gif"
+    },
+    "d4e3-alt": {
+      "id": "0054",
+      "name": "barbell lunge",
+      "file": "videos/0054-t8iSghb.gif"
+    },
+    "d4e4": {
+      "id": "0599",
+      "name": "lever seated leg curl",
+      "file": "videos/0599-Zg3XY7P.gif"
+    },
+    "d4e4-alt": {
+      "id": "0586",
+      "name": "lever lying leg curl",
+      "file": "videos/0586-17lJ1kr.gif"
+    },
+    "d4e5": {
+      "id": "0605",
+      "name": "lever standing calf raise",
+      "file": "videos/0605-ykUOVze.gif"
+    },
+    "d4e5-alt": {
+      "id": "0088",
+      "name": "barbell seated calf raise",
+      "file": "videos/0088-ktsFQAZ.gif"
+    },
+    "d4e6": {
+      "id": "0126",
+      "name": "barbell wrist curl",
+      "file": "videos/0126-82LxxkW.gif"
+    },
+    "d4e6-alt": {
+      "id": "0364",
+      "name": "dumbbell one arm wrist curl",
+      "file": "videos/0364-q8aHNoF.gif"
+    },
+    "wu-u1": {
+      "id": "3666",
+      "name": "walking on incline treadmill",
+      "file": "videos/3666-rjiM4L3.gif"
+    },
+    "wu-u2": {
+      "id": "0235",
+      "name": "cable standing shoulder external rotation",
+      "file": "videos/0235-FWdVhcW.gif"
+    },
+    "wu-u3": {
+      "id": "1167",
+      "name": "dynamic chest stretch (male)",
+      "file": "videos/1167-3uj0Ozg.gif"
+    },
+    "wu-u4": {
+      "id": "0863",
+      "name": "dumbbell lying external shoulder rotation",
+      "file": "videos/0863-bmBf7LN.gif"
+    },
+    "wu-u5": {
+      "id": "0314",
+      "name": "dumbbell incline bench press",
+      "file": "videos/0314-ns0SIbU.gif"
+    },
+    "wu-l1": {
+      "id": "0798",
+      "name": "stationary bike walk",
+      "file": "videos/0798-a8VDgLw.gif"
+    },
+    "wu-l2": {
+      "id": "3655",
+      "name": "walking high knees lunge",
+      "file": "videos/3655-J9zIWig.gif"
+    },
+    "wu-l3": {
+      "id": "0514",
+      "name": "jump squat",
+      "file": "videos/0514-LIlE5Tn.gif"
+    },
+    "wu-l4": {
+      "id": "1368",
+      "name": "ankle circles",
+      "file": "videos/1368-uL9CsKm.gif"
+    },
+    "wu-l5": {
+      "id": "1463",
+      "name": "sled 45° leg press (side pov)",
+      "file": "videos/1463-2Qh2J1e.gif"
+    }
+  }
+}

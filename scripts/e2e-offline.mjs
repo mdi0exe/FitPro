@@ -2,8 +2,9 @@
  * Offline demo checks: the exercise pictures must render with the network cut.
  *
  * Before this change every card hotlinked `fitnessprogramer.com`, which answers
- * 403 to the Android WebView (Cloudflare), so the picture simply vanished.
- * Now the demos are bundled under `public/gifs/` and shipped inside the APK.
+ * 403 to the Android WebView (Cloudflare), so the picture simply vanished. Now
+ * the real animated GIFs from `hasaneyldrm/exercises-dataset` are bundled under
+ * `public/gifs/` and shipped inside the APK.
  *
  * Usage: node scripts/e2e-offline.mjs
  * Requires the built app on http://127.0.0.1:4400/.
@@ -23,26 +24,31 @@ const check = (name, ok, detail = "") => {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------------------------------------------------------------------------
-// 1. Every bundled file exists and is a real animated SVG
+// 1. Every bundled file exists and is a real animated GIF
 // ---------------------------------------------------------------------------
 {
   const dir = path.resolve("dist", "gifs");
-  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".svg")) : [];
-  check("dist/gifs contains the bundle", files.length >= 36, `${files.length} files`);
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".gif")) : [];
+  // 26 programmed + 26 substitutes + 10 warm-up demos.
+  check("dist/gifs contains the bundle", files.length >= 62, `${files.length} GIFs`);
 
-  const sample = files.length ? fs.readFileSync(path.join(dir, "d1e1.svg"), "utf8") : "";
+  const header = files.length
+    ? fs.readFileSync(path.join(dir, "d1e1.gif")).subarray(0, 6).toString("ascii")
+    : "";
+  check("demos are real GIF89a files", header === "GIF89a", header);
   check(
-    "demos are self-contained (embedded JPEG, no remote URL)",
-    sample.includes("data:image/jpeg;base64,") &&
-      !sample.includes("https://") &&
-      !sample.includes("fitnessprogramer"),
+    "substitute demos are bundled too",
+    files.includes("d1e1-alt.gif") && files.includes("d4e6-alt.gif"),
   );
-  check("demos animate (CSS keyframes)", sample.includes("@keyframes alt"));
+  check(
+    "warm-up demos cover both halves",
+    files.includes("wu-u1.gif") && files.includes("wu-l5.gif"),
+  );
 
   const totalBytes = files.reduce((sum, file) => sum + fs.statSync(path.join(dir, file)).size, 0);
   check(
     "bundle stays small enough for the APK",
-    totalBytes < 3.5 * 1024 * 1024,
+    totalBytes < 8 * 1024 * 1024,
     `${(totalBytes / 1024 / 1024).toFixed(2)} MB`,
   );
 }
@@ -86,7 +92,7 @@ const card = await page.evaluate(() => {
   return { src: img.getAttribute("src"), width: img.naturalWidth, height: img.naturalHeight };
 });
 check("exercise card keeps its picture offline", Boolean(card) && card.width > 0, JSON.stringify(card));
-check("picture comes from the bundle", (card?.src ?? "").startsWith("/gifs/"), card?.src ?? "");
+check("picture comes from the bundle", (card?.src ?? "").endsWith("/gifs/d1e1.gif"), card?.src ?? "");
 
 // Warm-up rows use the same bundled files.
 const warmupFallback = await page.evaluate(() => {
@@ -99,7 +105,7 @@ const modalSrc = await page.evaluate(
   () => document.querySelector("#overlay-root img")?.getAttribute("src") ?? "",
 );
 check("warm-up viewer opens offline", warmupFallback);
-check("warm-up demo is the bundled file", modalSrc.startsWith("/gifs/"), modalSrc);
+check("warm-up demo is the bundled file", modalSrc === "/gifs/wu-u1.gif", modalSrc);
 
 await page.evaluate(() => {
   document.querySelector("#overlay-root button[aria-label='بستن']")?.click();
@@ -114,6 +120,7 @@ await page.evaluateOnNewDocument(() => {
   if (!raw) return;
   raw.days[0].exercises[0].gifUrl =
     "https://fitnessprogramer.com/wp-content/uploads/2021/02/Incline-Dumbbell-Press.gif";
+  raw.days[0].exercises[1].gifUrl = "/gifs/d1e2.svg";
   raw.days[0].warmups[0].gifUrl = "";
   localStorage.setItem(key, JSON.stringify(raw));
 });
@@ -129,12 +136,17 @@ const migrated = await page.evaluate(() =>
 );
 check(
   "old fitnessprogramer link is migrated",
-  migrated.days?.[0]?.exercises?.[0]?.gifUrl === "/gifs/d1e1.svg",
+  migrated.days?.[0]?.exercises?.[0]?.gifUrl === "/gifs/d1e1.gif",
   migrated.days?.[0]?.exercises?.[0]?.gifUrl,
 );
 check(
+  "previous SVG demo is migrated",
+  migrated.days?.[0]?.exercises?.[1]?.gifUrl === "/gifs/d1e2.gif",
+  migrated.days?.[0]?.exercises?.[1]?.gifUrl,
+);
+check(
   "blank warm-up demo is refilled",
-  migrated.days?.[0]?.warmups?.[0]?.gifUrl === "/gifs/wu-upper-1.svg",
+  migrated.days?.[0]?.warmups?.[0]?.gifUrl === "/gifs/wu-u1.gif",
   migrated.days?.[0]?.warmups?.[0]?.gifUrl,
 );
 

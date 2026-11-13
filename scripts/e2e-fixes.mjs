@@ -115,17 +115,17 @@ await wait(300);
 saved = await state();
 check(
   "exercise demos point at the bundled files",
-  (saved.days[0].exercises[0].gifUrl ?? "") === "/gifs/d1e1.svg",
+  (saved.days[0].exercises[0].gifUrl ?? "") === "/gifs/d1e1.gif",
   saved.days[0].exercises[0].gifUrl,
 );
 check(
   "warm-up demos point at the bundled files",
-  (saved.days[0].warmups[0].gifUrl ?? "") === "/gifs/wu-upper-1.svg",
+  (saved.days[0].warmups[0].gifUrl ?? "") === "/gifs/wu-u1.gif",
   saved.days[0].warmups[0].gifUrl,
 );
 
 const imgSrc = await page.$eval("[data-exercise] img", (node) => node.src).catch(() => "");
-check("exercise card renders the demo", imgSrc.endsWith("/gifs/d1e1.svg"), imgSrc);
+check("exercise card renders the demo", imgSrc.endsWith("/gifs/d1e1.gif"), imgSrc);
 const referrer = await page.$eval("[data-exercise] img", (node) => node.referrerPolicy).catch(() => "");
 check("gif uses no-referrer", referrer === "no-referrer", referrer);
 

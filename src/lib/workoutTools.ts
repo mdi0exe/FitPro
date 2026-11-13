@@ -269,10 +269,9 @@ export function swapBusyExercise(exercise: Exercise): void {
   if (alt) {
     exercise.name = alt.name;
     exercise.query = alt.query;
-    // The bundled demo of the programmed movement: same pattern, other
-    // equipment, and it always renders offline (the remote alternatives were
-    // behind Cloudflare and 403'd inside the WebView).
-    exercise.gifUrl = `/gifs/${exercise.id}.svg`;
+    // The substitute movement has its own bundled demo, so the card keeps
+    // showing the movement that is actually on the screen.
+    exercise.gifUrl = `/gifs/${exercise.id}-alt.gif`;
     exercise.tip = alt.tip;
   } else {
     // Custom exercises have no curated alternative: rename so the card is honest.
