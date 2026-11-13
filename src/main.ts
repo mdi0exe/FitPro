@@ -17,6 +17,7 @@ import {
   requestRender,
   setActiveTab,
   setRenderHook,
+  setState,
   visibleTabs,
 } from "./lib/store";
 import { mountRestTimer } from "./components/restTimer";
@@ -24,7 +25,7 @@ import { installWakeLockLifecycle } from "./lib/workoutTools";
 import { renderUni } from "./views/uni";
 import { renderHeader, renderNav } from "./components/shell";
 import { toast } from "./components/ui";
-import { initNotificationActions } from "./lib/notify";
+import { hasNativeWaterBridge, initNotificationActions } from "./lib/notify";
 import { renderWorkout } from "./views/workout";
 import { renderProgress } from "./views/progress";
 import { renderNutrition } from "./views/nutrition";
@@ -250,17 +251,39 @@ async function boot(): Promise<void> {
 void boot();
 
 // Keep the UI in sync if the app is resumed on a new day.
+let syncingAfterBackground = false;
+
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
-  try {
-    if (ensureDailyDietReset()) {
-      persist(0);
-      requestRender();
-    }
-  } catch {
-    /* state not ready yet */
-  }
+  void syncAfterBackground();
 });
+
+/**
+ * Resume sync.
+ *
+ * Two things can change while the app is in the background: the calendar (the
+ * diet checklist resets on a new day) and — on Android — the JSON state file
+ * itself, because the water notification's action button writes the glass
+ * natively without opening the app (`scripts/setup-android-native.mjs`).
+ *
+ * The file is read *before* anything is written: persisting first would clobber
+ * the glass the receiver just saved with our stale in-memory count.
+ */
+async function syncAfterBackground(): Promise<void> {
+  if (syncingAfterBackground) return;
+  syncingAfterBackground = true;
+  try {
+    if (hasNativeWaterBridge()) {
+      setState(await loadState());
+    }
+    if (ensureDailyDietReset()) persist(0);
+    requestRender();
+  } catch (error) {
+    console.warn("resume sync failed", error);
+  } finally {
+    syncingAfterBackground = false;
+  }
+}
 
 // A late session can run past midnight with the app still in the foreground, so
 // the calendar is re-checked every minute: the nutrition checklist and any

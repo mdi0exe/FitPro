@@ -27,7 +27,7 @@ on:
       - "scripts/gen-icons.mjs"
       - "scripts/gen-android-icons.mjs"
       - "scripts/patch-android-manifest.mjs"
-      - "scripts/inject-main-activity.mjs"
+      - "scripts/setup-android-native.mjs"
       - "src-tauri/icons/**"
       - "public/**"
       - ".github/workflows/android-apk.yml"
@@ -40,7 +40,7 @@ on:
       - "scripts/gen-icons.mjs"
       - "scripts/gen-android-icons.mjs"
       - "scripts/patch-android-manifest.mjs"
-      - "scripts/inject-main-activity.mjs"
+      - "scripts/setup-android-native.mjs"
       - "src-tauri/icons/**"
       - "public/**"
       - ".github/workflows/android-apk.yml"
@@ -230,16 +230,21 @@ jobs:
           node scripts/patch-android-manifest.mjs
           grep -n "uses-permission" src-tauri/gen/android/app/src/main/AndroidManifest.xml
 
-      # The notification plugin launches the activity for the water reminder's
-      # action button, which drags the whole app to the foreground just to log a
-      # glass. `MainActivity` is patched to read the action extra and send the
-      # task back with `moveTaskToBack(true)`. Same reason as above: the file is
-      # regenerated on every run, so it is injected instead of committed.
-      - name: Inject background water action into MainActivity
+      # The notification plugin builds action buttons with
+      # `PendingIntent.getActivity`, so tapping "+۱ لیوان آب" in the water
+      # reminder starts MainActivity and flashes the whole app to the front.
+      # This injects a `WaterBroadcastReceiver` (getBroadcast) plus the
+      # `window.AndroidWater` bridge, so the glass is written straight into
+      # gym_state.json and the app never opens.
+      - name: Inject native Android silent WaterBroadcastReceiver
         run: |
           set -euo pipefail
-          node scripts/inject-main-activity.mjs
-          grep -n "fitpro-background-water\|moveTaskToBack" \
+          node scripts/setup-android-native.mjs
+          grep -n "WaterBroadcastReceiver" \
+            src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          grep -n "PendingIntent.getBroadcast\|ACTION_DRINK_ONE" \
+            src-tauri/gen/android/app/src/main/java/ir/student/hypertrophy/WaterBroadcastReceiver.kt
+          grep -n "AndroidWater" \
             src-tauri/gen/android/app/src/main/java/ir/student/hypertrophy/MainActivity.kt
 
       # `tauri android init` scaffolds the project with Tauri's default launcher

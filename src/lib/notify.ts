@@ -128,6 +128,22 @@ export async function pushSystemNotification(
   }
 }
 
+declare global {
+  interface Window {
+    /**
+     * Injected by `MainActivity.onWebViewCreate` on Android
+     * (see `scripts/setup-android-native.mjs`).
+     */
+    AndroidWater?: {
+      showWaterNotification: (title: string, body: string) => void;
+      scheduleWaterNotification: (triggerAtMs: number) => void;
+      cancelWaterNotification: () => void;
+    };
+    /** Called by `WaterBroadcastReceiver` after it saves a glass natively. */
+    __onSilentWaterIncrement?: (newCount: number) => void;
+  }
+}
+
 /** Fixed id so an immediate alert replaces its scheduled twin. */
 export const WATER_NOTIFICATION_ID = 7701;
 
@@ -135,6 +151,43 @@ export const WATER_NOTIFICATION_ID = 7701;
 export const WATER_ACTION_TYPE_ID = "water-reminder-actions";
 /** The single "I drank a glass" button inside that group. */
 export const WATER_ACTION_ID = "drink_one_glass";
+
+/**
+ * The native Android bridge, when this build has one.
+ *
+ * `tauri-plugin-notification` builds action buttons with
+ * `PendingIntent.getActivity`, so tapping "💧 +۱ لیوان آب خوردم" *opens* the app.
+ * The Kotlin side registers the same button with `PendingIntent.getBroadcast`
+ * and exposes this bridge, which lets the glass be logged without the app ever
+ * coming to the foreground.
+ */
+function androidWaterBridge(): Window["AndroidWater"] | undefined {
+  if (!isTauri() || typeof window === "undefined") return undefined;
+  const bridge = window.AndroidWater;
+  return bridge && typeof bridge.showWaterNotification === "function" ? bridge : undefined;
+}
+
+/** True when the silent native receiver is available (Android build only). */
+export function hasNativeWaterBridge(): boolean {
+  return androidWaterBridge() !== undefined;
+}
+
+/**
+ * Posts the water reminder — through the native receiver when possible, so its
+ * action button never opens the app.
+ */
+export async function showWaterNotification(title: string, body: string): Promise<void> {
+  const bridge = androidWaterBridge();
+  if (bridge) {
+    try {
+      bridge.showWaterNotification(title, body);
+      return;
+    } catch (error) {
+      console.warn("native water notification failed, falling back to the plugin", error);
+    }
+  }
+  await pushSystemNotification(title, body, WATER_NOTIFICATION_ID, WATER_ACTION_TYPE_ID);
+}
 
 let actionsInitialized = false;
 
@@ -148,6 +201,28 @@ let actionsInitialized = false;
 export async function initNotificationActions(): Promise<void> {
   if (!isTauri() || actionsInitialized) return;
   actionsInitialized = true;
+
+  // The native receiver has already written the glass to gym_state.json; this
+  // only brings the in-memory copy (and the visible count) back in sync without
+  // the app being pulled to the foreground.
+  window.__onSilentWaterIncrement = (newCount: number) => {
+    try {
+      const state = getState();
+      const glasses = Math.max(0, Math.min(20, Math.round(Number(newCount) || 0)));
+      if (glasses <= 0) return;
+      state.diet.waterGlasses = glasses;
+      if (glasses >= 8) {
+        const water = state.diet.items.find((item) => item.id === "diet-4");
+        if (water) water.done = true;
+      }
+      syncWaterChecklist();
+      syncTodayActivity();
+      // No `persist()`: the native side owns the file for this change.
+      if (document.visibilityState === "visible") requestRender();
+    } catch (error) {
+      console.warn("silent water increment failed", error);
+    }
+  };
 
   try {
     await registerActionTypes([
@@ -214,6 +289,19 @@ export async function scheduleWaterNotificationAt(nextAtMs: number): Promise<voi
   // of the 00:00–09:00 sleep window as well, not just the JS countdown.
   const safeNextAt = adjustTimestampForWaterQuietHours(nextAtMs);
   if (!isTauri() || !Number.isFinite(safeNextAt) || safeNextAt <= Date.now() + 1000) return;
+
+  // Native alarm first: it keeps firing from `WaterBroadcastReceiver` even if
+  // the WebView is gone, and its action button never opens the app.
+  const bridge = androidWaterBridge();
+  if (bridge) {
+    try {
+      bridge.scheduleWaterNotification(safeNextAt);
+      return;
+    } catch (error) {
+      console.warn("native water alarm failed, falling back to the plugin", error);
+    }
+  }
+
   // Never prompt here — scheduling also runs on boot.
   if (!(await canPost())) return;
 
@@ -238,6 +326,12 @@ export async function scheduleWaterNotificationAt(nextAtMs: number): Promise<voi
 export async function cancelScheduledWaterNotification(): Promise<void> {
   if (!isTauri()) return;
   try {
+    androidWaterBridge()?.cancelWaterNotification();
+  } catch (error) {
+    console.warn("native water alarm cancel failed", error);
+  }
+  try {
+    // Same notification id, so this also dismisses a reminder that is on screen.
     await cancel([WATER_NOTIFICATION_ID]);
   } catch {
     /* nothing scheduled */

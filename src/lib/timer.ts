@@ -106,12 +106,10 @@ export class CountdownTimer {
 import { toastWithAction } from "../components/ui";
 import { getState, persist } from "./store";
 import {
-  WATER_ACTION_TYPE_ID,
-  WATER_NOTIFICATION_ID,
   cancelScheduledWaterNotification,
   incrementWaterGlassFromNotification,
-  pushSystemNotification,
   scheduleWaterNotificationAt,
+  showWaterNotification,
 } from "./notify";
 import { adjustTimestampForWaterQuietHours, isWaterQuietHours } from "./quietHours";
 
@@ -312,9 +310,15 @@ export function vibrate(pattern: number | number[] = [200, 100, 200]): void {
 export const restTimer = new CountdownTimer(90);
 export const cardioTimer = new CountdownTimer(300);
 
-/** Water notification (shared id so an alert replaces its scheduled twin). */
+/**
+ * Water notification (shared id so an alert replaces its scheduled twin).
+ *
+ * Goes through `showWaterNotification`, which prefers the native Android
+ * receiver: its action button is a broadcast, so the app never opens when the
+ * user taps "💧 +۱ لیوان آب خوردم".
+ */
 export function notifyWater(title: string, body: string): void {
-  void pushSystemNotification(title, body, WATER_NOTIFICATION_ID, WATER_ACTION_TYPE_ID);
+  void showWaterNotification(title, body);
 }
 
 // ---------------------------------------------------------------------------
