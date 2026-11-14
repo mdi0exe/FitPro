@@ -201,7 +201,9 @@ export function openExerciseEditor(options: {
       nameInput.value = item.name;
       gifInput.value = item.gif;
       queryInput.value = `${item.english} gif`;
-      if (!tipInput.value.trim()) tipInput.value = item.muscle;
+      // The catalog now ships a real Persian coaching cue for every movement.
+      // Replace (not just fill) it so swapping a pick swaps the tip too.
+      tipInput.value = item.tip || item.muscle;
       nameInput.focus();
     },
   });

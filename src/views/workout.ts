@@ -32,7 +32,11 @@ import {
   openSwapExerciseModal,
 } from "../lib/workoutTools";
 import { syncLogs } from "../lib/localBackend";
-import { openExerciseHistoryModal, recordExerciseHistory } from "../components/exerciseHistory";
+import {
+  clearTodayExerciseHistory,
+  openExerciseHistoryModal,
+  recordExerciseHistory,
+} from "../components/exerciseHistory";
 import {
   openDoubleProgressionModal,
   reachedTopOfRange,
@@ -697,6 +701,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     ariaLabel: `وزنه ست ${log.index}`,
     onChange: (value) => {
       log.weight = value;
+      if (log.done) recordExerciseHistory(exercise);
       persist();
     },
     onOpenPicker: (current, setValue) =>
@@ -710,6 +715,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
         presets: [0, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 30, 35, 40, 50, 60, 70, 80, 100],
         onChange: (value) => {
           log.weight = value;
+          if (log.done) recordExerciseHistory(exercise);
           setValue(value);
           persist();
         },
@@ -724,6 +730,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     ariaLabel: `تکرار ست ${log.index}`,
     onChange: (value) => {
       log.reps = value;
+      if (log.done) recordExerciseHistory(exercise);
       persist();
     },
     onOpenPicker: (current, setValue) =>
@@ -738,6 +745,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
         presets: [6, 8, 10, 12, 15, 20, 25],
         onChange: (value) => {
           log.reps = value;
+          if (log.done) recordExerciseHistory(exercise);
           setValue(value);
           persist();
         },
@@ -793,6 +801,12 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
         offerDoubleProgression(exercise);
       } else beep(2, 1320, 0.12);
       startRest();
+    } else if (exercise.logs.some((entry) => entry.done)) {
+      // Other sets are still ticked: recompute setsCompleted and the top set.
+      recordExerciseHistory(exercise);
+    } else {
+      // Last tick was undone: today's row would be a phantom point.
+      clearTodayExerciseHistory(exercise.id);
     }
     refreshProgress(day, exercise);
 
@@ -823,6 +837,8 @@ function applyToAllSets(exercise: Exercise, field: "weight" | "reps", value: num
     if (field === "weight") log.weight = value;
     else log.reps = value;
   }
+  // Editing a finished set must move today's chart point as well.
+  if (exercise.logs.some((log) => log.done)) recordExerciseHistory(exercise);
   persist(0);
   toast(
     field === "weight"

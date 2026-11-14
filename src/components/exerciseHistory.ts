@@ -60,6 +60,21 @@ export function recordExerciseHistory(exercise: Exercise): void {
   state.exerciseHistory[exercise.id] = history.slice(-MAX_ENTRIES);
 }
 
+/**
+ * Drops today's row when the last tick of a movement is undone.
+ * A session with zero completed sets must not leave a phantom point on the
+ * chart or inflate the "sessions" count.
+ */
+export function clearTodayExerciseHistory(exerciseId: string): void {
+  const state = getState();
+  const map = state.exerciseHistory;
+  if (!map || !Array.isArray(map[exerciseId])) return;
+  const today = isoToday();
+  const remaining = map[exerciseId].filter((row) => row.date !== today);
+  if (remaining.length > 0) map[exerciseId] = remaining;
+  else delete map[exerciseId];
+}
+
 /** Last recorded row, or `null` when the movement has never been ticked. */
 export function lastExerciseEntry(exerciseId: string): ExerciseHistoryEntry | null {
   const entries = exerciseHistoryFor(exerciseId);

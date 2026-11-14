@@ -116,6 +116,11 @@ export function persist(delay = 350): void {
   }, delay);
 }
 
+/** True when a debounced `persist()` write is still queued. */
+export function hasPendingSave(): boolean {
+  return saveTimer !== null;
+}
+
 export async function flushNow(): Promise<void> {
   if (!state) return;
   if (flushing) {
@@ -247,7 +252,12 @@ export function syncTodayActivity(): boolean {
   const before = JSON.stringify(entry);
 
   // Only overwrite the workout block when there is progress to record, so
-  // restarting a day does not erase what was already logged today.
+  // restarting a day does not erase what was already logged today. When the
+  // student unticks the last set (setsDone === 0) the existing row is kept
+  // deliberately: `restartDay`, the overload cycle and a manual untick all
+  // converge here, and dropping the row would make the calendar flash empty
+  // (and break the calendar/history e2e suites). Diet, water and weight are
+  // still refreshed on every sync.
   if (setsDone > 0 && targetDay) {
     entry.workoutTitle = `${targetDay.label} — ${targetDay.title}`;
     entry.completedExercises = completedExercises;

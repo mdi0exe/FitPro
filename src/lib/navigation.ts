@@ -63,7 +63,17 @@ export function releaseOverlay(id: string): void {
   }
 }
 
-/** Records a tab change so back returns to the previous screen. */
+/**
+ * Records a tab change so back returns to the previous screen.
+ *
+ * Only the first hop out of the root/home entry is a real navigation. Once the
+ * student is already on a non-home tab, replace that entry instead of stacking
+ * another one — otherwise a long tab-hopping session leaves dozens of entries
+ * and the Android back button appears to "do nothing" several times on the
+ * home screen.
+ */
 export function pushTab(tab: string): void {
-  history.pushState({ tab }, "");
+  const state = history.state as { tab?: string } | null;
+  if (state?.tab) history.replaceState({ tab }, "");
+  else history.pushState({ tab }, "");
 }

@@ -504,9 +504,15 @@ function hashCode(value: string): number {
   return hash;
 }
 
-/** 8100..8739, one id per (alarm key, weekday); never collides with water 7701. */
+/**
+ * 10000..410002, one id per (alarm key, weekday).
+ *
+ * The old 80-bucket version collided constantly across 25+ shuttle services
+ * (two different buses could cancel each other's alarm). 50,000 buckets keeps
+ * the value far inside i32 and clear of the fixed ids 7701 / 7901 / 7902 / 7905.
+ */
 function busAlarmId(key: string, weekday: number): number {
-  return 8100 + (Math.abs(hashCode(key)) % 80) * 8 + weekday;
+  return 10000 + (Math.abs(hashCode(key)) % 50000) * 8 + weekday;
 }
 
 /** Moves `hhmm` earlier by `delta` minutes (same day for every published time). */

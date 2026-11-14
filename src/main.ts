@@ -2,14 +2,17 @@
 import "./styles.css";
 
 import { loadState } from "./lib/api";
+import { isoToday } from "./lib/fa";
 import { clear, el, escapeHtml } from "./lib/dom";
 import { installNavigation } from "./lib/navigation";
 import { restoreWaterReminderOnBoot, unlockAudio } from "./lib/timer";
 import {
   applyTheme,
   ensureDailyDietReset,
+  flushNow,
   getActiveTab,
   getState,
+  hasPendingSave,
   homeTab,
   initState,
   installLifecycleFlush,
@@ -56,6 +59,9 @@ function headerSignature(): string {
       state.languageStudy.title,
       state.languageStudy.targetMinutes,
       state.languageStudy.completedDates.length,
+      // In uni-only mode today's study tick is shown in the header; the length
+      // alone can stay unchanged when a date is replaced, so compare the flag.
+      state.languageStudy.completedDates.includes(isoToday()),
     ].join("|");
   } catch {
     return "";
@@ -274,6 +280,9 @@ async function syncAfterBackground(): Promise<void> {
   syncingAfterBackground = true;
   try {
     if (hasNativeWaterBridge()) {
+      // A debounced save queued just before the app was backgrounded must land
+      // first, otherwise setState(loadState()) silently discards it.
+      if (hasPendingSave()) await flushNow();
       setState(await loadState());
     }
     if (ensureDailyDietReset()) persist(0);

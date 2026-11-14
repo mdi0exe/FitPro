@@ -162,6 +162,9 @@ fn reset_to_defaults(app: AppHandle) -> Result<AppStateData, String> {
     // theme, modular mode, university, courses, reminders, diet template and
     // progress history — has to survive a "reset plan" tap.
     fresh.profile = current.profile.clone();
+    // "Reset plan" must also re-select the default template on the native side
+    // (the browser equivalent lives in localBackend.ts::localReset).
+    fresh.profile.workout_program_id = crate::models::default_program_id();
     if !current.weight_history.is_empty() {
         fresh.weight_history = current.weight_history;
     }
@@ -177,12 +180,18 @@ fn reset_to_defaults(app: AppHandle) -> Result<AppStateData, String> {
     fresh.uni_reminders = current.uni_reminders;
     fresh.courses = current.courses;
     fresh.semester_week_type = current.semester_week_type;
+    fresh.semester_week_anchor_date = current.semester_week_anchor_date;
     fresh.language_study = current.language_study;
     fresh.custom_shuttle_json = current.custom_shuttle_json;
     fresh.activity_history = current.activity_history;
     fresh.personal_records = current.personal_records;
     fresh.progress_photos = current.progress_photos;
-    fresh.deload_active = current.deload_active;
+    // Progression charts belong to the student, not to the workout plan.
+    fresh.exercise_history = current.exercise_history;
+    // `fresh` carries 100% default weights. Leaving recovery week on would
+    // multiply those defaults by 1.25 when the student later toggles it off,
+    // so the flag is cleared here (the browser side also drops its snapshot).
+    fresh.deload_active = false;
     fresh.readiness = current.readiness;
 
     fresh.push_milestone(&today, "برنامه تمرینی به حالت پیش‌فرض بازگشت.", "system");

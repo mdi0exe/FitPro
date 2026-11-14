@@ -137,7 +137,6 @@ const MOVEMENT_FA = [
   ["shrug", "شراگ"],
   ["fly", "پروانه"],
   ["push up", "شنا"],
-  ["push up", "شنا"],
   ["muscle up", "ماسل‌آپ"],
   ["dip", "دیپ"],
   ["crunch", "کرانچ"],

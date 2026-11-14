@@ -218,6 +218,40 @@ export function normalizeState(input: AppStateData): AppStateData {
       !state.diet.waterReminderEnabled || !Number.isFinite(nextAt) || nextAt < 0
         ? 0
         : Math.trunc(nextAt);
+
+    // Same bounds as models.rs::normalize: a malformed AI paste must never
+    // make the protein card or the meal table meaningless.
+    const calories = Number(state.diet.customCalories);
+    state.diet.customCalories =
+      state.diet.customCalories != null && Number.isFinite(calories) &&
+      calories >= 1200 && calories <= 5000
+        ? Math.trunc(calories)
+        : null;
+    const protein = Number(state.diet.customProtein);
+    state.diet.customProtein =
+      state.diet.customProtein != null && Number.isFinite(protein) &&
+      protein >= 60 && protein <= 320
+        ? Math.trunc(protein)
+        : null;
+    state.diet.mealTable = (Array.isArray(state.diet.mealTable) ? state.diet.mealTable : [])
+      .filter((row) => row && typeof row.name === "string" && row.name.trim())
+      .slice(0, 10)
+      .map((row) => ({
+        name: cleanText(row.name, 80, "وعده"),
+        kcal: Math.min(3000, Math.max(0, Math.round(Number(row.kcal) || 0))),
+        protein: Math.min(200, Math.max(0, Math.round(Number(row.protein) || 0))),
+      }));
+    state.diet.coachRules = (Array.isArray(state.diet.coachRules) ? state.diet.coachRules : [])
+      .filter((rule) => rule && typeof rule.title === "string" && rule.title.trim())
+      .slice(0, 4)
+      .map((rule) => ({
+        title: cleanText(rule.title, 60, "قاعده مربی"),
+        headline: cleanText(rule.headline, 120, ""),
+        points: (Array.isArray(rule.points) ? rule.points : [])
+          .filter((point) => typeof point === "string" && point.trim())
+          .slice(0, 6)
+          .map((point) => cleanText(point, 220, "")),
+      }));
   }
 
   const exerciseGifs = defaultGifs.exercises as Record<string, string>;
@@ -232,6 +266,22 @@ export function normalizeState(input: AppStateData): AppStateData {
       }
     }
     for (const exercise of day.exercises) {
+      // A "machine is busy" swap only covers the day it was made on. A restored
+      // backup can still carry yesterday's substitute, so put the programmed
+      // movement back before resolving its demo (mirrors models.rs::normalize).
+      if (exercise.swappedDate && exercise.swappedDate !== localIso()) {
+        if (exercise.originalName) exercise.name = exercise.originalName;
+        if (exercise.originalQuery) exercise.query = exercise.originalQuery;
+        exercise.gifUrl = exercise.originalGifUrl ?? `/gifs/${exercise.id}.gif`;
+        if (exercise.originalTip !== undefined && exercise.originalTip !== null) {
+          exercise.tip = exercise.originalTip;
+        }
+        exercise.swappedDate = null;
+        exercise.originalName = null;
+        exercise.originalQuery = null;
+        exercise.originalGifUrl = null;
+        exercise.originalTip = null;
+      }
       exercise.sets = Math.min(12, Math.max(1, exercise.sets || 1));
       // Same rule as models.rs: keep prescriptions in ASCII digits.
       exercise.reps = en(exercise.reps ?? "");
@@ -292,7 +342,19 @@ export function localLoad(): AppStateData {
     writeRaw(seed);
     return clone(seed);
   }
-  return clone(normalizeState(raw));
+  // `normalizeState` repairs yesterday's "machine is busy" swap in memory.
+  // Normally the boot-time daily reset would notice the change and persist it;
+  // because the repair already happened, that signal is gone. Write the
+  // repaired state back for this one case so a stale swappedDate cannot
+  // survive a reload (and re-trigger a reset every single launch).
+  const hadExpiredSwap = (raw.days ?? []).some((day) =>
+    (day.exercises ?? []).some(
+      (exercise) => exercise.swappedDate && exercise.swappedDate !== localIso(),
+    ),
+  );
+  const normalized = normalizeState(raw);
+  if (hadExpiredSwap) writeRaw(normalized);
+  return clone(normalized);
 }
 
 export function localSave(state: AppStateData): void {
@@ -422,12 +484,22 @@ export function localReset(): AppStateData {
   fresh.uniReminders = current.uniReminders;
   fresh.courses = current.courses;
   fresh.semesterWeekType = current.semesterWeekType;
+  fresh.semesterWeekAnchorDate = current.semesterWeekAnchorDate;
   fresh.languageStudy = current.languageStudy;
   fresh.customShuttleJson = current.customShuttleJson;
   fresh.activityHistory = current.activityHistory;
   fresh.personalRecords = current.personalRecords;
   fresh.progressPhotos = current.progressPhotos;
-  fresh.deloadActive = current.deloadActive;
+  // Progression charts belong to the student, not to the workout plan.
+  fresh.exerciseHistory = current.exerciseHistory;
+  // `fresh` carries 100% default weights: leaving recovery on would raise
+  // them by 25% when the student toggles it off later.
+  fresh.deloadActive = false;
+  try {
+    window.localStorage.removeItem("persian-hypertrophy::deload-snapshot");
+  } catch {
+    /* storage unavailable */
+  }
   fresh.readiness = current.readiness;
   fresh.profile.workoutProgramId = 'upper-lower-4';
   pushMilestone(fresh, "برنامه تمرینی به حالت پیش‌فرض بازگشت.", "system");
