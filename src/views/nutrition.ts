@@ -125,12 +125,25 @@ function dietTemplateCard(): HTMLElement {
 
 function setDietTemplate(id: string): void {
   const state = getState();
-  if (activeDietTemplateId(state.diet.items) === id) {
+  // An AI plan locks calories/protein/meals/rules. Choosing a standard template
+  // is an explicit override, so clear those locks or the pick has no visible
+  // effect on the protein card and the meal table.
+  const hadAiOverrides = Boolean(
+    state.diet.customCalories ||
+      state.diet.customProtein ||
+      (state.diet.mealTable?.length ?? 0) > 0 ||
+      (state.diet.coachRules?.length ?? 0) > 0,
+  );
+  if (activeDietTemplateId(state.diet.items) === id && !hadAiOverrides) {
     toast("همین الگوی تغذیه فعال است.", "info");
     return;
   }
   const custom = state.diet.items.filter((entry) => entry.id.startsWith("custom-"));
   state.diet.items = [...dietTemplateItems(id), ...custom];
+  state.diet.customCalories = null;
+  state.diet.customProtein = null;
+  state.diet.mealTable = [];
+  state.diet.coachRules = [];
   syncWaterChecklist();
   softTap();
   persist(0);
@@ -613,11 +626,21 @@ function setWaterGlasses(value: number): void {
 
   state.diet.waterGlasses = next;
   syncWaterChecklist();
-  persist(0);
+
+  // Drinking a glass starts a fresh interval from NOW. Without this the
+  // pending alarm would still ring a few seconds later even though the
+  // student just had water.
+  if (next > previous && state.diet.waterReminderEnabled) {
+    startNewWaterReminderCycle(state.diet.waterReminderMinutes);
+  } else {
+    persist(0);
+  }
 
   if (next >= WATER_GOAL && previous < WATER_GOAL) {
     toast("💧 ۸ لیوان کامل شد! هیدراته ماندن = پمپ بهتر و ریکاوری سریع‌تر.", "ok");
     beep(2, 1320, 0.12);
+  } else {
+    softTap();
   }
   requestRender();
 }

@@ -131,11 +131,13 @@ await navTo("پیشرفت");
 check("progress tab shows the water count", (await calendarText()).includes("۱ لیوان"));
 
 // ------------------------------------------------ selecting another day
-const cells = await page.$$("main [data-weekly-activity] button[aria-pressed]");
-await cells[0].click();
+// Pick any day that is NOT today. The first cell is Saturday, which is today
+// on Saturdays — selecting it used to make this assertion fail once a week.
+const emptyCell = await page.$('main [data-weekly-activity] button[aria-pressed="false"]');
+await emptyCell.click();
 await wait(500);
-const saturdayText = await calendarText();
-check("selecting an empty day shows the empty state", saturdayText.includes("هنوز تمرینی"), saturdayText.slice(0, 90));
+const emptyDayText = await calendarText();
+check("selecting an empty day shows the empty state", emptyDayText.includes("هنوز تمرینی"), emptyDayText.slice(0, 90));
 
 const backToToday = await page.evaluate(() => {
   const button = Array.from(document.querySelectorAll("[data-weekly-activity] button")).find(

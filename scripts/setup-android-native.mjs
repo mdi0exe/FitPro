@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 /**
- * Native Android glue for the water reminder.
+ * Native Android glue for:
+ *   1. Silent water reminder action ("+۱ لیوان آب" via BroadcastReceiver)
+ *      with a full-interval reschedule whenever a glass is logged.
+ *   2. Saving backup JSON into the public Download folder via MediaStore.
+ *   3. The native Android Share Sheet (ACTION_SEND) for real .json files.
  *
  * Why this exists: `tauri-plugin-notification` builds its action buttons with
  * `PendingIntent.getActivity`, so tapping "💧 +۱ لیوان آب خوردم" *starts*
@@ -113,8 +117,25 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
         const val ACTION_SHOW_REMINDER = "${pkg}.ACTION_SHOW_WATER_REMINDER"
         const val ACTION_DRINK_ONE = "${pkg}.ACTION_DRINK_ONE_WATER"
 
-        /** Same file the Rust side owns: app_data_dir()/gym_state.json. */
-        private fun stateFile(context: Context) = File(context.dataDir, "${STATE_FILE}")
+        /**
+         * Same file the Rust side owns: app_data_dir()/gym_state.json.
+         * Tauri on Android resolves that to the activity data dir; some
+         * builds place it in filesDir instead, so prefer whichever file
+         * actually exists. Callers bail out when neither is present.
+         */
+        private fun stateFile(context: Context): File {
+            val inData = File(context.dataDir, "${STATE_FILE}")
+            if (inData.exists()) return inData
+            val inFiles = File(context.filesDir, "${STATE_FILE}")
+            return if (inFiles.exists()) inFiles else inData
+        }
+
+        private fun toPersianDigits(value: Int): String {
+            val map = charArrayOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
+            return value.toString().map { ch ->
+                if (ch in '0'..'9') map[ch - '0'] else ch
+            }.joinToString("")
+        }
 
         fun ensureChannel(context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -270,6 +291,9 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
                 manager.cancel(NOTIF_ID)
 
                 val glasses = incrementWaterInStateFile(context)
+                // Drinking from the action button must restart the countdown,
+                // otherwise the pending alarm rings again moments later.
+                rescheduleFromState(context)
 
                 // If the WebView is alive in the background, update its memory so
                 // the next frame already shows the new count. Never brings the
@@ -283,7 +307,7 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
 
                 Toast.makeText(
                     context,
-                    "💧 نوش جان! آب امروز: " + glasses + " لیوان",
+                    "💧 نوش جان! آب امروز: " + toPersianDigits(glasses) + " لیوان",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -359,20 +383,94 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
 
 const mainActivityKt = `package ${pkg}
 
+import android.content.ClipData
+import android.content.ContentProvider
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.database.Cursor
+import android.database.MatrixCursor
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelFileDescriptor
+import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
+import java.io.File
+import java.io.FileNotFoundException
+
+/**
+ * Zero-XML ContentProvider so the app can attach a real .json file to the
+ * native share sheet (Telegram, WhatsApp, Drive, ...) on every Android
+ * version without tripping FileUriExposedException.
+ */
+class BackupFileProvider : ContentProvider() {
+    companion object {
+        const val AUTHORITY = "${pkg}.backup"
+
+        fun sanitizeName(raw: String): String {
+            val cleaned = raw.take(80).map { ch ->
+                if (ch.isLetterOrDigit() || ch == '.' || ch == '-' || ch == '_') ch else '-'
+            }.joinToString("").trim('-', '.')
+            val base = if (cleaned.isEmpty()) "hypertrophy-backup.json" else cleaned
+            return if (base.endsWith(".json")) base else "\$base.json"
+        }
+
+        fun backupCacheDir(context: Context): File =
+            File(context.cacheDir, "shared_backups").apply { mkdirs() }
+    }
+
+    override fun onCreate(): Boolean = true
+
+    override fun getType(uri: Uri): String? = "application/json"
+
+    override fun query(
+        uri: Uri,
+        projection: Array<out String>?,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+        sortOrder: String?
+    ): Cursor? {
+        val ctx = context ?: return null
+        val name = sanitizeName(uri.lastPathSegment ?: return null)
+        val file = File(backupCacheDir(ctx), name)
+        if (!file.exists()) return null
+        val cols = projection ?: arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
+        val row = Array<Any?>(cols.size) { i ->
+            when (cols[i]) {
+                OpenableColumns.DISPLAY_NAME -> file.name
+                OpenableColumns.SIZE -> file.length()
+                else -> null
+            }
+        }
+        return MatrixCursor(cols, 1).apply { addRow(row) }
+    }
+
+    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? {
+        val ctx = context ?: throw FileNotFoundException("No context")
+        val name = sanitizeName(uri.lastPathSegment ?: throw FileNotFoundException("No filename"))
+        val file = File(backupCacheDir(ctx), name)
+        if (!file.exists()) throw FileNotFoundException(file.absolutePath)
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+    }
+
+    override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
+    override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
+}
 
 /**
  * ${MARKER}: bridge behind \`window.AndroidWater\` (see src/lib/notify.ts).
  *
  * Exposed to the bundled frontend only — the WebView never navigates away from
- * the app's own assets, and every method just forwards to the receiver.
+ * the app's own assets. Besides the water alarm it now owns the two backup
+ * entry points, which cannot be implemented from Rust or a WebView alone.
  */
 class AndroidWaterBridge(private val context: Context) {
     @JavascriptInterface
@@ -388,6 +486,83 @@ class AndroidWaterBridge(private val context: Context) {
     @JavascriptInterface
     fun cancelWaterNotification() {
         WaterBroadcastReceiver.cancelSchedule(context)
+    }
+
+    /**
+     * Writes the backup straight into the phone's public Download folder.
+     * Android 10+ scoped storage blocks plain file writes there, so it goes
+     * through MediaStore.Downloads, which needs no runtime permission.
+     */
+    @JavascriptInterface
+    fun saveBackupToDownloads(fileName: String, contents: String): String {
+        val safeName = BackupFileProvider.sanitizeName(fileName)
+        val bytes = contents.toByteArray(Charsets.UTF_8)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val resolver = context.contentResolver
+            try {
+                resolver.delete(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    "\${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                    arrayOf(safeName)
+                )
+            } catch (_: Exception) {
+            }
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, safeName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: throw IllegalStateException("MediaStore insert returned null")
+            resolver.openOutputStream(uri)?.use { out -> out.write(bytes) }
+                ?: throw IllegalStateException("openOutputStream returned null")
+            return "/storage/emulated/0/Download/\$safeName"
+        }
+
+        @Suppress("DEPRECATION")
+        val publicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        return try {
+            if (!publicDir.exists()) publicDir.mkdirs()
+            val target = File(publicDir, safeName)
+            target.writeBytes(bytes)
+            target.absolutePath
+        } catch (_: Exception) {
+            val fallbackDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                ?: File(context.filesDir, "backups")
+            if (!fallbackDir.exists()) fallbackDir.mkdirs()
+            val target = File(fallbackDir, safeName)
+            target.writeBytes(bytes)
+            target.absolutePath
+        }
+    }
+
+    /** Opens the native Share Sheet with the real .json file attached. */
+    @JavascriptInterface
+    fun shareBackupFile(fileName: String, contents: String): Boolean {
+        return try {
+            val safeName = BackupFileProvider.sanitizeName(fileName)
+            val file = File(BackupFileProvider.backupCacheDir(context), safeName)
+            file.writeText(contents, Charsets.UTF_8)
+
+            val uri = Uri.parse("content://\${BackupFileProvider.AUTHORITY}/\$safeName")
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, safeName)
+                clipData = ClipData.newRawUri(safeName, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(sendIntent, "ارسال فایل پشتیبان").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            Handler(Looper.getMainLooper()).post {
+                context.startActivity(chooser)
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 }
 
@@ -465,6 +640,12 @@ if (!fs.existsSync(MANIFEST)) {
 }
 
 let manifest = fs.readFileSync(MANIFEST, "utf8");
+if (!manifest.includes("</application>")) {
+  console.error("[android-native] no </application> tag — unexpected manifest shape.");
+  process.exit(1);
+}
+let manifestChanged = false;
+
 if (!manifest.includes("WaterBroadcastReceiver")) {
   const receiverTag = [
     `        <!-- ${MARKER}: the water action stays in the background -->`,
@@ -472,14 +653,24 @@ if (!manifest.includes("WaterBroadcastReceiver")) {
     `            android:name=".WaterBroadcastReceiver"`,
     `            android:exported="false" />`,
   ].join("\n");
-
-  if (!manifest.includes("</application>")) {
-    console.error("[android-native] no </application> tag — unexpected manifest shape.");
-    process.exit(1);
-  }
   manifest = manifest.replace("</application>", `${receiverTag}\n    </application>`);
-  fs.writeFileSync(MANIFEST, manifest, "utf8");
+  manifestChanged = true;
 }
+
+if (!manifest.includes("BackupFileProvider")) {
+  const providerTag = [
+    `        <!-- ${MARKER}: granted content Uri for the native share sheet -->`,
+    `        <provider`,
+    `            android:name=".BackupFileProvider"`,
+    `            android:authorities="${pkg}.backup"`,
+    `            android:exported="false"`,
+    `            android:grantUriPermissions="true" />`,
+  ].join("\n");
+  manifest = manifest.replace("</application>", `${providerTag}\n    </application>`);
+  manifestChanged = true;
+}
+
+if (manifestChanged) fs.writeFileSync(MANIFEST, manifest, "utf8");
 
 // ---------------------------------------------------------------------------
 // Verify
@@ -496,6 +687,15 @@ if (!mainActivity.includes('addJavascriptInterface(AndroidWaterBridge(this), "An
   problems.push("MainActivity does not expose window.AndroidWater");
 }
 if (!patchedManifest.includes("WaterBroadcastReceiver")) problems.push("manifest has no receiver");
+if (!mainActivity.includes("MediaStore.Downloads.EXTERNAL_CONTENT_URI")) {
+  problems.push("backup save does not use MediaStore.Downloads");
+}
+if (!mainActivity.includes("Intent.ACTION_SEND")) problems.push("native share sheet is missing");
+if (!mainActivity.includes("class BackupFileProvider")) problems.push("BackupFileProvider is missing");
+if (!patchedManifest.includes("BackupFileProvider")) problems.push("manifest has no file provider");
+if (!written.includes("rescheduleFromState(context)")) {
+  problems.push("drink action does not restart the water timer");
+}
 
 if (problems.length > 0) {
   console.error(`[android-native] verification failed: ${problems.join(", ")}`);
@@ -504,4 +704,5 @@ if (problems.length > 0) {
 
 console.log(`[android-native] package ${pkg}`);
 console.log(`[android-native] wrote WaterBroadcastReceiver.kt + MainActivity.kt`);
-console.log(`[android-native] registered .WaterBroadcastReceiver in the manifest`);
+console.log(`[android-native] registered .WaterBroadcastReceiver + .BackupFileProvider in the manifest`);
+console.log("[android-native] enabled MediaStore Downloads save + native share sheet");

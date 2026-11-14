@@ -235,6 +235,204 @@ const ALTERNATIVE_MOVES: Record<string, AltSpec> = {
   },
 };
 
+/** Exact muscle group for every movement in the bundled 4-day programme. */
+const EXERCISE_MUSCLE_MAP: Record<string, string> = {
+  // Day 1 — Upper A
+  d1e1: "chest",
+  d1e2: "back",
+  d1e3: "chest",
+  d1e4: "back",
+  d1e5: "shoulders",
+  d1e6: "biceps",
+  d1e7: "triceps",
+  // Day 2 — Lower A + Abs
+  d2e1: "quads",
+  d2e2: "quads",
+  d2e3: "quads",
+  d2e4: "hamstrings",
+  d2e5: "calves",
+  d2e6: "abs",
+  // Day 3 — Upper B
+  d3e1: "shoulders",
+  d3e2: "back",
+  d3e3: "chest",
+  d3e4: "back",
+  d3e5: "shoulders",
+  d3e6: "biceps",
+  d3e7: "triceps",
+  // Day 4 — Lower B + Forearms
+  d4e1: "hamstrings",
+  d4e2: "quads",
+  d4e3: "quads",
+  d4e4: "hamstrings",
+  d4e5: "calves",
+  d4e6: "forearms",
+};
+
+/**
+ * Compound Persian/English movement phrases, ordered so specific terms
+ * ("جلو پا", "پشت پا", "پرس پا", "جلو بازو"…) win before generic words.
+ *
+ * This replaces the old word-overlap scoring, which dropped every 2-letter
+ * word: "پا" disappeared from «جلو پا دستگاه» and the leftover «جلو» matched
+ * the ten «جلو بازو» catalog rows. Equipment words are deliberately absent.
+ */
+const MUSCLE_KEYWORDS: Array<[string, string[]]> = [
+  [
+    "quads",
+    [
+      "جلو پا",
+      "جلوپا",
+      "چهارسر",
+      "پرس پا",
+      "هاگ پا",
+      "هاگ اسکات",
+      "اسکات",
+      "اسکوات",
+      "لانگز",
+      "لانج",
+      "استپ آپ",
+      "leg extension",
+      "leg press",
+      "squat",
+      "lunge",
+    ],
+  ],
+  [
+    "hamstrings",
+    [
+      "پشت پا",
+      "همسترینگ",
+      "ددلیفت رومانیایی",
+      "ددلیفت پا صاف",
+      "گود مورنینگ",
+      "leg curl",
+      "romanian deadlift",
+      "stiff leg",
+      "hamstring",
+    ],
+  ],
+  ["glutes", ["باسن", "هیپ تراست", "پل باسن", "hip thrust", "glute"]],
+  ["calves", ["ساق پا", "پرس ساق", "ساق", "calf"]],
+  [
+    "abs",
+    [
+      "زیرشکم",
+      "شکم",
+      "کرانچ",
+      "درازنشست",
+      "پلانک",
+      "چرخش روسی",
+      "وی\u200cآپ",
+      "crunch",
+      "plank",
+      "sit-up",
+      "sit up",
+      "knee raise",
+      "leg raise",
+      "abs",
+    ],
+  ],
+  [
+    "biceps",
+    [
+      "جلو بازو",
+      "جلوبازو",
+      "لاری",
+      "چکشی",
+      "bicep",
+      "preacher curl",
+      "hammer curl",
+      "concentration curl",
+      "ez bar curl",
+      "barbell curl",
+      "dumbbell curl",
+    ],
+  ],
+  [
+    "triceps",
+    [
+      "پشت بازو",
+      "پشت\u200cبازو",
+      "دیپ پشت بازو",
+      "دیپ",
+      "پشت سر",
+      "tricep",
+      "pushdown",
+      "skull crusher",
+    ],
+  ],
+  [
+    "shoulders",
+    [
+      "سرشانه",
+      "نشر جانب",
+      "نشر از جانب",
+      "نشر از جلو",
+      "نشر خم",
+      "نشر ایستاده",
+      "فلای معکوس",
+      "فیس\u200cپول",
+      "فیس پول",
+      "شراگ",
+      "shoulder",
+      "lateral raise",
+      "front raise",
+      "rear delt",
+      "reverse fly",
+      "face pull",
+      "shrug",
+      "overhead press",
+      "military press",
+    ],
+  ],
+  [
+    "back",
+    [
+      "زیربغل",
+      "قایقی",
+      "تی\u200cبار",
+      "تی بار",
+      "بارفیکس",
+      "روئینگ",
+      "پارویی",
+      "پول\u200cاور",
+      "پول اور",
+      "ددلیفت",
+      "pulldown",
+      "pull-up",
+      "pull up",
+      "chin up",
+      "row",
+      "t-bar",
+      "lat ",
+      "pullover",
+    ],
+  ],
+  ["forearms", ["ساعد", "مچ روی زانو", "جلو بازو انگشتی", "فشار دست", "wrist curl", "forearm"]],
+  [
+    "chest",
+    [
+      "سینه",
+      "پروانه",
+      "پک دک",
+      "کراس\u200cاور",
+      "کراس اور",
+      "شنا سوئدی",
+      "شنا",
+      "bench press",
+      "chest press",
+      "incline dumbbell press",
+      "pec deck",
+      "chest fly",
+      "dumbbell fly",
+      "push-up",
+      "push up",
+    ],
+  ],
+  ["cardio", ["هوازی", "تردمیل", "دوچرخه", "الپتیکال", "برپی", "cardio", "treadmill", "bike", "burpee"]],
+];
+
 /** Bundled demo GIFs, used when the original movement had none stored. */
 const EXERCISE_GIFS = defaultGifs.exercises as Record<string, string>;
 
@@ -257,9 +455,22 @@ export function isExerciseSwapped(exercise: Exercise): boolean {
 
 /** Swaps a busy machine for its alternative and remembers the original fields. */
 export function swapBusyExercise(exercise: Exercise): void {
-  if (isExerciseSwapped(exercise)) {
-    restoreOriginalExercise(exercise);
-    return;
+  // Picking the curated suggestion while a swap is already active used to call
+  // `restoreOriginalExercise()` first, which showed its own toast and re-render
+  // before this function showed a second one. Restore the fields silently and
+  // let the single toast below describe the final state.
+  if (isExerciseSwapped(exercise) && exercise.originalName) {
+    exercise.name = exercise.originalName;
+    if (exercise.originalQuery) exercise.query = exercise.originalQuery;
+    exercise.gifUrl = originalGifFor(exercise);
+    if (exercise.originalTip !== undefined && exercise.originalTip !== null) {
+      exercise.tip = exercise.originalTip;
+    }
+    exercise.swappedDate = null;
+    exercise.originalName = null;
+    exercise.originalQuery = null;
+    exercise.originalGifUrl = null;
+    exercise.originalTip = null;
   }
 
   const alt = ALTERNATIVE_MOVES[exercise.id];
@@ -316,19 +527,40 @@ export function restoreOriginalExercise(exercise: Exercise): void {
 /**
  * Which catalog muscle group an exercise belongs to.
  *
- * Exact name matches are reliable for the bundled programme, but a custom
- * exercise ("پرس سینه دستگاه") only shares words, so the fallback scores every
- * catalog entry by word overlap and takes the muscle that wins most often.
+ * The old word-overlap scorer dropped every two-letter word, so «جلو پا دستگاه»
+ * lost «پا» and the surviving «جلو» matched the ten «جلو بازو» rows. The order
+ * now is: exact catalog match (GIF / name / English query), then explicit
+ * compound phrase rules, then the known programme IDs, and only then a
+ * whole-word overlap score for genuinely unknown custom movements.
  */
-function guessMuscleKey(exercise: Exercise): string {
-  const direct =
-    EXERCISE_CATALOG.find((item) => item.name === exercise.name) ??
-    EXERCISE_CATALOG.find(
-      (item) => exercise.query && item.english.toLowerCase() === exercise.query.toLowerCase(),
-    );
-  if (direct) return direct.muscleKey;
+export function guessMuscleKey(exercise: Exercise): string {
+  const baseName = (exercise.originalName ?? exercise.name).trim();
+  const baseQuery = (exercise.originalQuery ?? exercise.query ?? "")
+    .toLowerCase()
+    .replace(/\bgif\b/g, "")
+    .trim();
+  const baseGif = exercise.originalGifUrl ?? exercise.gifUrl;
 
-  const words = exercise.name.split(/\s+/).filter((word) => word.length > 2);
+  // 1. Exact catalog match by GIF, Persian name or English query.
+  const byCatalog =
+    EXERCISE_CATALOG.find((item) => baseGif && item.gif === baseGif) ??
+    EXERCISE_CATALOG.find((item) => item.name === baseName || item.name === exercise.name) ??
+    EXERCISE_CATALOG.find((item) => baseQuery.length > 0 && item.english.toLowerCase() === baseQuery);
+  if (byCatalog) return byCatalog.muscleKey;
+
+  // 2. Specific compound phrases. Leg/back/arm terms are deliberately checked
+  //    before generic ones so «پشت پا» never becomes «پشت بازو».
+  const haystack = `${baseName} ${exercise.name} ${baseQuery}`.toLowerCase();
+  for (const [muscleKey, phrases] of MUSCLE_KEYWORDS) {
+    if (phrases.some((phrase) => haystack.includes(phrase))) return muscleKey;
+  }
+
+  // 3. Every movement in the bundled 4-day programme has an exact answer.
+  if (EXERCISE_MUSCLE_MAP[exercise.id]) return EXERCISE_MUSCLE_MAP[exercise.id];
+
+  // 4. Unknown custom movement: fall back to overlap, but keep short words
+  //    (they are exactly what the old filter threw away).
+  const words = baseName.split(/\s+/).filter((word) => word.length >= 2);
   const scores = new Map<string, number>();
   for (const item of EXERCISE_CATALOG) {
     let hits = 0;
@@ -336,10 +568,8 @@ function guessMuscleKey(exercise: Exercise): string {
       if (item.name.includes(word)) hits += 1;
     }
     if (hits === 0) continue;
-    // Squared so a two-word match clearly beats two one-word matches.
     scores.set(item.muscleKey, (scores.get(item.muscleKey) ?? 0) + hits * hits);
   }
-
   let best = "chest";
   let bestScore = 0;
   for (const [key, value] of scores) {
@@ -384,21 +614,17 @@ function applyCatalogSwap(exercise: Exercise, item: CatalogExercise): void {
  */
 export function openSwapExerciseModal(exercise: Exercise): void {
   const swapped = isExerciseSwapped(exercise);
-  const muscleKey = guessMuscleKey(exercise);
-  const muscle = CATALOG_MUSCLES.find((entry) => entry.key === muscleKey);
+  // Automatically selects the detected muscle, but the chips let the student
+  // browse a neighbouring group when that classification is not what they want.
+  let activeMuscleKey = guessMuscleKey(exercise);
   const curated = ALTERNATIVE_MOVES[exercise.id];
-  const options = catalogByMuscle(muscleKey).filter(
-    (item) => item.name !== exercise.name && item.name !== exercise.originalName,
-  );
 
-  const body = el("div", "space-y-2");
-  body.append(
-    el(
-      "p",
-      "text-[11px] leading-6 text-slate-400",
-      `دستگاه شلوغ است؟ یک حرکت از گروه «${escapeHtml(muscle?.label ?? "هم‌گروه")}» انتخاب کن. جایگزینی فقط برای امروز است و فردا خودکار به برنامه برمی‌گردد.`,
-    ),
-  );
+  const body = el("div", "space-y-2.5");
+  const desc = el("p", "text-[11px] leading-6 text-slate-400");
+  const filterRow = el("div", "flex flex-wrap gap-1 pt-0.5");
+  const sectionHeading = el("p", "mt-1 text-[10px] font-bold text-slate-300");
+  const list = el("div", "max-h-[42vh] space-y-1.5 overflow-y-auto pr-1");
+  body.append(desc);
 
   const handle = openModal({
     title: "جایگزین حرکت امروز",
@@ -407,14 +633,84 @@ export function openSwapExerciseModal(exercise: Exercise): void {
     footer: btn("btn-ghost w-full", "بستن", () => handle.close()),
   });
 
+  const paintList = () => {
+    const muscle = CATALOG_MUSCLES.find((entry) => entry.key === activeMuscleKey);
+    const muscleLabel = muscle?.label ?? "هم\u200cگروه";
+
+    desc.textContent = `دستگاه شلوغ است؟ یک حرکت از گروه «${muscleLabel}» انتخاب کن. جایگزینی فقط برای امروز است و فردا خودکار به برنامه بر\u200cمی\u200cگردد.`;
+    sectionHeading.textContent = `همه حرکت\u200cهای ${muscleLabel}`;
+
+    filterRow.replaceChildren();
+    for (const m of CATALOG_MUSCLES) {
+      const isActive = m.key === activeMuscleKey;
+      filterRow.append(
+        btn(
+          `rounded-lg border px-2 py-1 text-[10px] font-bold transition active:scale-95 ${
+            isActive
+              ? "border-emerald-400/60 bg-emerald-400/15 text-emerald-300"
+              : "border-slate-800 bg-slate-900/60 text-slate-400"
+          }`,
+          m.label,
+          () => {
+            activeMuscleKey = m.key;
+            softTap();
+            paintList();
+          },
+          { "aria-label": `فیلتر ${m.label}` },
+        ),
+      );
+    }
+
+    list.replaceChildren();
+    const options = catalogByMuscle(activeMuscleKey).filter(
+      (item) => item.name !== exercise.name && item.name !== exercise.originalName,
+    );
+
+    if (options.length === 0) {
+      list.append(
+        el(
+          "div",
+          "rounded-xl border border-dashed border-slate-800 bg-slate-900/40 px-3 py-4 text-center text-[10px] text-slate-500",
+          "برای این گروه حرکتی در کتابخانه پیدا نشد.",
+        ),
+      );
+      return;
+    }
+
+    for (const item of options) {
+      const row = btn(
+        "flex w-full items-start gap-2 rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-right transition active:scale-[0.99]",
+        "",
+        () => {
+          applyCatalogSwap(exercise, item);
+          handle.close();
+        },
+        { "aria-label": `انتخاب ${item.name}` },
+      );
+      const img = el("img", "h-12 w-12 shrink-0 rounded-lg bg-white object-contain");
+      img.src = item.gif;
+      img.alt = item.name;
+      img.loading = "lazy";
+      img.decoding = "async";
+      const info = el("div", "min-w-0 flex-1");
+      info.append(
+        el("p", "text-[11px] font-extrabold leading-5 text-slate-100", escapeHtml(item.name)),
+        el("p", "mt-0.5 text-[9px] text-slate-500", `${escapeHtml(item.equipment)} • ${escapeHtml(item.muscle)}`),
+        el("p", "mt-1 text-[10px] leading-5 text-slate-400", escapeHtml(item.tip)),
+      );
+      row.append(img, info);
+      list.append(row);
+    }
+  };
+
   // Curated one-tap suggestion first: it is the only option that ships with a
-  // hand-picked demo GIF and a matching cue.
+  // hand-picked demo GIF and a matching cue. `swapBusyExercise` now replaces an
+  // existing swap silently, so only one toast is shown.
   if (curated) {
     const quick = btn(
       "flex w-full items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-right transition active:scale-[0.99]",
       "",
       () => {
-        if (isExerciseSwapped(exercise)) restoreOriginalExercise(exercise);
         swapBusyExercise(exercise);
         handle.close();
       },
@@ -430,46 +726,8 @@ export function openSwapExerciseModal(exercise: Exercise): void {
     body.append(quick);
   }
 
-  body.append(
-    el("p", "mt-1 text-[10px] font-bold text-slate-300", `همه حرکت‌های ${escapeHtml(muscle?.label ?? "")}`),
-  );
-
-  if (options.length === 0) {
-    body.append(
-      el(
-        "div",
-        "rounded-xl border border-dashed border-slate-800 bg-slate-900/40 px-3 py-4 text-center text-[10px] text-slate-500",
-        "برای این گروه حرکتی در کتابخانه پیدا نشد.",
-      ),
-    );
-  }
-
-  const list = el("div", "max-h-[42vh] space-y-1.5 overflow-y-auto pr-1");
-  for (const item of options) {
-    const row = btn(
-      "flex w-full items-start gap-2 rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-right transition active:scale-[0.99]",
-      "",
-      () => {
-        applyCatalogSwap(exercise, item);
-        handle.close();
-      },
-      { "aria-label": `انتخاب ${item.name}` },
-    );
-    const img = el("img", "h-12 w-12 shrink-0 rounded-lg bg-slate-900 object-cover");
-    img.src = item.gif;
-    img.alt = item.name;
-    img.loading = "lazy";
-    img.decoding = "async";
-    const info = el("div", "min-w-0 flex-1");
-    info.append(
-      el("p", "text-[11px] font-extrabold leading-5 text-slate-100", escapeHtml(item.name)),
-      el("p", "mt-0.5 text-[9px] text-slate-500", `${escapeHtml(item.equipment)} • ${escapeHtml(item.muscle)}`),
-      el("p", "mt-1 text-[10px] leading-5 text-slate-400", escapeHtml(item.tip)),
-    );
-    row.append(img, info);
-    list.append(row);
-  }
-  body.append(list);
+  body.append(filterRow, sectionHeading, list);
+  paintList();
 
   if (swapped) {
     body.append(
@@ -797,8 +1055,32 @@ export function getActiveWorkoutDaysCount(): number {
 // #9. Deload week
 // ---------------------------------------------------------------------------
 
-/** Weights captured before entering deload, so leaving it is lossless. */
-const deloadSnapshot = new Map<string, number>();
+/**
+ * Weights captured before entering deload, so leaving it is lossless.
+ *
+ * The old in-memory `Map` vanished when the app was closed mid-deload, and the
+ * fallback (`× 1.25`) slowly drifted the weights upwards on every cycle. The
+ * snapshot now lives in localStorage next to the state.
+ */
+const DELOAD_SNAPSHOT_KEY = "persian-hypertrophy::deload-snapshot";
+
+function readDeloadSnapshot(): Record<string, number> {
+  try {
+    const raw = window.localStorage.getItem(DELOAD_SNAPSHOT_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeDeloadSnapshot(map: Record<string, number> | null): void {
+  try {
+    if (!map) window.localStorage.removeItem(DELOAD_SNAPSHOT_KEY);
+    else window.localStorage.setItem(DELOAD_SNAPSHOT_KEY, JSON.stringify(map));
+  } catch {
+    /* storage unavailable — the × 1.25 fallback below still applies */
+  }
+}
 
 const roundToPlate = (value: number) => Math.max(2.5, Math.round(value / 2.5) * 2.5);
 
@@ -807,17 +1089,19 @@ export function toggleDeloadWeek(): void {
   const entering = !state.deloadActive;
   state.deloadActive = entering;
 
-  if (entering) deloadSnapshot.clear();
+  const snapshot = entering ? {} : readDeloadSnapshot();
 
   for (const day of state.days) {
     for (const exercise of day.exercises) {
       if (exercise.bodyweight || exercise.targetWeight <= 0) continue;
+      const key = `${day.id}:${exercise.id}`;
 
       if (entering) {
-        deloadSnapshot.set(exercise.id, exercise.targetWeight);
+        snapshot[key] = exercise.targetWeight;
         exercise.targetWeight = roundToPlate(exercise.targetWeight * 0.8);
       } else {
-        const original = deloadSnapshot.get(exercise.id);
+        // Older saves used the bare exercise id as the key.
+        const original = snapshot[key] ?? snapshot[exercise.id];
         exercise.targetWeight = original ?? roundToPlate(exercise.targetWeight * 1.25);
       }
 
@@ -827,6 +1111,7 @@ export function toggleDeloadWeek(): void {
     }
   }
 
+  writeDeloadSnapshot(entering ? snapshot : null);
   persist(0);
   toast(
     entering

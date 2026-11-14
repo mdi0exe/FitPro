@@ -2,7 +2,7 @@
 import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { daysBetween, fa, faDate, faNum, faReps, firstNumber, isoToday } from "../lib/fa";
-import { alarm, beep, cardioTimer, chord, softTap } from "../lib/timer";
+import { alarm, beep, cardioTimer, chord, softTap, startNewWaterReminderCycle } from "../lib/timer";
 import { applyProgressiveOverload } from "../lib/api";
 import {
   getState,
@@ -112,9 +112,15 @@ function waterBar(): HTMLElement {
       "shrink-0 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-[10px] font-bold text-cyan-200 transition active:scale-95",
       "💧 ‎+۱ لیوان",
       () => {
+        const previous = state.diet.waterGlasses;
         state.diet.waterGlasses = Math.min(20, state.diet.waterGlasses + 1);
         syncWaterChecklist();
-        persist(0);
+        // A glass logged mid-workout also restarts the reminder countdown.
+        if (state.diet.waterGlasses > previous && state.diet.waterReminderEnabled) {
+          startNewWaterReminderCycle(state.diet.waterReminderMinutes);
+        } else {
+          persist(0);
+        }
         if (state.diet.waterGlasses === WATER_GOAL) {
           toast("💧 ۸ لیوان کامل شد! پمپ و ریکاوری بهتر.", "ok");
           beep(2, 1320, 0.12);
@@ -557,7 +563,7 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
         title: exercise.name,
         query: exercise.query,
         gifUrl: exercise.gifUrl,
-        fallbackUrl: `/gifs/${exercise.id}.svg`,
+        fallbackUrl: `/gifs/${exercise.id}.gif`,
         onSaveUrl: (url) => {
           exercise.gifUrl = url;
           persist(0);

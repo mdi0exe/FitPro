@@ -4,7 +4,12 @@
 import { btn, el, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { faDate, faNum, isoToday } from "../lib/fa";
-import { saveBackupFile } from "../lib/api";
+import {
+  isTauri,
+  nativeSaveBackupToDownloads,
+  nativeShareBackupFile,
+  saveBackupFile,
+} from "../lib/api";
 import { getState, persist, requestRender, setState } from "../lib/store";
 import { normalizeState } from "../lib/localBackend";
 import type { AppStateData, ProgressPhoto } from "../types";
@@ -227,10 +232,10 @@ export function renderBackupRestoreCard(): HTMLElement {
   row.append(
     btn("btn-primary w-full text-xs", "📤 ارسال به تلگرام / اشتراک‌گذاری فایل", () => {
       void shareBackup(hint);
-    }),
+    }, { "aria-label": "اشتراکگذاری فایل پشتیبان" }),
     btn("btn-ghost w-full text-xs", "📁 ذخیره مستقیم در پوشه Download", () => {
       void saveBackupToDownloads(hint);
-    }),
+    }, { "aria-label": "ذخیره پشتیبان در Download" }),
     btn("btn-ghost w-full text-xs", "📥 بازیابی از فایل", () => fileInput.click()),
   );
 
@@ -253,23 +258,37 @@ function setHint(target: HTMLElement, text: string, tone: "ok" | "error" = "ok")
 }
 
 /**
- * Hands the backup to Android's share sheet (Telegram, Drive, email…).
+ * Opens the native Android Share Sheet (Telegram, Drive, email...).
  *
- * `navigator.share` with `files` is the only way to attach a real `.json` to
- * another app from a WebView. Devices that expose the API without file support
- * still get the JSON as text, and anything older falls back to a saved copy.
+ * An Android WebView has no `navigator.share`; the Kotlin bridge is the only
+ * way to attach a real `.json` file. A genuine browser still uses the Web Share
+ * API, and a failure is reported — never silently converted into a save, which
+ * used to make both backup buttons do the same thing.
  */
 async function shareBackup(hint: HTMLElement): Promise<void> {
   const name = backupFileName();
   const json = backupJson();
-  const nav = typeof navigator === "undefined" ? undefined : navigator;
 
+  // Android WebViews have no `navigator.share`. Previously that landed in the
+  // catch block below, which called `saveBackupToDownloads` — so both buttons
+  // did exactly the same thing. The Kotlin bridge now owns this path.
+  const nativeResult = nativeShareBackupFile(name, json);
+  if (nativeResult !== null) {
+    if (nativeResult) {
+      setHint(hint, "منوی اشتراک\u200cگذاری اندروید باز شد؛ فایل JSON را به تلگرام یا درایو بفرست 📤");
+    } else {
+      setHint(hint, "باز کردن منوی اشتراک\u200cگذاری ناموفق بود.", "error");
+    }
+    return;
+  }
+
+  const nav = typeof navigator === "undefined" ? undefined : navigator;
   try {
     const file = new File([json], name, { type: "application/json" });
     const canShareFiles =
       typeof nav?.canShare === "function" && nav.canShare({ files: [file] });
     if (nav?.share && canShareFiles) {
-      await nav.share({ files: [file], title: "پشتیبان فیت‌پرو" });
+      await nav.share({ files: [file], title: "پشتیبان فیت\u200cپرو" });
       setHint(hint, "فایل پشتیبان به اشتراک گذاشته شد 📤");
       return;
     }
@@ -282,8 +301,18 @@ async function shareBackup(hint: HTMLElement): Promise<void> {
   } catch (error) {
     // Dismissing the sheet is not a failure.
     if ((error as Error | undefined)?.name === "AbortError") return;
-    console.warn("share failed, saving a copy instead", error);
-    await saveBackupToDownloads(hint);
+    console.warn("share failed", error);
+    if (!isTauri()) {
+      downloadBackup(name, json);
+      setHint(hint, "اشتراک\u200cگذاری پشتیبانی نشد؛ فایل از طریق مرورگر دانلود شد 📁");
+      return;
+    }
+    // Never silently save here — that is what made the two buttons identical.
+    setHint(
+      hint,
+      "اشتراک\u200cگذاری در این دستگاه در دسترس نیست؛ از دکمه «ذخیره مستقیم در پوشه Download» استفاده کن.",
+      "error",
+    );
   }
 }
 
@@ -291,6 +320,20 @@ async function shareBackup(hint: HTMLElement): Promise<void> {
 async function saveBackupToDownloads(hint: HTMLElement): Promise<void> {
   const name = backupFileName();
   const json = backupJson();
+
+  // Android 10+ scoped storage blocks Rust's std::fs::write into Download.
+  // MediaStore.Downloads needs no permission and lands in the visible folder.
+  let nativePath: string | null = null;
+  try {
+    nativePath = nativeSaveBackupToDownloads(name, json);
+  } catch (error) {
+    console.warn("MediaStore backup write failed, trying the native command", error);
+  }
+  if (nativePath) {
+    setHint(hint, `ذخیره شد در ${nativePath}`);
+    toast("فایل پشتیبان در پوشه Download ذخیره شد 💾");
+    return;
+  }
 
   try {
     const saved = await saveBackupFile(name, json);
@@ -308,8 +351,8 @@ async function saveBackupToDownloads(hint: HTMLElement): Promise<void> {
     toast("فایل پشتیبان ذخیره شد 💾");
   } catch (error) {
     console.warn("native backup write failed", error);
-    toast("ذخیره فایل ناموفق بود؛ از گزینه اشتراک‌گذاری استفاده کن.", "error");
-    setHint(hint, "ذخیره فایل ناموفق بود؛ از دکمه اشتراک‌گذاری استفاده کن.", "error");
+    toast("ذخیره فایل ناموفق بود؛ از گزینه اشتراک\u200cگذاری استفاده کن.", "error");
+    setHint(hint, "ذخیره فایل ناموفق بود؛ از دکمه اشتراک\u200cگذاری استفاده کن.", "error");
   }
 }
 

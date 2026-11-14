@@ -25,6 +25,8 @@ import { getState, persist, requestRender, syncTodayActivity, syncWaterChecklist
 
 /** Android 8+ needs a channel; High importance gives a heads-up banner. */
 const CHANNEL_ID = "fitpro-alerts";
+/** Same synchronous localStorage mirror timer.ts reads on boot. */
+const WATER_MIRROR_KEY = "persian-hypertrophy::water-next-at";
 let channelReady = false;
 
 async function ensureChannel(): Promise<void> {
@@ -138,6 +140,10 @@ declare global {
       showWaterNotification: (title: string, body: string) => void;
       scheduleWaterNotification: (triggerAtMs: number) => void;
       cancelWaterNotification: () => void;
+      /** MediaStore.Downloads writer — returns the public path, throws on failure. */
+      saveBackupToDownloads?: (fileName: string, contents: string) => string;
+      /** Native ACTION_SEND share sheet — returns false when no app can handle it. */
+      shareBackupFile?: (fileName: string, contents: string) => boolean;
     };
     /** Called by `WaterBroadcastReceiver` after it saves a glass natively. */
     __onSilentWaterIncrement?: (newCount: number) => void;
@@ -189,6 +195,28 @@ export async function showWaterNotification(title: string, body: string): Promis
   await pushSystemNotification(title, body, WATER_NOTIFICATION_ID, WATER_ACTION_TYPE_ID);
 }
 
+/**
+ * Restarts the water countdown after a glass is logged.
+ *
+ * Kept here (rather than importing `startNewWaterReminderCycle` from timer.ts)
+ * because timer.ts already imports this module — a cycle would make the boot
+ * order fragile. All this needs is the same deadline math and the OS alarm.
+ */
+function bumpWaterDeadlineOnDrink(): void {
+  const state = getState();
+  if (!state.diet.waterReminderEnabled) return;
+  const mins = Math.min(240, Math.max(15, Math.round(state.diet.waterReminderMinutes || 60)));
+  const nextAt = adjustTimestampForWaterQuietHours(Date.now() + mins * 60_000);
+  state.diet.waterReminderNextAt = Math.trunc(nextAt);
+  try {
+    window.localStorage.setItem(WATER_MIRROR_KEY, String(state.diet.waterReminderNextAt));
+  } catch {
+    /* storage unavailable */
+  }
+  // Replaces the pending alarm (same PendingIntent id on the native side).
+  void scheduleWaterNotificationAt(nextAt);
+}
+
 let actionsInitialized = false;
 
 /**
@@ -214,6 +242,19 @@ export async function initNotificationActions(): Promise<void> {
       if (glasses >= 8) {
         const water = state.diet.items.find((item) => item.id === "diet-4");
         if (water) water.done = true;
+      }
+      // The receiver already wrote the new deadline into gym_state.json and
+      // re-armed its alarm. Mirror the value in memory so the on-screen
+      // countdown does not keep showing the old, expired deadline.
+      if (state.diet.waterReminderEnabled) {
+        const mins = Math.min(240, Math.max(15, Math.round(state.diet.waterReminderMinutes || 60)));
+        const nextAt = adjustTimestampForWaterQuietHours(Date.now() + mins * 60_000);
+        state.diet.waterReminderNextAt = Math.trunc(nextAt);
+        try {
+          window.localStorage.setItem(WATER_MIRROR_KEY, String(state.diet.waterReminderNextAt));
+        } catch {
+          /* storage unavailable */
+        }
       }
       syncWaterChecklist();
       syncTodayActivity();
@@ -252,6 +293,7 @@ export function addWaterGlass(count = 1): number {
   const state = getState();
   const next = Math.min(20, Math.max(0, (state.diet.waterGlasses ?? 0) + count));
   state.diet.waterGlasses = next;
+  if (count > 0) bumpWaterDeadlineOnDrink();
   syncWaterChecklist();
   syncTodayActivity();
   persist(0);

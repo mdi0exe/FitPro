@@ -175,6 +175,8 @@ node scripts/gen-icons.mjs       # رندر SVG با Edge + تمام آیکون�
 node scripts/patch-android-manifest.mjs  # افزودن مجوزهای آلارم دقیق به مانیفست تولیدشده
 node scripts/ensure-keystore.mjs # ساخت کلید ثابت دیباگ در src-tauri/keystore (یک‌بار؛ در گیت کامیت می‌شود)
 node scripts/build-exercise-library.mjs  # ساخت کاتالوگ ۱۲۰ حرکتی + GIF + نکته فارسی هر حرکت
+node scripts/setup-android-native.mjs  # تزریق BroadcastReceiver آب + MediaStore/Share به پروژه اندروید (CI)
+node scripts/dump-code.mjs       # جمع کردن تمام کد سورس در project-code-dump.txt (برای دادن به AI)
 node scripts/serve-dist.mjs      # سرور استاتیک dist روی 127.0.0.1:4400
 node scripts/verify-ui.mjs       # اسکرین‌شات هر تب با Edge headless + گزارش خطاها
 node scripts/e2e-check.mjs       # تست عملکردی: ثبت ست، تایمر، افزایش وزنه، ویرایش، ذخیره‌سازی
@@ -184,6 +186,7 @@ node scripts/e2e-audio.mjs       # تست صداهای MP3، گین‌ها، و�
 node scripts/e2e-calendar.mjs    # تست تقویم هفته، کارنامه روزانه و اتصال نوتیفیکیشن
 node scripts/e2e-uni.mjs         # تست تب دانشگاه، رادار سرویس و ابزارهای باشگاه
 node scripts/e2e-v5.mjs          # تست کلید APK، هدر SVG، هفته خودکار، اشتراک تفکیک‌شده، AI، تاریخچه
+node scripts/e2e-v6.mjs          # تست ریست تایمر آب، تشخیص عضله، ریکاوری و اشتراک/ذخیره بومی
 ```
 
 `verify-ui.mjs` و `e2e-check.mjs` از `puppeteer-core` و مرورگر Edge نصب‌شده روی ویندوز استفاده می‌کنند (بدون دانلود مرورگر جداگانه).
