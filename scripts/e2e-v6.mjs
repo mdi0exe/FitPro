@@ -167,6 +167,11 @@ function quietAdjusted(ms) {
   check("native share uses ACTION_SEND", native.includes("Intent.ACTION_SEND"));
   check("native provider is registered", native.includes('android:name=".BackupFileProvider"'));
   check("provider grants Uri permissions", native.includes('android:grantUriPermissions="true"'));
+  check("share sheet sets EXTRA_TITLE", native.includes("putExtra(Intent.EXTRA_TITLE, safeName)"));
+  check("MediaStore stream is flushed", native.includes("out.flush()"));
+  check("provider getType returns application/json", native.includes('getType(uri: Uri): String = "application/json"'));
+  check("notify.ts declares both backup bridge methods", notify.includes("shareBackupFile?:") && notify.includes("saveBackupToDownloads?:"));
+  check("progressPhotos accesses the bridge directly", !photos.includes("nativeSaveBackupToDownloads"));
   check("stateFile tolerates filesDir", native.includes("File(context.filesDir"));
   check("stateFile keeps dataDir too", native.includes("File(context.dataDir"));
   check(
@@ -178,8 +183,8 @@ function quietAdjusted(ms) {
   check("nutrition +1 restarts the cycle", nutrition.includes("startNewWaterReminderCycle(state.diet.waterReminderMinutes)"));
   check("workout +1 restarts the cycle", workout.includes("startNewWaterReminderCycle(state.diet.waterReminderMinutes)"));
   check("share failure no longer silently saves", !photos.includes("await saveBackupToDownloads(hint);"));
-  check("share button uses the native bridge", photos.includes("nativeShareBackupFile(name, json)"));
-  check("save button uses the native bridge", photos.includes("nativeSaveBackupToDownloads(name, json)"));
+  check("share button uses the native bridge", photos.includes("nativeBridge.shareBackupFile(name, json)"));
+  check("save button uses the native bridge", photos.includes("nativeBridge.saveBackupToDownloads(name, json)"));
   check("muscle phrase table exists", tools.includes("const MUSCLE_KEYWORDS"));
   check("leg compound phrases come before arms", tools.indexOf('"جلو پا"') < tools.indexOf('"جلو بازو"'));
   check("deload snapshot is persisted", tools.includes("DELOAD_SNAPSHOT_KEY"));

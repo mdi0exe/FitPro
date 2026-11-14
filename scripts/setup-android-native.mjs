@@ -119,9 +119,11 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
 
         /**
          * Same file the Rust side owns: app_data_dir()/gym_state.json.
-         * Tauri on Android resolves that to the activity data dir; some
-         * builds place it in filesDir instead, so prefer whichever file
-         * actually exists. Callers bail out when neither is present.
+         * Tauri 2.x resolves app_data_dir() to activity.dataDir on Android
+         * (PathPlugin.kt -> getDataDir), NOT context.filesDir. Both paths are
+         * checked for tolerance, but dataDir wins when both exist because
+         * that is where Rust actually writes. Callers bail out if neither
+         * file exists, so the fallback path is never used for a new write.
          */
         private fun stateFile(context: Context): File {
             val inData = File(context.dataDir, "${STATE_FILE}")
@@ -428,7 +430,7 @@ class BackupFileProvider : ContentProvider() {
 
     override fun onCreate(): Boolean = true
 
-    override fun getType(uri: Uri): String? = "application/json"
+    override fun getType(uri: Uri): String = "application/json"
 
     override fun query(
         uri: Uri,
@@ -515,8 +517,10 @@ class AndroidWaterBridge(private val context: Context) {
             }
             val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 ?: throw IllegalStateException("MediaStore insert returned null")
-            resolver.openOutputStream(uri)?.use { out -> out.write(bytes) }
-                ?: throw IllegalStateException("openOutputStream returned null")
+            resolver.openOutputStream(uri)?.use { out ->
+                out.write(bytes)
+                out.flush()
+            } ?: throw IllegalStateException("openOutputStream returned null")
             return "/storage/emulated/0/Download/\$safeName"
         }
 
@@ -550,6 +554,7 @@ class AndroidWaterBridge(private val context: Context) {
                 type = "application/json"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(Intent.EXTRA_SUBJECT, safeName)
+                putExtra(Intent.EXTRA_TITLE, safeName)
                 clipData = ClipData.newRawUri(safeName, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }

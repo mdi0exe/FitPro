@@ -4,12 +4,7 @@
 import { btn, el, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { faDate, faNum, isoToday } from "../lib/fa";
-import {
-  isTauri,
-  nativeSaveBackupToDownloads,
-  nativeShareBackupFile,
-  saveBackupFile,
-} from "../lib/api";
+import { saveBackupFile } from "../lib/api";
 import { getState, persist, requestRender, setState } from "../lib/store";
 import { normalizeState } from "../lib/localBackend";
 import type { AppStateData, ProgressPhoto } from "../types";
@@ -258,30 +253,28 @@ function setHint(target: HTMLElement, text: string, tone: "ok" | "error" = "ok")
 }
 
 /**
- * Opens the native Android Share Sheet (Telegram, Drive, email...).
- *
- * An Android WebView has no `navigator.share`; the Kotlin bridge is the only
- * way to attach a real `.json` file. A genuine browser still uses the Web Share
- * API, and a failure is reported — never silently converted into a save, which
- * used to make both backup buttons do the same thing.
+ * Hands the backup to Android's native Share Sheet (Telegram, Drive, WhatsApp...),
+ * or Web Share API on browsers that support it.
  */
 async function shareBackup(hint: HTMLElement): Promise<void> {
   const name = backupFileName();
   const json = backupJson();
 
-  // Android WebViews have no `navigator.share`. Previously that landed in the
-  // catch block below, which called `saveBackupToDownloads` — so both buttons
-  // did exactly the same thing. The Kotlin bridge now owns this path.
-  const nativeResult = nativeShareBackupFile(name, json);
-  if (nativeResult !== null) {
-    if (nativeResult) {
-      setHint(hint, "منوی اشتراک\u200cگذاری اندروید باز شد؛ فایل JSON را به تلگرام یا درایو بفرست 📤");
-    } else {
-      setHint(hint, "باز کردن منوی اشتراک\u200cگذاری ناموفق بود.", "error");
+  // 1. Native Android Share Sheet via AndroidWaterBridge (works in Android WebView!)
+  const nativeBridge = typeof window !== "undefined" ? window.AndroidWater : undefined;
+  if (nativeBridge && typeof nativeBridge.shareBackupFile === "function") {
+    try {
+      const ok = nativeBridge.shareBackupFile(name, json);
+      if (ok) {
+        setHint(hint, "منوی اشتراک\u200cگذاری باز شد؛ برنامه مقصد (مثل تلگرام) را انتخاب کن 📤");
+        return;
+      }
+    } catch (error) {
+      console.warn("native shareBackupFile failed", error);
     }
-    return;
   }
 
+  // 2. Web Share API (desktop / mobile browsers)
   const nav = typeof navigator === "undefined" ? undefined : navigator;
   try {
     const file = new File([json], name, { type: "application/json" });
@@ -297,56 +290,49 @@ async function shareBackup(hint: HTMLElement): Promise<void> {
       setHint(hint, "محتوای پشتیبان به اشتراک گذاشته شد 📤");
       return;
     }
-    throw new Error("share API unavailable");
   } catch (error) {
-    // Dismissing the sheet is not a failure.
     if ((error as Error | undefined)?.name === "AbortError") return;
-    console.warn("share failed", error);
-    if (!isTauri()) {
-      downloadBackup(name, json);
-      setHint(hint, "اشتراک\u200cگذاری پشتیبانی نشد؛ فایل از طریق مرورگر دانلود شد 📁");
-      return;
-    }
-    // Never silently save here — that is what made the two buttons identical.
-    setHint(
-      hint,
-      "اشتراک\u200cگذاری در این دستگاه در دسترس نیست؛ از دکمه «ذخیره مستقیم در پوشه Download» استفاده کن.",
-      "error",
-    );
   }
+
+  // 3. Browser fallback: download the file
+  downloadBackup(name, json);
+  setHint(hint, "فایل پشتیبان آماده شد 📁");
 }
 
-/** Writes the JSON with the native command (or a download in the browser). */
+/**
+ * Writes the JSON directly to the phone's public Download folder (via MediaStore
+ * on Android, or Tauri's download_dir on desktop).
+ */
 async function saveBackupToDownloads(hint: HTMLElement): Promise<void> {
   const name = backupFileName();
   const json = backupJson();
 
-  // Android 10+ scoped storage blocks Rust's std::fs::write into Download.
-  // MediaStore.Downloads needs no permission and lands in the visible folder.
-  let nativePath: string | null = null;
-  try {
-    nativePath = nativeSaveBackupToDownloads(name, json);
-  } catch (error) {
-    console.warn("MediaStore backup write failed, trying the native command", error);
-  }
-  if (nativePath) {
-    setHint(hint, `ذخیره شد در ${nativePath}`);
-    toast("فایل پشتیبان در پوشه Download ذخیره شد 💾");
-    return;
+  // 1. Native Android MediaStore.Downloads bridge — writes straight to public Download/
+  const nativeBridge = typeof window !== "undefined" ? window.AndroidWater : undefined;
+  if (nativeBridge && typeof nativeBridge.saveBackupToDownloads === "function") {
+    try {
+      const savedPath = nativeBridge.saveBackupToDownloads(name, json);
+      setHint(hint, `در پوشه Download گوشی ذخیره شد: ${savedPath} 📁`);
+      toast("فایل در پوشه Download گوشی ذخیره شد 💾");
+      return;
+    } catch (error) {
+      console.warn("native saveBackupToDownloads failed, trying Rust fallback", error);
+    }
   }
 
+  // 2. Desktop Tauri / fallback
   try {
     const saved = await saveBackupFile(name, json);
     if (!saved) {
       downloadBackup(name, json);
-      setHint(hint, "فایل از طریق مرورگر دانلود شد 📁");
+      setHint(hint, "فایل از طریق مرورگر در پوشه Downloads ذخیره شد 📁");
       return;
     }
     setHint(
       hint,
       saved.directory === "downloads"
         ? `ذخیره شد در ${saved.path}`
-        : `اندروید اجازه نوشتن در Download را نداد؛ نسخه پشتیبان در حافظه برنامه ذخیره شد: ${saved.path}`,
+        : `ذخیره شد در حافظه برنامه: ${saved.path}`,
     );
     toast("فایل پشتیبان ذخیره شد 💾");
   } catch (error) {

@@ -118,48 +118,6 @@ export async function saveBackupFile(
   return invoke<SavedBackup>("save_backup_file", { fileName, contents });
 }
 
-// ---------------------------------------------------------------------------
-// Android backup bridge (see scripts/setup-android-native.mjs)
-// ---------------------------------------------------------------------------
-// An Android WebView has no `navigator.share`, and since Android 10 scoped
-// storage forbids `std::fs::write` into the public Download folder. Both entry
-// points therefore have to go through Kotlin. `window.AndroidWater` is declared
-// in notify.ts; accessing it here (no import) avoids an import cycle.
-
-interface AndroidBackupBridge {
-  saveBackupToDownloads?: (fileName: string, contents: string) => string;
-  shareBackupFile?: (fileName: string, contents: string) => boolean;
-}
-
-function backupBridge(): AndroidBackupBridge | undefined {
-  if (typeof window === "undefined") return undefined;
-  return window.AndroidWater as AndroidBackupBridge | undefined;
-}
-
-/** True when this Android build can write to Downloads / open the share sheet. */
-export function hasNativeBackupBridge(): boolean {
-  const bridge = backupBridge();
-  return Boolean(bridge && (bridge.saveBackupToDownloads || bridge.shareBackupFile));
-}
-
-/**
- * Writes through MediaStore.Downloads and returns the public path.
- * `null` means "no native bridge" (desktop/browser); a thrown error means the
- * OS refused the write, so the caller can fall back to the Rust command.
- */
-export function nativeSaveBackupToDownloads(fileName: string, contents: string): string | null {
-  const save = backupBridge()?.saveBackupToDownloads;
-  if (!save) return null;
-  return save(fileName, contents);
-}
-
-/** Opens the native ACTION_SEND chooser. `null` = no bridge, `false` = failed. */
-export function nativeShareBackupFile(fileName: string, contents: string): boolean | null {
-  const share = backupBridge()?.shareBackupFile;
-  if (!share) return null;
-  return share(fileName, contents);
-}
-
 /**
  * Opens an external URL in the system browser.
  *
