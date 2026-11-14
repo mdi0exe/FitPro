@@ -188,7 +188,11 @@ const goto = async (page, label) => {
   check("week status strip is shown", /هفته\s*[۰-۹]+\s*ترم/.test(card), card.match(/هفته[^•]*ترم/)?.[0] ?? "");
 
   const before = await readState(page);
-  check("anchor starts unset", before.semesterWeekAnchorDate === null, String(before.semesterWeekAnchorDate));
+  check(
+    "anchor defaults to current week start",
+    typeof before.semesterWeekAnchorDate === "string" && before.semesterWeekAnchorDate.length === 10,
+    String(before.semesterWeekAnchorDate),
+  );
 
   const opened = await clickAria(page, "تنظیم شماره هفته ترم");
   check("week modal opens", opened);
@@ -485,8 +489,8 @@ const goto = async (page, label) => {
       `${beforeWeight} -> ${after.targetWeight}`,
     );
     check(
-      "reps drop back to the bottom of the range",
-      !String(after.reps).includes("-"),
+      "reps range is preserved on the exercise",
+      String(after.reps) === String(beforeExercise.reps),
       String(after.reps),
     );
   } else {

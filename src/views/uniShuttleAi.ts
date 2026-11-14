@@ -10,14 +10,18 @@ import { parseShuttleJson, SHUTTLE_AI_PROMPT_TEMPLATE } from "../data/shuttle";
 import { btn, el } from "../lib/dom";
 import { getState, persist, requestRender } from "../lib/store";
 import { confirmDialog, openModal, toast } from "../components/ui";
+import { copyText } from "../lib/clipboard";
+import { pruneBusAlarms } from "./uni";
 
-async function copyPrompt(): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(SHUTTLE_AI_PROMPT_TEMPLATE);
+async function copyPrompt(fallbackWrap: HTMLElement): Promise<void> {
+  const copied = await copyText(SHUTTLE_AI_PROMPT_TEMPLATE);
+  if (copied) {
     toast("پرامپت و تمپلیت JSON کپی شد؛ حالا همراه عکس سرویس‌ها به هوش مصنوعی بده 📋");
-  } catch {
-    // Clipboard is blocked without a secure context: show the text instead.
-    toast("کپی نشد؛ متن تمپلیت در کادر زیر قابل انتخاب است.", "error");
+  } else {
+    fallbackWrap.classList.remove("hidden");
+    const box = fallbackWrap.querySelector("textarea");
+    box?.select();
+    toast("دسترسی کلیپ‌بورد بسته است؛ متن پرامپت را از کادر زیر کپی کن.", "info");
   }
 }
 
@@ -33,8 +37,15 @@ export function openShuttleAiImportModal(): void {
     ),
   );
 
+  const promptFallback = el("div", "hidden space-y-1");
+  const promptBox = el("textarea", "field h-28 w-full resize-none text-left font-mono text-[10px] leading-5");
+  promptBox.dir = "ltr";
+  promptBox.readOnly = true;
+  promptBox.value = SHUTTLE_AI_PROMPT_TEMPLATE;
+  promptFallback.append(el("label", "label", "متن پرامپت برای کپی دستی"), promptBox);
+
   body.append(
-    btn("btn-ghost w-full text-xs", "📋 ۱. کپی پرامپت و تمپلیت آماده", () => void copyPrompt(), {
+    btn("btn-ghost w-full text-xs", "📋 ۱. کپی پرامپت و تمپلیت آماده", () => void copyPrompt(promptFallback), {
       "aria-label": "کپی پرامپت تمپلیت سرویس‌ها",
     }),
   );
@@ -44,7 +55,7 @@ export function openShuttleAiImportModal(): void {
   area.spellcheck = false;
   area.placeholder = '{\n  "effectiveDate": "1405/08/23",\n  "railway": { ... },\n  "suburbs": [ ... ]\n}';
   area.value = state.customShuttleJson ?? "";
-  body.append(el("label", "label", "۲. JSON خروجی هوش مصنوعی"), area);
+  body.append(el("label", "label", "۲. JSON خروجی هوش مصنوعی"), area, promptFallback);
 
   const status = el("p", "text-[10px] leading-5 text-slate-500");
   status.textContent = state.customShuttleJson
@@ -61,6 +72,7 @@ export function openShuttleAiImportModal(): void {
       if (!raw) {
         state.customShuttleJson = null;
         persist(0);
+        void pruneBusAlarms();
         handle.close();
         toast("برنامه سرویس به حالت پیش‌فرض برگشت.", "info");
         requestRender();
@@ -77,6 +89,7 @@ export function openShuttleAiImportModal(): void {
 
       state.customShuttleJson = raw;
       persist(0);
+      void pruneBusAlarms();
       handle.close();
       toast("برنامه جدید سرویس‌ها اعمال شد 🚌✅");
       requestRender();
@@ -95,6 +108,7 @@ export function openShuttleAiImportModal(): void {
       if (!ok) return;
       state.customShuttleJson = null;
       persist(0);
+      void pruneBusAlarms();
       handle.close();
       toast("سرویس‌ها به حالت پیش‌فرض برگشتند.", "info");
       requestRender();

@@ -511,6 +511,10 @@ for (const dir of targets) {
     writeRes(dir, path.join(`mipmap-${name}`, "ic_launcher_round.png"), encodePng(round));
     writeRes(dir, path.join(`mipmap-${name}`, "ic_launcher_foreground.png"), encodePng(foreground));
   }
+  const legacyFgXml = path.join(dir, "drawable-v24", "ic_launcher_foreground.xml");
+  if (fs.existsSync(legacyFgXml)) fs.unlinkSync(legacyFgXml);
+  const legacyFgXml2 = path.join(dir, "drawable", "ic_launcher_foreground.xml");
+  if (fs.existsSync(legacyFgXml2)) fs.unlinkSync(legacyFgXml2);
   writeRes(dir, path.join("mipmap-anydpi-v26", "ic_launcher.xml"), ADAPTIVE_XML);
   writeRes(dir, path.join("mipmap-anydpi-v26", "ic_launcher_round.xml"), ADAPTIVE_ROUND_XML);
   writeRes(dir, path.join("drawable", "ic_launcher_background.xml"), BACKGROUND_XML);

@@ -8,6 +8,7 @@ import {
   applyTheme,
   getActiveTab,
   getState,
+  homeTab,
   persist,
   requestRender,
   setActiveTab,
@@ -30,9 +31,12 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; icon: string }> = [
 export function renderHeader(): HTMLElement {
   const state = getState();
   const { profile } = state;
-  const gained = profile.currentWeight - profile.startWeight;
-  const span = Math.max(0.1, profile.targetWeight - profile.startWeight);
-  const percent = Math.min(100, Math.max(0, (gained / span) * 100));
+  const isLoss = profile.targetWeight < profile.startWeight;
+  const span = Math.abs(profile.targetWeight - profile.startWeight);
+  const changed = isLoss
+    ? profile.startWeight - profile.currentWeight
+    : profile.currentWeight - profile.startWeight;
+  const percent = span < 0.1 ? 100 : Math.min(100, Math.max(0, (changed / span) * 100));
   const uniOnly = state.appMode === "uni_only";
   const program = findProgram(profile.workoutProgramId);
 
@@ -168,10 +172,10 @@ export function renderNav(): HTMLElement {
     }
     button.addEventListener("click", () => {
       if (getActiveTab() === item.id) return;
-      pushTab(item.id);
+      pushTab(item.id, homeTab(getState().appMode));
       setActiveTab(item.id);
       requestRender();
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
     });
     inner.append(button);
   });

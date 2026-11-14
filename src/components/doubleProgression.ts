@@ -41,10 +41,9 @@ function bumpRange(reps: string): string {
 function topSet(exercise: Exercise): { weight: number; reps: number } | null {
   const done = exercise.logs.filter((log) => log.done);
   if (done.length === 0) return null;
-  const best = done.reduce(
-    (acc, log) => (log.weight * log.reps > acc.weight * acc.reps ? log : acc),
-    done[0],
-  );
+  const score = (log: { weight: number; reps: number }) =>
+    log.weight > 0 ? log.weight * log.reps : log.reps;
+  const best = done.reduce((acc, log) => (score(log) > score(acc) ? log : acc), done[0]);
   return { weight: best.weight, reps: best.reps };
 }
 
@@ -70,13 +69,15 @@ function applyChoice(exercise: Exercise, choice: "weight" | "rep" | "hold"): voi
 
   if (choice === "weight" && !bodyweight) {
     exercise.targetWeight = roundStep(exercise.targetWeight + WEIGHT_STEP);
-    // Drop the reps back to the bottom of the range: that is the second half of
-    // double progression, and it is what makes the new weight survivable.
-    exercise.reps = String(bottomOfRange(range));
+    // حفظ دامنه تکرار (مثلاً ۸ تا ۱۲) به‌جای پاک کردن سقف دامنه
+    const floorReps = bottomOfRange(range);
+    for (const log of exercise.logs) {
+      if (!log.done) log.reps = floorReps;
+    }
     logMilestone(
-      `${exercise.name}: وزنه به ${faNum(exercise.targetWeight, 1)} کیلوگرم رفت و تکرارها از ${fa(bottomOfRange(range))} شروع می‌شود.`,
+      `${exercise.name}: وزنه به ${faNum(exercise.targetWeight, 1)} کیلوگرم رفت (بازه ${faReps(range)}، شروع از ${fa(floorReps)}).`,
     );
-    toast(`${exercise.name}: ${faNum(exercise.targetWeight, 1)} کیلو × ${fa(bottomOfRange(range))} تکرار برای جلسه بعد.`);
+    toast(`${exercise.name}: ${faNum(exercise.targetWeight, 1)} کیلو × ${fa(floorReps)} تکرار برای جلسه بعد.`);
   } else if (choice === "weight") {
     // Bodyweight movements progress by reps only.
     exercise.reps = bumpRange(range);
@@ -98,7 +99,11 @@ function applyChoice(exercise: Exercise, choice: "weight" | "rep" | "hold"): voi
  * Opens the chooser. `suggestWeight` is `true` when every set already reached
  * the top of the rep range, which is the signal to add plates.
  */
-export function openDoubleProgressionModal(exercise: Exercise, suggestWeight: boolean): void {
+export function openDoubleProgressionModal(
+  exercise: Exercise,
+  suggestWeight: boolean,
+  onAfterClose?: () => void,
+): void {
   const top = topSet(exercise);
   const bodyweight = exercise.bodyweight || exercise.targetWeight <= 0;
   const range = exercise.reps;
@@ -176,6 +181,7 @@ export function openDoubleProgressionModal(exercise: Exercise, suggestWeight: bo
     subtitle: "افزایش تدریجی دو مرحله‌ای",
     body,
     footer: btn("btn-ghost w-full", "بعداً", () => handle.close()),
+    onClose: () => onAfterClose?.(),
   });
 }
 

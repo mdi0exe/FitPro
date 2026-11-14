@@ -380,7 +380,11 @@ function proteinCard(): HTMLElement {
     return box;
   };
   grid.append(
-    cell("پروتئین روزانه", `${fa(proteinTarget)} گرم`, aiProtein !== null ? "هوش مصنوعی" : "۱٫۵۵ گرم بر کیلو"),
+    cell(
+      "پروتئین روزانه",
+      `${fa(proteinTarget)} گرم`,
+      aiProtein !== null ? "هوش مصنوعی" : cutting ? "۱٫۸ گرم بر کیلو" : "۱٫۵۵ گرم بر کیلو",
+    ),
     cell("کالری روزانه", `${fa(calories)} کالری`, aiCalories !== null ? "هوش مصنوعی" : "از وزن بدن"),
   );
   card.append(grid);
@@ -588,7 +592,7 @@ function waterTrackerCard(): HTMLElement {
     // counter, otherwise a re-render or restart would look like a reset.
     const countdownText = (remainingSec: number) =>
       isWaterQuietHours()
-        ? `🌙 در حالت خواب — یادآور بعدی: ${fa(clock(remainingSec))}`
+        ? `🌙 در حالت خواب — یادآوری بعدی: ${fa(clock(remainingSec))}`
         : `یادآوری بعدی: ${fa(clock(remainingSec))}`;
 
     const countdown = el(

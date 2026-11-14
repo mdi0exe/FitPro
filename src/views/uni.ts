@@ -10,6 +10,7 @@ import { sectionTitle, toast } from "../components/ui";
 import {
   cancelNotifications,
   ensureNotificationPermission,
+  hasNotificationPermission,
   scheduleRepeatingNotification,
 } from "../lib/notify";
 import { softTap } from "../lib/timer";
@@ -46,6 +47,8 @@ function detectTodayScheduleKey(): Exclude<ScheduleGroupKey, "suburbs"> {
 }
 
 let activeGroup: ScheduleGroupKey = detectTodayScheduleKey();
+let activeGroupDate = isoToday();
+let radarTickHandle: number | null = null;
 
 function ensureUniReminders() {
   const state = getState();
@@ -80,6 +83,14 @@ export function foodDayLabel(day: number): string {
 }
 
 export function renderUni(): HTMLElement {
+  // A session can cross midnight while the tab stays mounted: re-detect the
+  // day group instead of keeping yesterday's timetable on screen.
+  const todayIso = isoToday();
+  if (activeGroupDate !== todayIso) {
+    activeGroupDate = todayIso;
+    activeGroup = detectTodayScheduleKey();
+  }
+
   const view = el("div", "space-y-3 animate-fade-up");
   view.append(
     uniHeroBanner(),
@@ -89,6 +100,21 @@ export function renderUni(): HTMLElement {
     reminderCard(),
     shuttleScheduleCard(),
   );
+
+  // Refresh the "next bus" radar every 30 s while the card is on screen.
+  if (radarTickHandle === null) {
+    radarTickHandle = window.setInterval(() => {
+      const node = document.querySelector("[data-uni-radar]");
+      if (!node) {
+        if (radarTickHandle !== null) {
+          window.clearInterval(radarTickHandle);
+          radarTickHandle = null;
+        }
+        return;
+      }
+      node.replaceWith(nextBusRadarCard());
+    }, 30_000);
+  }
   return view;
 }
 
@@ -103,7 +129,7 @@ function uniHeroBanner(): HTMLElement {
     el(
       "p",
       "mt-1 text-[11px] leading-6 text-slate-400",
-      `برنامه سرویس‌های راه‌آهن، خسروشهر، اسکو، شرق و میدان فهمیده (اجرا از ${shuttle().effectiveDate})`,
+      `برنامه سرویس‌های راه‌آهن، خسروشهر، اسکو، شرق و میدان فهمیده (اجرا از ${escapeHtml(shuttle().effectiveDate)})`,
     ),
   );
 
@@ -136,6 +162,7 @@ function nextBusRadarCard(): HTMLElement {
   };
 
   const card = el("div", "card space-y-2.5 border-emerald-500/25 bg-emerald-500/5");
+  card.setAttribute("data-uni-radar", "1");
   card.append(
     sectionTitle(
       `⏳ رادار سرویس امروز (${schedule.title})`,
@@ -666,4 +693,105 @@ async function setGymTime(time: string): Promise<void> {
     ));
   toast(ok ? `یادآور باشگاه روی ${fa(time)} تنظیم شد 💪` : `ساعت ${fa(time)} ذخیره شد.`, ok ? "ok" : "info");
   requestRender();
+}
+
+// ---------------------------------------------------------------------------
+// Alarm synchronisation
+// ---------------------------------------------------------------------------
+
+/** Every departure key the current timetable can produce. */
+function allKnownBusKeys(): Set<string> {
+  const table = shuttle();
+  const keys = new Set<string>();
+  (["sun-wed", "sat", "thu", "fri"] as const).forEach((group) => {
+    table.railway[group].fromUni.forEach((time) => keys.add(`${group}-uni-${time}`));
+    table.railway[group].fromRailway.forEach((time) => keys.add(`${group}-rail-${time}`));
+  });
+  table.suburbs.forEach((item) => {
+    item.times.forEach((time) => keys.add(`suburb-${item.id}-${time}`));
+  });
+  return keys;
+}
+
+/**
+ * Cancels alarms whose departure time no longer exists after a timetable
+ * update, so a removed bus cannot keep ringing every weekday.
+ */
+export async function pruneBusAlarms(): Promise<void> {
+  const reminders = ensureUniReminders();
+  const valid = allKnownBusKeys();
+  const obsolete = reminders.activeBusAlarms.filter((key) => !valid.has(key));
+  if (obsolete.length === 0) return;
+
+  const idsToCancel: number[] = [];
+  for (const key of obsolete) {
+    for (let weekday = 1; weekday <= 7; weekday += 1) idsToCancel.push(busAlarmId(key, weekday));
+  }
+  await cancelNotifications(idsToCancel);
+  reminders.activeBusAlarms = reminders.activeBusAlarms.filter((key) => valid.has(key));
+  persist(0);
+}
+
+/**
+ * Re-registers the repeating university alarms on boot / backup restore.
+ * Only runs when the OS permission is already granted (never prompts).
+ */
+export async function syncUniAlarms(): Promise<void> {
+  if (!(await hasNotificationPermission())) return;
+  const reminders = ensureUniReminders();
+
+  if (reminders.thursdayFoodEnabled) {
+    const at = shiftEarlier(reminders.thursdayFoodTime, 0);
+    const label = foodDayLabel(reminders.foodReminderDay);
+    await scheduleRepeatingNotification(
+      7901,
+      "🍱 یادآور رزرو غذای سلف",
+      `امروز ${label} است! غذای هفته بعد سلف را رزرو کن (اولویت: چلو جوجه و مرغ).`,
+      { hour: at.hour, minute: at.minute, weekday: foodAlarmWeekday(reminders.foodReminderDay) },
+    );
+  } else {
+    await cancelNotifications([7901]);
+  }
+
+  if (reminders.gymReminderEnabled) {
+    const at = shiftEarlier(reminders.gymReminderTime, 0);
+    await scheduleRepeatingNotification(
+      7902,
+      "🎒 وقت رفتن به باشگاه!",
+      "۱٫۵ ساعت قبل از شام سلف تمرین کن تا شامت وعده ریکاوری بعد تمرین شود 💪",
+      { hour: at.hour, minute: at.minute },
+    );
+  } else {
+    await cancelNotifications([7902]);
+  }
+
+  const table = shuttle();
+  for (const key of reminders.activeBusAlarms) {
+    let group: ScheduleGroupKey = "sun-wed";
+    let time = "";
+    let title = "سرویس دانشگاه";
+    if (key.startsWith("suburb-")) {
+      const lastDash = key.lastIndexOf("-");
+      time = key.slice(lastDash + 1);
+      group = "suburbs";
+      const id = key.slice("suburb-".length, lastDash);
+      title = table.suburbs.find((entry) => entry.id === id)?.route ?? title;
+    } else {
+      const match = /^(sun-wed|sat|thu|fri)-(uni|rail)-(\d{2}:\d{2})$/.exec(key);
+      if (!match) continue;
+      group = match[1] as ScheduleGroupKey;
+      time = match[3];
+      title = match[2] === "uni" ? "دانشگاه ← راه‌آهن" : "راه‌آهن ← دانشگاه";
+    }
+    if (!time) continue;
+    const at = shiftEarlier(time, 15);
+    for (const weekday of GROUP_WEEKDAYS[group]) {
+      await scheduleRepeatingNotification(
+        busAlarmId(key, weekday),
+        `🚌 ۱۵ دقیقه تا سرویس ${fa(time)}`,
+        `${title} ساعت ${fa(time)} حرکت می‌کند. آماده باش!`,
+        { hour: at.hour, minute: at.minute, weekday },
+      );
+    }
+  }
 }

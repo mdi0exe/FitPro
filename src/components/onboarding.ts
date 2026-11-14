@@ -6,7 +6,7 @@
  * Persian/Android keyboard is never required.
  */
 import { btn, el } from "../lib/dom";
-import { faNum } from "../lib/fa";
+import { faNum, isoToday } from "../lib/fa";
 import {
   applyTheme,
   getActiveTab,
@@ -19,6 +19,7 @@ import {
 } from "../lib/store";
 import { WORKOUT_PROGRAMS } from "../data/programs";
 import { applyDeveloperPreset, applyProgram } from "../lib/appSettings";
+import { syncWakeLockWithMode } from "../lib/workoutTools";
 import { openModal, toast, type ModalHandle } from "./ui";
 import { idealWeightCalculatorCard } from "./idealWeight";
 import { softTap } from "../lib/timer";
@@ -84,6 +85,7 @@ export function openOnboardingModal(): void {
         applyTheme();
         setActiveTab(homeTab(state.appMode));
         persist(0);
+        void syncWakeLockWithMode();
         handle.close();
         toast("پروفایل پیشفرض توسعهدهنده با موفقیت بارگذاری شد ⚡");
         requestRender();
@@ -256,14 +258,26 @@ export function openOnboardingModal(): void {
     "btn-primary w-full",
     "✅ ذخیره و ورود به برنامه",
     () => {
+      const isFirstRun = !state.onboardingCompleted;
       state.appMode = appMode;
       state.profile.name = nameInput.value.trim() || "کاربر";
       state.profile.universityName = uniInput.value.trim() || "دانشگاه من";
       state.profile.currentWeight = currentWeight;
-      state.profile.startWeight = currentWeight;
+      if (isFirstRun) {
+        state.profile.startWeight = currentWeight;
+      }
       state.profile.targetWeight = targetWeight;
       state.profile.heightCm = heightCm;
       state.profile.age = age;
+
+      const today = isoToday();
+      const existingWeight = state.weightHistory.find((entry) => entry.date === today);
+      if (existingWeight) existingWeight.weight = currentWeight;
+      else if (state.weightHistory.length === 0 || isFirstRun) {
+        state.weightHistory = [{ date: today, weight: currentWeight }];
+      } else {
+        state.weightHistory.push({ date: today, weight: currentWeight });
+      }
 
       if (appMode !== "uni_only") applyProgram(state, programId);
 
@@ -276,6 +290,7 @@ export function openOnboardingModal(): void {
       state.onboardingCompleted = true;
       applyTheme();
       persist(0);
+      void syncWakeLockWithMode();
       handle.close();
       toast("تنظیمات شخصی شما ذخیره شد 🎉");
       requestRender();

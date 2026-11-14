@@ -80,6 +80,11 @@ export async function ensureNotificationPermission(): Promise<boolean> {
   return false;
 }
 
+/** Non-prompting permission check, safe to call from boot/restore paths. */
+export async function hasNotificationPermission(): Promise<boolean> {
+  return canPost();
+}
+
 /** Non-prompting check — safe to call from timers. */
 async function canPost(): Promise<boolean> {
   if (isTauri()) {
@@ -420,6 +425,39 @@ export async function scheduleRepeatingNotification(
   } catch (error) {
     console.warn("repeating notification unavailable", error);
     return false;
+  }
+}
+
+/** Fixed ids for the in-app timers' background notifications. */
+export const REST_TIMER_NOTIF_ID = 7801;
+export const CARDIO_TIMER_NOTIF_ID = 7802;
+export const LANG_TIMER_NOTIF_ID = 7803;
+
+/**
+ * Registers a single future notification (rest / cardio / study timer).
+ * Without this the alert only fires while the screen is on, because the WebView
+ * is frozen in the background.
+ */
+export async function scheduleOneShotNotification(
+  id: number,
+  title: string,
+  body: string,
+  triggerAtMs: number,
+): Promise<void> {
+  if (!isTauri() || !Number.isFinite(triggerAtMs) || triggerAtMs <= Date.now() + 1000) return;
+  if (!(await canPost())) return;
+  try {
+    await ensureChannel();
+    await cancel([id]).catch(() => undefined);
+    sendNotification({
+      id,
+      channelId: CHANNEL_ID,
+      title,
+      body,
+      schedule: Schedule.at(new Date(triggerAtMs), false, true),
+    });
+  } catch (error) {
+    console.warn("one-shot notification unavailable", error);
   }
 }
 

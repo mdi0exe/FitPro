@@ -7,6 +7,7 @@
 import type { AppStateData } from "../types";
 import { createSeedState } from "../data/seed";
 import { findProgram, WORKOUT_PROGRAMS } from "../data/programs";
+import { clearDeloadSnapshot } from "./workoutTools";
 
 export const DEVELOPER_UNIVERSITY = "دانشگاه صنعتی تبریز";
 export const DEVELOPER_PROGRAM_ID = "upper-lower-4";
@@ -26,11 +27,7 @@ export function applyProgram(state: AppStateData, programId: string): boolean {
   state.profile.goal = program.goalLabel;
   state.profile.workoutProgramId = program.id;
   state.deloadActive = false;
-  try {
-    window.localStorage.removeItem("persian-hypertrophy::deload-snapshot");
-  } catch {
-    /* storage unavailable */
-  }
+  clearDeloadSnapshot();
   return true;
 }
 
@@ -70,11 +67,8 @@ export function applyDeveloperPreset(state: AppStateData): void {
   state.appMode = "full";
   state.onboardingCompleted = true;
   state.deloadActive = false;
-  try {
-    window.localStorage.removeItem("persian-hypertrophy::deload-snapshot");
-  } catch {
-    /* storage unavailable */
-  }
+  state.readiness = "normal";
+  clearDeloadSnapshot();
 
   state.theme = history.theme;
   state.weightHistory = history.weightHistory;

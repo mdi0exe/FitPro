@@ -3,12 +3,18 @@
  */
 import { btn, el, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
-import { faDate, faNum, isoToday } from "../lib/fa";
+import { faDate, faNum, faSigned, isoToday } from "../lib/fa";
 import { saveBackupFile } from "../lib/api";
 import { getState, persist, requestRender, setState } from "../lib/store";
 import { normalizeState } from "../lib/localBackend";
 import type { AppStateData, ProgressPhoto } from "../types";
 import { confirmDialog, openModal, sectionTitle, toast } from "../components/ui";
+import { restoreWaterReminderOnBoot } from "../lib/timer";
+import { syncWakeLockWithMode } from "../lib/workoutTools";
+import { syncUniAlarms } from "../views/uni";
+import { syncLanguageStudyAlarm } from "../views/uniLanguage";
+
+let showAllPhotos = false;
 
 const MAX_PHOTOS = 24;
 
@@ -75,8 +81,9 @@ export function renderProgressPhotosCard(): HTMLElement {
     );
   }
 
+  const visiblePhotos = showAllPhotos ? photos : photos.slice(0, 6);
   const grid = el("div", "grid grid-cols-2 gap-2.5");
-  for (const photo of photos.slice(0, 6)) {
+  for (const photo of visiblePhotos) {
     const item = el("div", "relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-950");
     const img = el("img", "h-44 w-full object-cover");
     img.src = photo.dataUrl;
@@ -99,6 +106,15 @@ export function renderProgressPhotosCard(): HTMLElement {
     grid.append(item);
   }
   card.append(grid);
+
+  if (photos.length > 6) {
+    card.append(
+      btn("btn-ghost w-full text-xs", showAllPhotos ? "نمایش کمتر" : `مشاهده همه عکس‌ها (${faNum(photos.length, 0)})`, () => {
+        showAllPhotos = !showAllPhotos;
+        requestRender();
+      }),
+    );
+  }
 
   return card;
 }
@@ -146,7 +162,7 @@ function openCompareModal(before: ProgressPhoto, after: ProgressPhoto): void {
   const delta = Math.round((after.weight - before.weight) * 10) / 10;
   openModal({
     title: "مقایسه تغییرات بدن",
-    subtitle: `تغییر وزن: ${faNum(delta, 1)} کیلوگرم`,
+    subtitle: `تغییر وزن: ${faSigned(delta, 1)} کیلوگرم`,
     body,
   });
 }
@@ -209,6 +225,10 @@ export function renderBackupRestoreCard(): HTMLElement {
         const restored = normalizeState(parsed as AppStateData);
         setState(restored);
         persist(0);
+        restoreWaterReminderOnBoot();
+        void syncUniAlarms();
+        void syncLanguageStudyAlarm();
+        void syncWakeLockWithMode();
         toast("پشتیبان با موفقیت بازیابی شد ✅");
         requestRender();
       } catch {

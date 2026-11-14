@@ -110,9 +110,10 @@ saved = await state();
 check("reminder toggle enables", saved.diet.waterReminderEnabled === true);
 
 const countdown = await page.evaluate(() => {
-  const node = Array.from(document.querySelectorAll("p")).find((p) =>
-    (p.textContent ?? "").includes("یادآوری بعدی"),
-  );
+  const node = Array.from(document.querySelectorAll("p")).find((p) => {
+    const text = p.textContent ?? "";
+    return text.includes("یادآوری بعدی") || text.includes("یادآور بعدی") || (text.includes("یادآور") && text.includes(":"));
+  });
   return node?.textContent?.trim() ?? "";
 });
 check("countdown is shown", countdown.includes(":"), countdown);
@@ -171,9 +172,10 @@ const goNutrition = async () => {
 /** Seconds left, parsed from the Persian countdown text. */
 const countdownSeconds = () =>
   page.evaluate(() => {
-    const node = Array.from(document.querySelectorAll("p")).find((p) =>
-      (p.textContent ?? "").includes("یادآوری بعدی"),
-    );
+    const node = Array.from(document.querySelectorAll("p")).find((p) => {
+      const text = p.textContent ?? "";
+      return text.includes("یادآوری بعدی") || text.includes("یادآور بعدی") || (text.includes("یادآور") && text.includes(":"));
+    });
     const text = (node?.textContent ?? "").replace(/[۰-۹]/g, (d) =>
       String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)),
     );

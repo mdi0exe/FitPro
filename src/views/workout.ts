@@ -5,6 +5,7 @@ import { daysBetween, fa, faDate, faNum, faReps, firstNumber, isoToday } from ".
 import { alarm, beep, cardioTimer, chord, softTap, startNewWaterReminderCycle } from "../lib/timer";
 import { applyProgressiveOverload } from "../lib/api";
 import {
+  clearTodayWorkoutActivity,
   getState,
   mutate,
   persist,
@@ -13,6 +14,7 @@ import {
   syncWaterChecklist,
   WATER_GOAL,
 } from "../lib/store";
+import { CARDIO_TIMER_NOTIF_ID, cancelNotifications, scheduleOneShotNotification } from "../lib/notify";
 import type { Exercise, SetLog, WorkoutDay } from "../types";
 import { confirmDialog, openModal, progressBar, toast } from "../components/ui";
 import { openGifModal } from "../components/gifModal";
@@ -23,6 +25,7 @@ import { openValuePicker, stepper } from "../components/stepper";
 import { refreshWeeklyActivityCard, renderWeeklyActivityCard } from "../components/weeklyActivity";
 import {
   checkAndUpdatePR,
+  clearDeloadSnapshot,
   isExerciseSwapped,
   openPlateCalculatorModal,
   openWorkoutFinishModal,
@@ -163,7 +166,9 @@ function dayStrip(): HTMLElement {
       }`,
       `<span class="flex w-full items-center justify-between gap-1 text-[10px] opacity-80">
          <span>${escapeHtml(day.label)}</span>
-         ${finished ? '<span class="text-emerald-400">✓</span>' : `<span>${fa(done)}/${fa(total)}</span>`}
+         <span data-day-pill-status="${day.id}" class="${finished ? "text-emerald-400" : ""}">${
+           finished ? "✓" : `${fa(done)}/${fa(total)}`
+         }</span>
        </span>
        <span class="w-full truncate text-right text-xs font-extrabold">${escapeHtml(day.title)}</span>`,
       () => {
@@ -246,6 +251,7 @@ async function runOverload(): Promise<void> {
 
   try {
     const next = await applyProgressiveOverload();
+    clearDeloadSnapshot();
     setState(next);
     toast("چرخه افزایش وزنه اعمال شد.");
     // beep() owns its vibration now; no second vibrate() here.
@@ -339,9 +345,12 @@ function warmupCard(day: WorkoutDay): HTMLElement {
 
     check.addEventListener("click", () => {
       item.done = !item.done;
+      item.doneDate = item.done ? isoToday() : null;
       persist(0);
       if (item.done) {
         softTap();
+      } else if (dayDone(day) === 0 && !day.warmups.some((w) => w.done)) {
+        clearTodayWorkoutActivity();
       }
       const nowDone = day.warmups.filter((w) => w.done).length;
       titles.querySelector("p:last-child")!.textContent = `${fa(nowDone)} از ${fa(total)} مرحله انجام شد`;
@@ -356,6 +365,7 @@ function warmupCard(day: WorkoutDay): HTMLElement {
       text.className = `flex-1 text-[11px] leading-6 ${
         item.done ? "text-slate-500 line-through decoration-slate-600" : "text-slate-300"
       }`;
+      refreshWeeklyActivityCard();
     });
 
     row.append(check, text, gifButton);
@@ -403,6 +413,16 @@ function cardioTimerBlock(): HTMLElement {
     svgIcon(icons.play, "h-4 w-4"),
     () => {
       cardioTimer.toggle();
+      if (cardioTimer.running) {
+        void scheduleOneShotNotification(
+          CARDIO_TIMER_NOTIF_ID,
+          "🔥 هوازی تمام شد",
+          "۵ دقیقه هوازی تمام شد. حالا گرم کردن پویا!",
+          Date.now() + cardioTimer.remaining * 1000,
+        );
+      } else {
+        void cancelNotifications([CARDIO_TIMER_NOTIF_ID]);
+      }
       paintCardio();
     },
     { "aria-label": "شروع یا توقف" },
@@ -410,6 +430,7 @@ function cardioTimerBlock(): HTMLElement {
 
   const resetButton = btn("btn-icon", svgIcon(icons.reset, "h-4 w-4"), () => {
     cardioTimer.reset(300);
+    void cancelNotifications([CARDIO_TIMER_NOTIF_ID]);
     paintCardio();
   }, { "aria-label": "بازنشانی" });
 
@@ -425,6 +446,7 @@ function cardioTimerBlock(): HTMLElement {
 
   cardioTimer.onTick = () => paintCardio();
   cardioTimer.onDone = () => {
+    void cancelNotifications([CARDIO_TIMER_NOTIF_ID]);
     alarm();
     toast("۵ دقیقه هوازی تمام شد. حالا گرم کردن پویا! 🔥");
     paintCardio();
@@ -547,6 +569,17 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
 
   const swapped = isExerciseSwapped(exercise);
 
+  const exerciseGifMap = defaultGifs.exercises as Record<string, string>;
+  const baseId = exercise.id.replace(/^(ppl\d+|dorm\d+)-/, "");
+  const hasDefaultDemo = baseId in exerciseGifMap;
+  const fallbackDemo = hasDefaultDemo
+    ? swapped
+      ? `/gifs/${baseId}-alt.gif`
+      : `/gifs/${baseId}.gif`
+    : null;
+  const legacyGifPath = `/gifs/${exercise.id}.gif`;
+  void legacyGifPath;
+
   const chips = el("div", "mt-1.5 flex flex-wrap items-center gap-1.5");
   chips.append(
     el("span", "chip", `${fa(exercise.sets)} ست`),
@@ -577,7 +610,7 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
         title: exercise.name,
         query: exercise.query,
         gifUrl: exercise.gifUrl,
-        fallbackUrl: `/gifs/${exercise.id}.gif`,
+        fallbackUrl: fallbackDemo,
         onSaveUrl: (url) => {
           exercise.gifUrl = url;
           persist(0);
@@ -621,7 +654,7 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
   );
   card.append(tools);
 
-  if (exercise.gifUrl) {
+  if (exercise.gifUrl && exercise.gifUrl !== "none") {
     // The dataset GIFs are 180×180 on a white background, so they sit in a white
     // card at their natural square size instead of being stretched full width.
     // Hug the artwork: a full-width white bar leaves ~100px of empty white on
@@ -641,14 +674,11 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
 
     // Stored demo → its own offline file → plain explanation. The picture is
     // never deleted from the card.
-    const localDemo = exercise.swappedDate && exercise.originalName
-      ? `/gifs/${exercise.id}-alt.gif`
-      : `/gifs/${exercise.id}.gif`;
-    let fellBack = exercise.gifUrl === localDemo;
+    let fellBack = !fallbackDemo || exercise.gifUrl === fallbackDemo;
     img.addEventListener("error", () => {
-      if (!fellBack) {
+      if (!fellBack && fallbackDemo) {
         fellBack = true;
-        img.src = localDemo;
+        img.src = fallbackDemo;
         return;
       }
       wrap.replaceWith(
@@ -782,6 +812,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
   check.addEventListener("click", () => {
     const wasComplete = dayTotal(day) > 0 && dayDone(day) === dayTotal(day);
     log.done = !log.done;
+    log.doneDate = log.done ? isoToday() : null;
     persist(0);
 
     row.className = `flex items-center gap-1.5 rounded-xl border px-1.5 py-1.5 transition ${
@@ -799,37 +830,50 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
       // audio cue: the chart and the double-progression step both read it.
       recordExerciseHistory(exercise);
 
-      // Record the PR before the audio cue; a re-render puts the 🏆 chip up.
-      if (checkAndUpdatePR(exercise, log.weight, log.reps)) {
+      // Record the PR only on unswapped moves before the audio cue; a re-render puts the 🏆 chip up.
+      if (!isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) {
         persist(0);
         requestRender();
       }
 
-      // One clip per tap: the final set plays the brighter "chord" instead of
-      // the regular bell, so the two real MP3s never overlap.
-      const dayFinishedNow = !wasComplete && dayTotal(day) > 0 && dayDone(day) === dayTotal(day);
       const allDone =
         exercise.logs.length > 0 && exercise.logs.every((entry) => entry.done);
-      if (allDone) {
-        chord();
-        // Only open the progression modal if the day-finish celebration isn't
-        // about to open on the exact same tap (avoids two stacked modals).
-        if (!dayFinishedNow) offerDoubleProgression(exercise);
-      } else beep(2, 1320, 0.12);
-      startRest();
-    } else if (exercise.logs.some((entry) => entry.done)) {
-      // Other sets are still ticked: recompute setsCompleted and the top set.
-      recordExerciseHistory(exercise);
+      const dayFinished =
+        !wasComplete && dayTotal(day) > 0 && dayDone(day) === dayTotal(day);
+
+      if (dayFinished && allDone) {
+        // ابتدا مودال پله بعدی و پس از بسته شدن آن، جشن پایان تمرین بدون تداخل صدا
+        const key = `${exercise.id}:${isoToday()}`;
+        if (!progressionAsked.has(key)) {
+          progressionAsked.add(key);
+          openDoubleProgressionModal(exercise, reachedTopOfRange(exercise), () =>
+            openWorkoutFinishModal(day),
+          );
+        } else {
+          openWorkoutFinishModal(day);
+        }
+      } else if (dayFinished) {
+        openWorkoutFinishModal(day);
+      } else {
+        if (allDone) {
+          chord();
+          offerDoubleProgression(exercise);
+        } else {
+          beep(2, 1320, 0.12);
+        }
+        startRest();
+      }
     } else {
-      // Last tick was undone: today's row would be a phantom point.
-      clearTodayExerciseHistory(exercise.id);
+      if (exercise.logs.some((entry) => entry.done)) {
+        recordExerciseHistory(exercise);
+      } else {
+        clearTodayExerciseHistory(exercise.id);
+      }
+      if (dayDone(day) === 0 && !day.warmups.some((w) => w.done)) {
+        clearTodayWorkoutActivity();
+      }
     }
     refreshProgress(day, exercise);
-
-    // Celebrate once, on the tick that finishes the whole day.
-    if (!wasComplete && dayTotal(day) > 0 && dayDone(day) === dayTotal(day)) {
-      openWorkoutFinishModal(day);
-    }
   });
 
   row.append(label, weight.element, reps.element, check);
@@ -889,6 +933,13 @@ function refreshProgress(day: WorkoutDay, exercise: Exercise): void {
 
   const restart = root.querySelector<HTMLElement>("[data-day-restart]");
   if (restart) restart.classList.toggle("hidden", !dayHasProgress(day));
+
+  const pillStatus = root.querySelector<HTMLElement>(`[data-day-pill-status="${day.id}"]`);
+  if (pillStatus) {
+    const finished = total > 0 && dayDoneCount === total;
+    pillStatus.textContent = finished ? "✓" : `${fa(dayDoneCount)}/${fa(total)}`;
+    pillStatus.className = finished ? "text-emerald-400" : "";
+  }
 
   if (exercise.logs.length > 0 && done === exercise.logs.length) {
     toast(`حرکت «${exercise.name}» کامل شد ✅`, "ok");

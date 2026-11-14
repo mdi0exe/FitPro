@@ -39,6 +39,13 @@ export function isWakeLockActive(): boolean {
 
 /** Re-acquires the lock; browsers drop it whenever the page is hidden. */
 export async function requestGymWakeLock(): Promise<void> {
+  // The university-only layout has no gym session, so keeping the screen on
+  // just drains the battery.
+  try {
+    if (getState().appMode === "uni_only") return;
+  } catch {
+    /* before initState */
+  }
   if (!wakeLockDesired || wakeLockSentinel) return;
   if (!wakeLockApi) {
     // Unsupported browser: stop pretending it is on.
@@ -78,6 +85,26 @@ export async function toggleGymWakeLock(): Promise<boolean> {
   }
   toast("روشن ماندن صفحه حین تمرین فعال شد 📱");
   return true;
+}
+
+/** Re-evaluates the wake lock after a mode / preset change. */
+export async function syncWakeLockWithMode(): Promise<void> {
+  let mode: string | undefined;
+  try {
+    mode = getState().appMode;
+  } catch {
+    return;
+  }
+  if (mode === "uni_only") {
+    try {
+      await wakeLockSentinel?.release();
+    } catch {
+      /* already released */
+    }
+    wakeLockSentinel = null;
+    return;
+  }
+  await requestGymWakeLock();
 }
 
 /** Call once at boot: keeps the screen awake for the whole session. */
@@ -245,6 +272,12 @@ const ALTERNATIVE_MOVES: Record<string, AltSpec> = {
   },
 };
 
+/**
+ * Per-day copies of the same movement carry a prefix (`ppl4-d1e1`,
+ * `dorm1-d2e6`). Bundled GIFs and the muscle map are keyed by the base id.
+ */
+const baseExerciseId = (id: string): string => id.replace(/^(ppl\d+|dorm\d+)-/, "");
+
 /** Exact muscle group for every movement in the bundled 4-day programme. */
 const EXERCISE_MUSCLE_MAP: Record<string, string> = {
   "dorm-pushup": "chest",
@@ -368,7 +401,7 @@ const MUSCLE_KEYWORDS: Array<[string, string[]]> = [
       "پشت\u200cبازو",
       "دیپ پشت بازو",
       "دیپ",
-      "پشت سر",
+      "از پشت سر",
       "tricep",
       "pushdown",
       "skull crusher",
@@ -457,7 +490,7 @@ const EXERCISE_GIFS = defaultGifs.exercises as Record<string, string>;
  */
 function originalGifFor(exercise: Exercise): string | null {
   if (typeof exercise.originalGifUrl === "string") return exercise.originalGifUrl;
-  return EXERCISE_GIFS[exercise.id] ?? null;
+  return EXERCISE_GIFS[baseExerciseId(exercise.id)] ?? null;
 }
 
 /** True when the movement on screen is today's substitute, not the programme. */
@@ -485,7 +518,7 @@ export function swapBusyExercise(exercise: Exercise): void {
     exercise.originalTip = null;
   }
 
-  const alt = ALTERNATIVE_MOVES[exercise.id];
+  const alt = ALTERNATIVE_MOVES[baseExerciseId(exercise.id)];
 
   // Save the programmed movement first: this is what "back to original" and the
   // automatic next-day reset restore.
@@ -499,8 +532,11 @@ export function swapBusyExercise(exercise: Exercise): void {
     exercise.name = alt.name;
     exercise.query = alt.query;
     // The substitute movement has its own bundled demo for d1..d4; dorm moves keep their gif.
-    if (EXERCISE_GIFS[exercise.id]) {
-      exercise.gifUrl = `/gifs/${exercise.id}-alt.gif`;
+    const baseId = baseExerciseId(exercise.id);
+    if (baseId in EXERCISE_GIFS) {
+      exercise.gifUrl = `/gifs/${baseId}-alt.gif`;
+    } else {
+      exercise.gifUrl = null;
     }
     exercise.tip = alt.tip;
   } else {
@@ -569,7 +605,9 @@ export function guessMuscleKey(exercise: Exercise): string {
   }
 
   // 3. Every movement in the bundled 4-day programme has an exact answer.
-  if (EXERCISE_MUSCLE_MAP[exercise.id]) return EXERCISE_MUSCLE_MAP[exercise.id];
+  if (EXERCISE_MUSCLE_MAP[baseExerciseId(exercise.id)]) {
+    return EXERCISE_MUSCLE_MAP[baseExerciseId(exercise.id)];
+  }
 
   // 4. Unknown custom movement: fall back to overlap, but keep short words
   //    (they are exactly what the old filter threw away).
@@ -1080,6 +1118,11 @@ function readDeloadSnapshot(): Record<string, number> {
   } catch {
     return {};
   }
+}
+
+/** Drops the recovery-week snapshot (programme switch / preset / reset). */
+export function clearDeloadSnapshot(): void {
+  writeDeloadSnapshot(null);
 }
 
 function writeDeloadSnapshot(map: Record<string, number> | null): void {

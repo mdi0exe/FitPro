@@ -7,7 +7,14 @@
 import { btn, el, svgIcon } from "../lib/dom";
 import { fa, faClock, isoAddDays, isoToday } from "../lib/fa";
 import { icons } from "../lib/icons";
-import { cancelNotifications, ensureNotificationPermission, scheduleRepeatingNotification } from "../lib/notify";
+import {
+  LANG_TIMER_NOTIF_ID,
+  cancelNotifications,
+  ensureNotificationPermission,
+  hasNotificationPermission,
+  scheduleOneShotNotification,
+  scheduleRepeatingNotification,
+} from "../lib/notify";
 import { getState, persist, requestRender } from "../lib/store";
 import { CountdownTimer, alarm, softTap } from "../lib/timer";
 import type { LanguageStudyState } from "../types";
@@ -66,6 +73,23 @@ async function scheduleLanguageAlarm(hhmm: string): Promise<boolean> {
   if (!granted) return false;
   const title = languageState().title || "مطالعه روزانه زبان";
   return scheduleRepeatingNotification(
+    LANGUAGE_ALARM_ID,
+    `📚 وقت ${title} است!`,
+    "یک جلسه تمرکز = سرمایه‌گذاری روی آینده تحصیلی و شغلی. همین حالا شروع کن 🔥",
+    { hour, minute },
+  );
+}
+
+export async function syncLanguageStudyAlarm(): Promise<void> {
+  if (!(await hasNotificationPermission())) return;
+  const lang = languageState();
+  if (!lang.reminderEnabled) {
+    await cancelNotifications([LANGUAGE_ALARM_ID]);
+    return;
+  }
+  const [hour, minute] = lang.reminderTime.split(":").map((part) => Number.parseInt(part, 10) || 0);
+  const title = lang.title || "مطالعه روزانه زبان";
+  await scheduleRepeatingNotification(
     LANGUAGE_ALARM_ID,
     `📚 وقت ${title} است!`,
     "یک جلسه تمرکز = سرمایه‌گذاری روی آینده تحصیلی و شغلی. همین حالا شروع کن 🔥",
@@ -178,6 +202,16 @@ export function renderLanguageStudyCard(): HTMLElement {
         languageStudyTimer.reset(target * 60);
       }
       languageStudyTimer.toggle();
+      if (languageStudyTimer.running) {
+        void scheduleOneShotNotification(
+          LANG_TIMER_NOTIF_ID,
+          `📚 پایان جلسه ${lang.title}`,
+          "وقت مطالعه امروز تمام شد و ثبت گردید ✅",
+          Date.now() + languageStudyTimer.remaining * 1000,
+        );
+      } else {
+        void cancelNotifications([LANG_TIMER_NOTIF_ID]);
+      }
       softTap();
       requestRender();
     },
@@ -187,6 +221,7 @@ export function renderLanguageStudyCard(): HTMLElement {
     toggleTimer,
     btn("btn-icon", svgIcon(icons.reset, "h-4 w-4"), () => {
       languageStudyTimer.reset(target * 60);
+      void cancelNotifications([LANG_TIMER_NOTIF_ID]);
       softTap();
       requestRender();
     }, { "aria-label": "ریست تایمر زبان" }),
@@ -198,6 +233,7 @@ export function renderLanguageStudyCard(): HTMLElement {
     if (node) node.textContent = faClock(remaining);
   };
   languageStudyTimer.onDone = () => {
+    void cancelNotifications([LANG_TIMER_NOTIF_ID]);
     alarm();
     const current = languageState();
     const day = isoToday();
@@ -274,8 +310,9 @@ export function renderLanguageStudyCard(): HTMLElement {
   reminderBox.append(head);
 
   const setTime = async (hour: number, minute: number) => {
-    const hh = String(((hour % 24) + 24) % 24).padStart(2, "0");
-    const mm = String(((minute % 60) + 60) % 60).padStart(2, "0");
+    const totalMinutes = (((hour * 60 + minute) % 1440) + 1440) % 1440;
+    const hh = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+    const mm = String(totalMinutes % 60).padStart(2, "0");
     lang.reminderTime = `${hh}:${mm}`;
     lang.reminderEnabled = true;
     softTap();

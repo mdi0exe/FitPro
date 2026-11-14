@@ -49,18 +49,36 @@ export function pushOverlay(close: () => void): string {
 }
 
 /** Releases an overlay that was closed from the UI (X, backdrop, action). */
+let pendingReleases = 0;
+let releaseScheduled = false;
+
+/** True when `id` is the modal the Escape key should close. */
+export function isTopOverlay(id: string): boolean {
+  return stack.length > 0 && stack[stack.length - 1].id === id;
+}
+
 export function releaseOverlay(id: string): void {
   const index = stack.findIndex((entry) => entry.id === id);
   if (index === -1) return;
   stack.splice(index, 1);
 
-  const state = history.state as { overlay?: string } | null;
-  if (state?.overlay === id) {
-    // Our entry is still current: step back, and swallow the resulting event so
-    // it does not also pop a tab.
-    suppressed += 1;
-    history.back();
-  }
+  // Closing two overlays in the same tick (a confirm dialog inside a modal)
+  // used to fire two `history.back()` calls, one of which popped the tab.
+  // Batch them into a single `history.go(-n)`.
+  pendingReleases += 1;
+  if (releaseScheduled) return;
+  releaseScheduled = true;
+  queueMicrotask(() => {
+    releaseScheduled = false;
+    const steps = pendingReleases;
+    pendingReleases = 0;
+    if (steps <= 0) return;
+    const state = history.state as { overlay?: string } | null;
+    if (state?.overlay) {
+      suppressed += steps;
+      history.go(-steps);
+    }
+  });
 }
 
 /**
@@ -72,8 +90,17 @@ export function releaseOverlay(id: string): void {
  * and the Android back button appears to "do nothing" several times on the
  * home screen.
  */
-export function pushTab(tab: string): void {
+export function pushTab(tab: string, homeTabId?: string): void {
   const state = history.state as { tab?: string } | null;
+  if (homeTabId && tab === homeTabId) {
+    // Going back to the home tab must not add an entry: otherwise one Back
+    // press lands on the tab we just left instead of closing the app.
+    if (state?.tab) {
+      suppressed += 1;
+      history.back();
+    }
+    return;
+  }
   if (state?.tab) history.replaceState({ tab }, "");
   else history.pushState({ tab }, "");
 }

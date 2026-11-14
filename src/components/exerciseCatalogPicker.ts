@@ -17,6 +17,15 @@ import {
 
 const ALL_KEY = "all";
 
+const normalizeSearch = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/\u200c/g, " ")
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/\s+/g, " ")
+    .trim();
+
 export interface CatalogPickerOptions {
   /** Called with the chosen movement; the caller closes the panel itself. */
   onPick: (item: CatalogExercise) => void;
@@ -56,7 +65,7 @@ export function catalogPicker(options: CatalogPickerOptions): CatalogPicker {
   searchInput.type = "search";
   searchInput.placeholder = "جستجو: پرس سینه، دمبل، اسکوات…";
   searchInput.addEventListener("input", () => {
-    query = searchInput.value.trim().toLowerCase();
+    query = normalizeSearch(searchInput.value);
     paintGrid();
   });
 
@@ -95,10 +104,10 @@ export function catalogPicker(options: CatalogPickerOptions): CatalogPicker {
     if (muscle !== ALL_KEY && item.muscleKey !== muscle) return false;
     if (!query) return true;
     return (
-      item.name.toLowerCase().includes(query) ||
+      normalizeSearch(item.name).includes(query) ||
       item.english.toLowerCase().includes(query) ||
-      item.equipment.includes(query) ||
-      item.muscle.includes(query)
+      normalizeSearch(item.equipment).includes(query) ||
+      normalizeSearch(item.muscle).includes(query)
     );
   };
 

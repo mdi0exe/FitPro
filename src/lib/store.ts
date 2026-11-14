@@ -10,7 +10,8 @@ let activeTab: TabId = "workout";
 const listeners = new Set<() => void>();
 
 let saveTimer: number | null = null;
-let flushing = false;
+/** The write currently on the wire (null when idle). */
+let inflightFlush: Promise<void> | null = null;
 let queued = false;
 
 /** Tabs visible in each modular layout, in bottom-nav order. */
@@ -122,22 +123,31 @@ export function hasPendingSave(): boolean {
 }
 
 export async function flushNow(): Promise<void> {
-  if (!state) return;
-  if (flushing) {
+  const current = state;
+  if (!current) return;
+  if (inflightFlush) {
+    // A write is already on the wire. Mark that another pass is needed and
+    // wait for the running one — the old `return` here resolved immediately,
+    // so callers could read a stale file right after awaiting flushNow().
     queued = true;
+    await inflightFlush;
+    // The running pass may already have started the queued pass.
+    if (inflightFlush) await inflightFlush;
     return;
   }
-  flushing = true;
-  try {
-    await saveState(state);
-  } catch (error) {
-    console.error("failed to persist app state", error);
-  } finally {
-    flushing = false;
-    if (queued) {
-      queued = false;
-      void flushNow();
+  inflightFlush = (async () => {
+    try {
+      await saveState(current);
+    } catch (error) {
+      console.error("failed to persist app state", error);
+    } finally {
+      inflightFlush = null;
     }
+  })();
+  await inflightFlush;
+  if (queued) {
+    queued = false;
+    await flushNow();
   }
 }
 
@@ -205,10 +215,15 @@ export function syncTodayActivity(): boolean {
   if (!Array.isArray(current.activityHistory)) current.activityHistory = [];
 
   const activeDayObj = current.days[current.activeDay];
+  // Only ticks stamped with TODAY count: without the date check, yesterday's
+  // still-ticked sets were reported as today's workout on every fresh day.
+  const isDoneToday = (done: boolean, doneDate?: string | null) => done && doneDate === today;
+
   const workedDays = current.days.filter(
     (day) =>
-      day.exercises.some((exercise) => exercise.logs.some((log) => log.done)) ||
-      day.warmups.some((warmup) => warmup.done),
+      day.exercises.some((exercise) =>
+        exercise.logs.some((log) => isDoneToday(log.done, log.doneDate)),
+      ) || day.warmups.some((warmup) => isDoneToday(warmup.done, warmup.doneDate)),
   );
   const targetDay =
     workedDays.find((day) => day.id === activeDayObj?.id) ?? workedDays[0] ?? activeDayObj;
@@ -218,9 +233,13 @@ export function syncTodayActivity(): boolean {
   let warmupsDone = 0;
 
   for (const day of workedDays) {
-    warmupsDone += day.warmups.filter((warmup) => warmup.done).length;
+    warmupsDone += day.warmups.filter((warmup) =>
+      isDoneToday(warmup.done, warmup.doneDate),
+    ).length;
     for (const exercise of day.exercises) {
-      const doneCount = exercise.logs.filter((log) => log.done).length;
+      const doneCount = exercise.logs.filter((log) =>
+        isDoneToday(log.done, log.doneDate),
+      ).length;
       if (doneCount === 0) continue;
       setsDone += doneCount;
       // With more than one day ticked, say which day each exercise came from.
@@ -275,6 +294,31 @@ export function syncTodayActivity(): boolean {
   if (current.activityHistory.length > 90) current.activityHistory.length = 90;
 
   return JSON.stringify(entry) !== before;
+}
+
+/**
+ * Clears today's workout block only when the user manually unticked every
+ * set/warmup done today. `restartDay` and the overload cycle reset the flags
+ * before calling in, so this only runs for a genuine manual untick and the
+ * calendar never keeps a phantom row.
+ */
+export function clearTodayWorkoutActivity(): void {
+  if (!state) return;
+  const today = isoToday();
+  const anyDoneToday = state.days.some(
+    (day) =>
+      day.exercises.some((ex) =>
+        ex.logs.some((log) => log.done && log.doneDate === today),
+      ) || day.warmups.some((wu) => wu.done && wu.doneDate === today),
+  );
+  if (anyDoneToday) return;
+  const entry = state.activityHistory.find((item) => item.date === today);
+  if (!entry) return;
+  entry.workoutTitle = "";
+  entry.completedExercises = [];
+  entry.setsDone = 0;
+  entry.warmupsDone = 0;
+  persist(0);
 }
 
 /** Flush pending writes when the app is backgrounded (Android included). */

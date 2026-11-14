@@ -14,6 +14,8 @@ import { icons } from "../lib/icons";
 import { openModal, toast } from "../components/ui";
 import type { CourseSession } from "../types";
 import { getState, persist, requestRender } from "./store";
+import { copyText } from "./clipboard";
+import { pruneBusAlarms } from "../views/uni";
 
 /** Which half of the university data a share action moves around. */
 export type UniShareScope = "courses" | "shuttle";
@@ -71,27 +73,9 @@ export function shareButton(label: string, aria: string, onClick: () => void): H
 /** Copies the scope's JSON to the clipboard, with a manual fallback modal. */
 export async function copyShareJson(scope: UniShareScope): Promise<void> {
   const json = JSON.stringify(sharePayload(scope));
-  let copied = false;
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(json);
-      copied = true;
-    }
-  } catch {
-    /* the WebView may deny clipboard access */
-  }
-  if (!copied) {
-    const temp = el("textarea", "sr-only");
-    temp.value = json;
-    document.body.append(temp);
-    temp.select();
-    try {
-      copied = document.execCommand("copy");
-    } catch {
-      copied = false;
-    }
-    temp.remove();
-  }
+  // One clipboard implementation for the whole app (hidden-textarea fallback
+  // included), instead of a second copy that drifted from it.
+  const copied = await copyText(json);
   if (copied) toast(`JSON ${scopeNoun(scope)} کپی شد؛ برای هم‌دانشگاهی‌ها بفرست.`);
   else openShareJsonModal(json, "export", scope);
 }
@@ -225,6 +209,11 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
   ) {
     state.customShuttleJson = data.customShuttleJson.trim();
     changed = true;
+  } else if (parseShuttleJson(raw)) {
+    // Some AI answers return the raw `{ railway, suburbs }` object instead of
+    // wrapping it in `{ customShuttleJson }`; accept both shapes.
+    state.customShuttleJson = raw.trim();
+    changed = true;
   }
 
   if (!changed) {
@@ -233,6 +222,8 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
   }
 
   persist(0);
+  // A new timetable invalidates alarms for departures that no longer exist.
+  if (scope === "shuttle") void pruneBusAlarms();
   close();
   toast(
     scope === "courses"

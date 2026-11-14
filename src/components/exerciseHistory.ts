@@ -37,11 +37,9 @@ export function recordExerciseHistory(exercise: Exercise): void {
   const done = exercise.logs.filter((log) => log.done);
   if (done.length === 0) return;
 
-  const top = done.reduce((best, log) => {
-    const score = log.weight > 0 ? log.weight * log.reps : log.reps;
-    const bestScore = best.weight > 0 ? best.weight * best.reps : best.reps;
-    return score > bestScore ? log : best;
-  }, done[0]);
+  const score = (log: { weight: number; reps: number }) =>
+    log.weight > 0 ? log.weight * log.reps : log.reps;
+  const top = done.reduce((best, log) => (score(log) > score(best) ? log : best), done[0]);
   const today = isoToday();
   const state = getState();
   state.exerciseHistory = state.exerciseHistory ?? {};
@@ -137,7 +135,7 @@ export function openExerciseHistoryModal(exercise: Exercise): void {
       ),
     );
   } else {
-    const isBodyweight = entries.every((r) => r.weight <= 0);
+    const isBodyweight = exercise.bodyweight || entries.every((r) => r.weight <= 0);
     const first = entries[0];
     const last = entries[entries.length - 1];
     const delta = isBodyweight ? last.reps - first.reps : last.weight - first.weight;
@@ -150,7 +148,7 @@ export function openExerciseHistoryModal(exercise: Exercise): void {
     };
     summary.append(
       cell(
-        isBodyweight ? "بیشترین تکرار" : "بهترین وزن",
+        isBodyweight ? "بهترین تکرار" : "بهترین وزن",
         isBodyweight
           ? fa(Math.max(...entries.map((r) => r.reps)))
           : `${faNum(Math.max(...entries.map((r) => r.weight)), 1)}`,
@@ -159,7 +157,7 @@ export function openExerciseHistoryModal(exercise: Exercise): void {
       cell("جلسات", fa(entries.length), "text-slate-100"),
       cell(
         isBodyweight ? "تغییر تکرار" : "تغییر وزن",
-        `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${faNum(Math.abs(delta), isBodyweight ? 0 : 1)}`,
+        `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${isBodyweight ? fa(Math.abs(delta)) : faNum(Math.abs(delta), 1)}`,
         delta > 0 ? "text-emerald-300" : delta < 0 ? "text-rose-300" : "text-slate-400",
       ),
     );

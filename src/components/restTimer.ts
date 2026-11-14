@@ -7,7 +7,12 @@
 import { btn, el, svgIcon } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { clock, fa } from "../lib/fa";
-import { pushSystemNotification } from "../lib/notify";
+import {
+  REST_TIMER_NOTIF_ID,
+  cancelNotifications,
+  pushSystemNotification,
+  scheduleOneShotNotification,
+} from "../lib/notify";
 import { alarm, restTimer } from "../lib/timer";
 import { getState } from "../lib/store";
 
@@ -84,6 +89,7 @@ export function mountRestTimer(): void {
     timeLabel.textContent = fa(clock(remaining));
   };
   restTimer.onDone = () => {
+    void cancelNotifications([REST_TIMER_NOTIF_ID]);
     if (caption) {
       caption.textContent = "استراحت تمام شد. ست بعدی را آغاز کنید.";
       caption.className = "text-[10px] font-bold text-emerald-300";
@@ -118,9 +124,16 @@ export function startRest(seconds?: number): void {
   restTimer.reset(total);
   show();
   restTimer.start();
+  void scheduleOneShotNotification(
+    REST_TIMER_NOTIF_ID,
+    "استراحت تمام شد",
+    "زمان اجرای ست بعدی است.",
+    Date.now() + total * 1000,
+  );
 }
 
 export function stopRest(): void {
+  void cancelNotifications([REST_TIMER_NOTIF_ID]);
   restTimer.reset(restTimer.total);
   restTimer.pause();
   if (hideHandle !== null) {
@@ -149,5 +162,13 @@ export function bumpRest(delta: number): void {
 
   if (delta > 0 && !restTimer.running) {
     restTimer.start();
+  }
+  if (restTimer.running && restTimer.remaining > 1) {
+    void scheduleOneShotNotification(
+      REST_TIMER_NOTIF_ID,
+      "استراحت تمام شد",
+      "زمان اجرای ست بعدی است.",
+      Date.now() + restTimer.remaining * 1000,
+    );
   }
 }

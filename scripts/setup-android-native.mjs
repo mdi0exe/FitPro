@@ -737,19 +737,26 @@ if (!manifest.includes("</application>")) {
 }
 let manifestChanged = false;
 
+const receiverTag = [
+  `        <!-- ${MARKER}: the water action stays in the background -->`,
+  `        <receiver`,
+  `            android:name=".WaterBroadcastReceiver"`,
+  `            android:exported="true">`,
+  `            <intent-filter>`,
+  `                <action android:name="android.intent.action.BOOT_COMPLETED" />`,
+  `                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />`,
+  `            </intent-filter>`,
+  `        </receiver>`,
+].join("\n");
+
 if (!manifest.includes("WaterBroadcastReceiver")) {
-  const receiverTag = [
-    `        <!-- ${MARKER}: the water action stays in the background -->`,
-    `        <receiver`,
-    `            android:name=".WaterBroadcastReceiver"`,
-    `            android:exported="true">`,
-    `            <intent-filter>`,
-    `                <action android:name="android.intent.action.BOOT_COMPLETED" />`,
-    `                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />`,
-    `            </intent-filter>`,
-    `        </receiver>`,
-  ].join("\n");
   manifest = manifest.replace("</application>", `${receiverTag}\n    </application>`);
+  manifestChanged = true;
+} else if (!manifest.includes("BOOT_COMPLETED")) {
+  manifest = manifest.replace(
+    /<!--\s*fitpro-native-water[\s\S]*?<\/receiver>|<receiver[^>]*WaterBroadcastReceiver[^>]*>[\s\S]*?<\/receiver>|<receiver[^>]*WaterBroadcastReceiver[^>]*\/>/,
+    receiverTag.trim()
+  );
   manifestChanged = true;
 }
 
@@ -783,6 +790,7 @@ if (!mainActivity.includes('addJavascriptInterface(AndroidWaterBridge(this), "An
   problems.push("MainActivity does not expose window.AndroidWater");
 }
 if (!patchedManifest.includes("WaterBroadcastReceiver")) problems.push("manifest has no receiver");
+if (!patchedManifest.includes("BOOT_COMPLETED")) problems.push("manifest receiver has no BOOT_COMPLETED");
 if (!mainActivity.includes("MediaStore.Downloads.EXTERNAL_CONTENT_URI")) {
   problems.push("backup save does not use MediaStore.Downloads");
 }

@@ -203,13 +203,17 @@ export function applyAiDietJson(raw: string): { ok: boolean; message: string } {
     // The `diet-4` water row drives the glass counter, so it is re-appended and
     // keeps its tick instead of disappearing with the old checklist.
     const water: DietItem = state.diet.items.find((item) => item.id === "diet-4") ?? waterRow();
+    const isWaterRow = (text: string) =>
+      /(۸\s*لیوان|نوشیدن\s*۸|آب\s*کافی\s*روزانه)/.test(text);
     state.diet.items = [
-      ...plan.checklist.map((entry, index) => ({
-        id: `ai-${index + 1}`,
-        text: entry.text,
-        hint: entry.hint,
-        done: false,
-      })),
+      ...plan.checklist
+        .filter((entry) => !isWaterRow(entry.text))
+        .map((entry, index) => ({
+          id: `ai-${index + 1}`,
+          text: entry.text,
+          hint: entry.hint,
+          done: false,
+        })),
       water,
     ];
     syncWaterChecklist();
@@ -285,7 +289,7 @@ export function openAiDietConfigurator(): void {
     () => {
       void readClipboardText().then((text) => {
         if (!text.trim()) {
-          toast("کلیپ‌بورد خالی است؛ پاسخ را دستی بچسبان.", "info");
+          toast("دسترسی کلیپ‌بورد در دسترس نیست یا خالی است؛ پاسخ را دستی بچسبان.", "info");
           return;
         }
         answerBox.value = text;

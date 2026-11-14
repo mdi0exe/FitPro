@@ -34,10 +34,16 @@ export function renderProgress(): HTMLElement {
 function weightHero(): HTMLElement {
   const { profile, weightHistory } = getState();
   const gained = profile.currentWeight - profile.startWeight;
-  const remaining = Math.max(0, profile.targetWeight - profile.currentWeight);
-  const span = Math.max(0.1, profile.targetWeight - profile.startWeight);
-  const percent = Math.min(100, Math.max(0, (gained / span) * 100));
-  const heightM = profile.heightCm / 100;
+  const isLoss = profile.targetWeight < profile.startWeight;
+  const span = Math.abs(profile.targetWeight - profile.startWeight);
+  const progressDone = isLoss
+    ? profile.startWeight - profile.currentWeight
+    : profile.currentWeight - profile.startWeight;
+  const remaining = isLoss
+    ? Math.max(0, profile.currentWeight - profile.targetWeight)
+    : Math.max(0, profile.targetWeight - profile.currentWeight);
+  const percent = span < 0.1 ? 100 : Math.min(100, Math.max(0, (progressDone / span) * 100));
+  const heightM = Math.max(1, profile.heightCm) / 100;
   const bmi = profile.currentWeight / (heightM * heightM);
 
   const card = el(
@@ -75,7 +81,7 @@ function weightHero(): HTMLElement {
   const bar = progressBar(percent, "mt-3");
   const foot = el("div", "mt-1.5 flex items-center justify-between text-[10px] text-slate-400");
   foot.append(
-    el("span", "", `${faNum(remaining, 1)} کیلو تا هدف`),
+    el("span", "", remaining < 0.1 ? "به وزن هدف رسیدی ✓" : `${faNum(remaining, 1)} کیلو تا هدف`),
     el("span", "", `${fa(weightHistory.length)} ثبت وزن`),
   );
 

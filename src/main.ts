@@ -24,7 +24,9 @@ import {
   visibleTabs,
 } from "./lib/store";
 import { mountRestTimer } from "./components/restTimer";
-import { installWakeLockLifecycle } from "./lib/workoutTools";
+import { installWakeLockLifecycle, syncWakeLockWithMode } from "./lib/workoutTools";
+import { syncUniAlarms } from "./views/uni";
+import { syncLanguageStudyAlarm } from "./views/uniLanguage";
 import { renderUni } from "./views/uni";
 import { renderHeader, renderNav } from "./components/shell";
 import { toast } from "./components/ui";
@@ -199,7 +201,7 @@ async function boot(): Promise<void> {
     // Keep the screen awake while training (re-acquired on resume).
     installWakeLockLifecycle();
     // Android action button: "+1 glass" straight from the notification shade.
-    void initNotificationActions();
+    await initNotificationActions();
     setRenderHook(() => renderView(true));
 
     // Android back: close the open overlay first, otherwise return to the
@@ -209,7 +211,7 @@ async function boot(): Promise<void> {
       if (getActiveTab() !== home) {
         setActiveTab(home);
         requestRender();
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
       }
     });
 
@@ -230,6 +232,9 @@ async function boot(): Promise<void> {
     // Resume the water reminder from its persisted deadline. This never resets
     // the countdown: closing the app only pauses it.
     restoreWaterReminderOnBoot();
+    void syncUniAlarms();
+    void syncLanguageStudyAlarm();
+    void syncWakeLockWithMode();
 
     // Android requires a user gesture before audio playback is allowed.
     const unlock = () => {

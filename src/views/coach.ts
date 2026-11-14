@@ -4,7 +4,10 @@ import { icons } from "../lib/icons";
 import { fa, faNum, makePersianNumericInput, parseFaFloat } from "../lib/fa";
 import { resetToDefaults, storageMode } from "../lib/api";
 import { ensureNotificationPermission, pushSystemNotification } from "../lib/notify";
-import { alarm, waterAlert } from "../lib/timer";
+import { alarm, stopWaterReminder, waterAlert } from "../lib/timer";
+import { syncWakeLockWithMode } from "../lib/workoutTools";
+import { syncUniAlarms } from "./uni";
+import { syncLanguageStudyAlarm } from "./uniLanguage";
 import { applyTheme, getState, persist, requestRender, setState } from "../lib/store";
 import { applyDeveloperPreset } from "../lib/appSettings";
 import type { AppStateData } from "../types";
@@ -190,7 +193,12 @@ function profileEditor(state: AppStateData): HTMLElement {
 
   const save = btn("btn-ghost w-full py-2 text-xs", "ذخیره مشخصات", () => {
     const name = nameInput.value.trim();
-    if (name) state.profile.name = name;
+    if (!name) {
+      toast("نام نمی‌تواند خالی باشد.", "error");
+      nameInput.focus();
+      return;
+    }
+    state.profile.name = name;
     // `parseFaFloat(..., fallback)` keeps a cleared field from wiping the value.
     state.profile.age = clamp(
       Math.round(parseFaFloat(age.input.value, state.profile.age)),
@@ -311,7 +319,7 @@ function settingsCard(): HTMLElement {
       toast("تست صدای هشدار باشگاه و ویبره قوی انجام شد 💪");
     }),
     btn("btn-ghost w-full py-2 text-xs", "💧 تست یادآور آب (ملایم)", () => {
-      waterAlert();
+      waterAlert(true);
       toast("تست صدای ملایم و نوتیفیکیشن آب انجام شد 💧");
     }),
     btn("btn-ghost w-full py-2 text-xs", "🔔 تست نوتیفیکیشن در نوار اعلان", () => {
@@ -367,9 +375,13 @@ async function loadDeveloperPreset(): Promise<void> {
   });
   if (!confirmed) return;
 
+  stopWaterReminder();
   applyDeveloperPreset(getState());
   applyTheme();
   persist(0);
+  void syncUniAlarms();
+  void syncLanguageStudyAlarm();
+  void syncWakeLockWithMode();
   toast('پروفایل پیش‌فرض توسعه‌دهنده بارگذاری شد ⚡');
   requestRender();
 }

@@ -325,7 +325,7 @@ const goToUni = async (page) => {
 
   await clickSelector(page, 'button[aria-label="بروزرسانی سرویس‌ها با هوش مصنوعی"]');
   await wait(500);
-  const area = await page.$("#overlay-root textarea");
+  const area = await page.$("#overlay-root textarea:not([readonly])");
   check("AI import sheet opens", Boolean(area));
 
   // Invalid JSON must be rejected without touching the stored table.

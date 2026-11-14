@@ -232,6 +232,12 @@ check("plate calculator shows a bar", plateText.includes("میله المپیک�
 await page.keyboard.press("Escape");
 await wait(400);
 
+const restoreBtn = await page.$('button[aria-label="برگشت به حرکت اصلی"]');
+if (restoreBtn) {
+  await restoreBtn.click();
+  await wait(600);
+}
+
 const setChecks = await page.$$('[data-row] button[aria-label="تکمیل ست"]');
 await setChecks[0].evaluate((node) => node.click());
 await wait(900);

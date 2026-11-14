@@ -284,8 +284,8 @@ export function softTap(_frequency = 980, _duration = 0.09): void {
  * notification. Never the gym alarm — and never during the 00:00–09:00 sleep
  * window, where the reminder has to be completely silent.
  */
-export function waterAlert(): void {
-  if (isWaterQuietHours()) {
+export function waterAlert(force = false): void {
+  if (!force && isWaterQuietHours()) {
     // Silent by design: no sound, no vibration, no status-bar notification.
     return;
   }

@@ -189,6 +189,11 @@ function coursesForDay(day: number): CourseSession[] {
 export function renderClassScheduleCard(): HTMLElement {
   const state = getState();
   const fortnightly = hasFortnightlyCourses();
+  if (fortnightly && !state.semesterWeekAnchorDate) {
+    state.semesterWeekAnchorDate = currentWeekStartIso();
+    state.semesterWeekType = effectiveSemesterWeekType();
+    persist(0);
+  }
   const weekNumber = semesterWeekNumber();
   // With no * / ** class the flag never matters, but the rows still need a
   // value; "odd" keeps `courseActiveThisWeek` true for every weekly class.

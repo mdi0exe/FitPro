@@ -51,13 +51,13 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "Which ABI(s) to build — armv7 is the smallest, all is ~4x bigger"
+        description: "Which ABI(s) to build — all (universal APK), or a single ABI"
         type: choice
-        default: armv7
+        default: all
         options:
-          - armv7
-          - aarch64
           - all
+          - aarch64
+          - armv7
 
 # One build per ref; a newer push cancels the previous run.
 concurrency:
@@ -291,9 +291,9 @@ jobs:
       - name: Build debug APK
         env:
           CI: "true"
-          # Default is armeabi-v7a: one ABI keeps the APK small (the universal
-          # build is ~4x bigger because each ABI ships its own .so).
-          TARGET_INPUT: ${{ inputs.target || 'armv7' }}
+          # Default is all: builds all 4 CPU architectures into a universal APK
+          # (arm64-v8a, armeabi-v7a, x86_64, x86).
+          TARGET_INPUT: ${{ inputs.target || 'all' }}
           # Debug symbols are the bulk of the Rust .so (~120 MB each). They are
           # useless in a downloadable APK, so strip them for CI only — this does
           # not touch the local `[profile.dev]` used by `npm run tauri:dev`.
@@ -346,9 +346,10 @@ jobs:
             echo "::warning::aapt2 not found — skipping the packaged permission check"
             exit 0
           fi
-          PERMS=$("${AAPT2}" dump permissions artifacts/*.apk)
+          FIRST_APK=$(find artifacts -type f -name '*.apk' | head -n 1)
+          PERMS=$("${AAPT2}" dump permissions "${FIRST_APK}")
           printf '%s\n' "${PERMS}"
-          for perm in POST_NOTIFICATIONS SCHEDULE_EXACT_ALARM USE_EXACT_ALARM WAKE_LOCK; do
+          for perm in POST_NOTIFICATIONS SCHEDULE_EXACT_ALARM USE_EXACT_ALARM WAKE_LOCK RECEIVE_BOOT_COMPLETED; do
             if ! printf '%s' "${PERMS}" | grep -q "${perm}"; then
               echo "::error::${perm} is missing from the packaged APK"
               exit 1

@@ -65,7 +65,8 @@ export function openGifModal(options: GifModalOptions): void {
     }
   };
 
-  renderPreview(options.gifUrl);
+  const initialUrl = options.gifUrl === "none" ? null : options.gifUrl;
+  renderPreview(initialUrl);
   body.append(preview);
 
   body.append(
@@ -102,7 +103,7 @@ export function openGifModal(options: GifModalOptions): void {
     input.type = "url";
     input.dir = "ltr";
     input.placeholder = "https://example.com/squat.gif";
-    input.value = options.gifUrl ?? "";
+    input.value = initialUrl ?? "";
     urlRow.append(input);
 
     const actions = el("div", "grid grid-cols-2 gap-2");
@@ -119,7 +120,7 @@ export function openGifModal(options: GifModalOptions): void {
       }),
       btn("btn-ghost", "حذف گیف", () => {
         input.value = "";
-        options.onSaveUrl?.(null);
+        options.onSaveUrl?.("none");
         renderPreview(null);
         toast("گیف حذف شد.", "info");
       }),
