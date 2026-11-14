@@ -29,9 +29,17 @@ const warmupGifs = defaultGifs.warmups as Record<string, string>;
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 /** One deep-cloned exercise with its bundled demo and a fresh set log. */
-function pick(base: WorkoutDay[], dayIndex: number, exIndex: number): Exercise {
+function pick(
+  base: WorkoutDay[],
+  dayIndex: number,
+  exIndex: number,
+  idOverride?: string,
+): Exercise {
   const exercise = clone(base[dayIndex].exercises[exIndex]);
+  // Resolve the demo from the SOURCE id before overriding it, otherwise the
+  // per-day copy would lose its bundled GIF.
   exercise.gifUrl = exercise.gifUrl || exerciseGifs[exercise.id] || null;
+  if (idOverride) exercise.id = idOverride;
   exercise.logs = syncLogs(exercise);
   return exercise;
 }
@@ -192,10 +200,10 @@ export const WORKOUT_PROGRAMS: ProgramTemplate[] = [
           focus: "پهنای سرشانه و تفکیک سینه",
           warmups: warmups(base, 0),
           exercises: [
-            pick(base, 2, 0),
+            pick(base, 2, 0, "ppl4-d3e1"),
             pick(base, 2, 2),
-            pick(base, 0, 0),
-            pick(base, 0, 4),
+            pick(base, 0, 0, "ppl4-d1e1"),
+            pick(base, 0, 4, "ppl4-d1e5"),
             pick(base, 2, 6),
           ],
         },
@@ -208,7 +216,7 @@ export const WORKOUT_PROGRAMS: ProgramTemplate[] = [
           exercises: [
             pick(base, 2, 3),
             pick(base, 2, 1),
-            pick(base, 2, 4),
+            pick(base, 2, 4, "ppl5-d3e5"),
             pick(base, 2, 5),
             pick(base, 1, 5),
           ],
@@ -240,7 +248,7 @@ export const WORKOUT_PROGRAMS: ProgramTemplate[] = [
     buildDays: () => {
       const base = baseDays();
       const pushUp: Exercise = {
-        id: "d1e1",
+        id: "dorm-pushup",
         name: "شنا سوئدی استاندارد (یا دست روی تخت)",
         sets: 4,
         reps: "12-15",
@@ -254,7 +262,7 @@ export const WORKOUT_PROGRAMS: ProgramTemplate[] = [
       pushUp.logs = syncLogs(pushUp);
 
       const squat: Exercise = {
-        id: "d2e2",
+        id: "dorm-squat",
         name: "اسکات وزن بدن (یا گابلت اسکات با دمبل/کوله)",
         sets: 4,
         reps: "15-20",
@@ -279,7 +287,7 @@ export const WORKOUT_PROGRAMS: ProgramTemplate[] = [
             pick(base, 0, 4), // Lateral Raise
             pick(base, 2, 0), // DB Shoulder Press
             pick(base, 0, 5), // Curl
-            pick(base, 1, 5), // Abs
+            pick(base, 1, 5, "dorm1-d2e6"), // Abs
           ],
         },
         {
@@ -292,7 +300,7 @@ export const WORKOUT_PROGRAMS: ProgramTemplate[] = [
             squat,
             pick(base, 3, 2), // Lunges
             pick(base, 3, 0), // DB RDL
-            pick(base, 1, 5), // Abs
+            pick(base, 1, 5, "dorm2-d2e6"), // Abs
           ],
         },
       ];

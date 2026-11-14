@@ -177,8 +177,11 @@ const countdownSeconds = () =>
     const text = (node?.textContent ?? "").replace(/[۰-۹]/g, (d) =>
       String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)),
     );
-    const match = /(\d+):(\d+)/.exec(text);
-    return match ? Number(match[1]) * 60 + Number(match[2]) : -1;
+    // The countdown renders H:MM:SS once it is more than an hour away.
+    const match = /(?:(\d+):)?(\d+):(\d+)/.exec(text);
+    if (!match) return -1;
+    const hours = match[1] ? Number(match[1]) : 0;
+    return hours * 3600 + Number(match[2]) * 60 + Number(match[3]);
   });
 
 await goNutrition();

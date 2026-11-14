@@ -386,6 +386,11 @@ async function resetPlan(): Promise<void> {
 
   try {
     const next = await resetToDefaults();
+    try {
+      window.localStorage.removeItem("persian-hypertrophy::deload-snapshot");
+    } catch {
+      /* storage unavailable */
+    }
     setState(next);
     toast("برنامه به حالت پیش‌فرض بازگشت.", "info");
     requestRender();

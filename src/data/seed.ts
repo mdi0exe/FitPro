@@ -25,6 +25,7 @@ const w = (id: string, text: string, query: string): WarmupItem => ({
   text,
   query,
   done: false,
+  doneDate: null,
   // Filled from default-gifs.json by normalizeState()/normalize().
   gifUrl: null,
 });
@@ -44,6 +45,7 @@ function ex(
     weight: targetWeight,
     reps: firstReps,
     done: false,
+    doneDate: null,
   }));
   return {
     id,

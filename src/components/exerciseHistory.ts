@@ -37,10 +37,11 @@ export function recordExerciseHistory(exercise: Exercise): void {
   const done = exercise.logs.filter((log) => log.done);
   if (done.length === 0) return;
 
-  const top = done.reduce(
-    (best, log) => (log.weight * log.reps > best.weight * best.reps ? log : best),
-    done[0],
-  );
+  const top = done.reduce((best, log) => {
+    const score = log.weight > 0 ? log.weight * log.reps : log.reps;
+    const bestScore = best.weight > 0 ? best.weight * best.reps : best.reps;
+    return score > bestScore ? log : best;
+  }, done[0]);
   const today = isoToday();
   const state = getState();
   state.exerciseHistory = state.exerciseHistory ?? {};
@@ -81,21 +82,22 @@ export function lastExerciseEntry(exerciseId: string): ExerciseHistoryEntry | nu
   return entries.length > 0 ? entries[entries.length - 1] : null;
 }
 
-/** Inline SVG sparkline: weight over time, with a soft area fill. */
-function chartSvg(entries: ExerciseHistoryEntry[]): string {
+/** Inline SVG sparkline: weight (or reps for bodyweight moves) over time. */
+function chartSvg(entries: ExerciseHistoryEntry[], useReps = false): string {
   const width = 300;
   const height = 120;
   const pad = 10;
-  const weights = entries.map((row) => row.weight);
-  const min = Math.min(...weights);
-  const max = Math.max(...weights);
+  const values = entries.map((row) => (useReps ? row.reps : row.weight));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
   // A flat series still needs a band, otherwise every point lands on the axis.
   const span = max - min < 0.01 ? 1 : max - min;
   const stepX = entries.length > 1 ? (width - pad * 2) / (entries.length - 1) : 0;
 
   const points = entries.map((row, index) => {
+    const val = useReps ? row.reps : row.weight;
     const x = pad + index * stepX;
-    const y = height - pad - ((row.weight - min) / span) * (height - pad * 2);
+    const y = height - pad - ((val - min) / span) * (height - pad * 2);
     return [x, y] as const;
   });
 
@@ -135,9 +137,10 @@ export function openExerciseHistoryModal(exercise: Exercise): void {
       ),
     );
   } else {
+    const isBodyweight = entries.every((r) => r.weight <= 0);
     const first = entries[0];
     const last = entries[entries.length - 1];
-    const delta = last.weight - first.weight;
+    const delta = isBodyweight ? last.reps - first.reps : last.weight - first.weight;
 
     const summary = el("div", "grid grid-cols-3 gap-2");
     const cell = (label: string, value: string, tone: string) => {
@@ -146,11 +149,17 @@ export function openExerciseHistoryModal(exercise: Exercise): void {
       return box;
     };
     summary.append(
-      cell("بهترین وزن", `${faNum(Math.max(...entries.map((r) => r.weight)), 1)}`, "text-emerald-300"),
+      cell(
+        isBodyweight ? "بیشترین تکرار" : "بهترین وزن",
+        isBodyweight
+          ? fa(Math.max(...entries.map((r) => r.reps)))
+          : `${faNum(Math.max(...entries.map((r) => r.weight)), 1)}`,
+        "text-emerald-300",
+      ),
       cell("جلسات", fa(entries.length), "text-slate-100"),
       cell(
-        "تغییر وزن",
-        `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${faNum(Math.abs(delta), 1)}`,
+        isBodyweight ? "تغییر تکرار" : "تغییر وزن",
+        `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${faNum(Math.abs(delta), isBodyweight ? 0 : 1)}`,
         delta > 0 ? "text-emerald-300" : delta < 0 ? "text-rose-300" : "text-slate-400",
       ),
     );
@@ -168,7 +177,7 @@ export function openExerciseHistoryModal(exercise: Exercise): void {
       );
     } else {
       const chart = el("div", "rounded-2xl border border-slate-800 bg-slate-950/60 p-2");
-      chart.innerHTML = chartSvg(entries);
+      chart.innerHTML = chartSvg(entries, isBodyweight);
       body.append(chart);
     }
 

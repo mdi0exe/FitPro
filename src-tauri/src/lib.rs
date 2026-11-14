@@ -165,6 +165,7 @@ fn reset_to_defaults(app: AppHandle) -> Result<AppStateData, String> {
     // "Reset plan" must also re-select the default template on the native side
     // (the browser equivalent lives in localBackend.ts::localReset).
     fresh.profile.workout_program_id = crate::models::default_program_id();
+    fresh.profile.goal = crate::models::UserProfile::default().goal;
     if !current.weight_history.is_empty() {
         fresh.weight_history = current.weight_history;
     }

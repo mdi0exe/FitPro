@@ -141,8 +141,12 @@ async function patchStateOnReload(page, mutate) {
     Boolean(await page.$('button[aria-label="حرکت جایگزین"]')),
   );
 
-  // Swap again, then pretend it happened yesterday.
+  // Swap again, then pretend it happened yesterday. The button opens the
+  // picker now, so the curated row has to be clicked to actually swap.
   await (await page.$('button[aria-label="حرکت جایگزین"]')).click();
+  await wait(500);
+  const quickAgain = await page.$('button[aria-label="جایگزین پیشنهادی"]');
+  if (quickAgain) await quickAgain.click();
   await wait(700);
   await patchStateOnReload(page, 'state.days[0].exercises[0].swappedDate = "2020-01-01";');
 

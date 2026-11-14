@@ -492,7 +492,17 @@ async function restartDay(day: WorkoutDay): Promise<void> {
   if (!confirmed) return;
 
   for (const exercise of day.exercises) {
-    for (const log of exercise.logs) log.done = false;
+    const prescribedReps = firstNumber(exercise.reps);
+    for (const log of exercise.logs) {
+      log.done = false;
+      // If Double Progression raised the prescription, bring the set up to the new target.
+      if (!exercise.bodyweight && exercise.targetWeight > 0 && log.weight < exercise.targetWeight) {
+        log.weight = exercise.targetWeight;
+        if (prescribedReps > 0) log.reps = prescribedReps;
+      } else if ((exercise.bodyweight || exercise.targetWeight <= 0) && prescribedReps > log.reps) {
+        log.reps = prescribedReps;
+      }
+    }
   }
   for (const warmup of day.warmups) warmup.done = false;
 
@@ -702,6 +712,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     onChange: (value) => {
       log.weight = value;
       if (log.done) recordExerciseHistory(exercise);
+      if (log.done && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
       persist();
     },
     onOpenPicker: (current, setValue) =>
@@ -716,6 +727,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
         onChange: (value) => {
           log.weight = value;
           if (log.done) recordExerciseHistory(exercise);
+          if (log.done && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
           setValue(value);
           persist();
         },
@@ -731,6 +743,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     onChange: (value) => {
       log.reps = value;
       if (log.done) recordExerciseHistory(exercise);
+      if (log.done && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
       persist();
     },
     onOpenPicker: (current, setValue) =>
@@ -746,6 +759,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
         onChange: (value) => {
           log.reps = value;
           if (log.done) recordExerciseHistory(exercise);
+          if (log.done && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
           setValue(value);
           persist();
         },
@@ -793,12 +807,14 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
 
       // One clip per tap: the final set plays the brighter "chord" instead of
       // the regular bell, so the two real MP3s never overlap.
+      const dayFinishedNow = !wasComplete && dayTotal(day) > 0 && dayDone(day) === dayTotal(day);
       const allDone =
         exercise.logs.length > 0 && exercise.logs.every((entry) => entry.done);
       if (allDone) {
         chord();
-        // Once per exercise per day: ask what the next session should be.
-        offerDoubleProgression(exercise);
+        // Only open the progression modal if the day-finish celebration isn't
+        // about to open on the exact same tap (avoids two stacked modals).
+        if (!dayFinishedNow) offerDoubleProgression(exercise);
       } else beep(2, 1320, 0.12);
       startRest();
     } else if (exercise.logs.some((entry) => entry.done)) {
@@ -836,6 +852,7 @@ function applyToAllSets(exercise: Exercise, field: "weight" | "reps", value: num
   for (const log of exercise.logs) {
     if (field === "weight") log.weight = value;
     else log.reps = value;
+    if (log.done) checkAndUpdatePR(exercise, log.weight, log.reps);
   }
   // Editing a finished set must move today's chart point as well.
   if (exercise.logs.some((log) => log.done)) recordExerciseHistory(exercise);
@@ -927,6 +944,11 @@ function editExercise(exercise: Exercise): void {
       const repsChanged = exercise.reps !== draft.reps;
       const weightChanged = exercise.targetWeight !== draft.targetWeight;
 
+      const identityEdited =
+        exercise.name !== draft.name ||
+        exercise.tip !== draft.tip ||
+        exercise.gifUrl !== draft.gifUrl;
+
       exercise.name = draft.name;
       exercise.reps = draft.reps;
       exercise.tip = draft.tip;
@@ -935,6 +957,16 @@ function editExercise(exercise: Exercise): void {
       exercise.targetWeight = draft.targetWeight;
       exercise.bodyweight = draft.targetWeight <= 0;
       exercise.sets = draft.sets;
+
+      // If the user manually edited a swapped exercise, make the edit permanent
+      // instead of overwriting it tomorrow morning with the old originalName.
+      if (identityEdited && exercise.swappedDate) {
+        exercise.swappedDate = null;
+        exercise.originalName = null;
+        exercise.originalQuery = null;
+        exercise.originalGifUrl = null;
+        exercise.originalTip = null;
+      }
 
       // Rows that are not checked yet follow the new prescription; completed
       // sets are history and keep what was actually lifted.

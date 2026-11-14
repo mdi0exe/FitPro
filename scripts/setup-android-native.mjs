@@ -274,6 +274,11 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         when (intent?.action) {
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                restoreAlarmOnBoot(context)
+            }
+
             ACTION_SHOW_REMINDER -> {
                 val calendar = Calendar.getInstance()
                 if (calendar.get(Calendar.HOUR_OF_DAY) in 0..8) {
@@ -335,6 +340,15 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
             if (diet.optString("lastResetDate", day) != day) {
                 diet.put("lastResetDate", day)
                 diet.put("waterGlasses", 0)
+                // Yesterday's meal ticks must go too, otherwise the JS
+                // ensureDailyDietReset() sees a "reset" date that is already
+                // today and leaves the stale ticks in place.
+                val dayItems = diet.optJSONArray("items")
+                if (dayItems != null) {
+                    for (index in 0 until dayItems.length()) {
+                        dayItems.optJSONObject(index)?.put("done", false)
+                    }
+                }
             }
 
             val glasses = (diet.optInt("waterGlasses", 0) + 1).coerceAtMost(20)
@@ -348,6 +362,35 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
                         if (item.optString("id") == "diet-4") item.put("done", true)
                     }
                 }
+            }
+
+            // Keep today's calendar entry in sync even if the student never
+            // opens the app before midnight.
+            val history = root.optJSONArray("activityHistory") ?: org.json.JSONArray().also {
+                root.put("activityHistory", it)
+            }
+            var todayEntry: JSONObject? = null
+            for (i in 0 until history.length()) {
+                val entry = history.optJSONObject(i) ?: continue
+                if (entry.optString("date") == day) {
+                    todayEntry = entry
+                    break
+                }
+            }
+            if (todayEntry == null) {
+                todayEntry = JSONObject().apply {
+                    put("date", day)
+                    put("workoutTitle", "")
+                    put("completedExercises", org.json.JSONArray())
+                    put("setsDone", 0)
+                    put("warmupsDone", 0)
+                    put("dietDone", 0)
+                    put("dietTotal", diet.optJSONArray("items")?.length() ?: 5)
+                    put("waterGlasses", glasses)
+                }
+                history.put(0, todayEntry)
+            } else {
+                todayEntry.put("waterGlasses", glasses)
             }
 
             writeAtomically(file, root)
@@ -374,6 +417,25 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
             scheduleAt(context, nextAt)
         } catch (_: Exception) {
             // Nothing to reschedule.
+        }
+    }
+
+    /** Re-arms the water alarm after a reboot or an app update. */
+    private fun restoreAlarmOnBoot(context: Context) {
+        try {
+            val file = stateFile(context)
+            if (!file.exists()) return
+            val root = JSONObject(file.readText(Charsets.UTF_8))
+            val diet = root.optJSONObject("diet") ?: return
+            if (!diet.optBoolean("waterReminderEnabled", false)) return
+            val savedNext = diet.optLong("waterReminderNextAt", 0L)
+            val now = System.currentTimeMillis()
+            if (savedNext > now + 1000L) {
+                scheduleAt(context, quietHoursAdjusted(savedNext))
+            } else {
+                rescheduleFromState(context)
+            }
+        } catch (_: Exception) {
         }
     }
 }
@@ -521,7 +583,17 @@ class AndroidWaterBridge(private val context: Context) {
                 out.write(bytes)
                 out.flush()
             } ?: throw IllegalStateException("openOutputStream returned null")
-            return "/storage/emulated/0/Download/\$safeName"
+            var actualName = safeName
+            try {
+                resolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val idx = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                        if (idx >= 0 && !cursor.isNull(idx)) actualName = cursor.getString(idx)
+                    }
+                }
+            } catch (_: Exception) {
+            }
+            return "/storage/emulated/0/Download/\$actualName"
         }
 
         @Suppress("DEPRECATION")
@@ -546,7 +618,12 @@ class AndroidWaterBridge(private val context: Context) {
     fun shareBackupFile(fileName: String, contents: String): Boolean {
         return try {
             val safeName = BackupFileProvider.sanitizeName(fileName)
-            val file = File(BackupFileProvider.backupCacheDir(context), safeName)
+            val cacheDir = BackupFileProvider.backupCacheDir(context)
+            // Drop older backups so the cache cannot grow without bound.
+            cacheDir.listFiles()?.forEach { old ->
+                if (old.name != safeName) old.delete()
+            }
+            val file = File(cacheDir, safeName)
             file.writeText(contents, Charsets.UTF_8)
 
             val uri = Uri.parse("content://\${BackupFileProvider.AUTHORITY}/\$safeName")
@@ -561,8 +638,17 @@ class AndroidWaterBridge(private val context: Context) {
             val chooser = Intent.createChooser(sendIntent, "ارسال فایل پشتیبان").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+            if (chooser.resolveActivity(context.packageManager) == null) return false
             Handler(Looper.getMainLooper()).post {
-                context.startActivity(chooser)
+                try {
+                    context.startActivity(chooser)
+                } catch (_: Exception) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "برنامه‌ای برای اشتراک‌گذاری پیدا نشد.",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
             }
             true
         } catch (_: Exception) {
@@ -656,7 +742,12 @@ if (!manifest.includes("WaterBroadcastReceiver")) {
     `        <!-- ${MARKER}: the water action stays in the background -->`,
     `        <receiver`,
     `            android:name=".WaterBroadcastReceiver"`,
-    `            android:exported="false" />`,
+    `            android:exported="true">`,
+    `            <intent-filter>`,
+    `                <action android:name="android.intent.action.BOOT_COMPLETED" />`,
+    `                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />`,
+    `            </intent-filter>`,
+    `        </receiver>`,
   ].join("\n");
   manifest = manifest.replace("</application>", `${receiverTag}\n    </application>`);
   manifestChanged = true;

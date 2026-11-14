@@ -441,8 +441,12 @@ function openCourseModal(existing?: CourseSession): void {
   };
   const shift = (delta: number) => {
     const length = Math.max(30, toMinutes(endTime) - toMinutes(startTime));
-    startTime = toHhmm(toMinutes(startTime) + delta);
-    endTime = toHhmm(toMinutes(startTime) + length);
+    // Keep the whole class inside the day: shifting must never push 23:30 past
+    // midnight (which would wrap the end time back to 00:00).
+    const maxStart = 23 * 60 + 30 - length;
+    const nextStart = Math.min(Math.max(6 * 60, toMinutes(startTime) + delta), Math.max(6 * 60, maxStart));
+    startTime = toHhmm(nextStart);
+    endTime = toHhmm(nextStart + length);
     softTap();
     paintSlots();
     paintShift();

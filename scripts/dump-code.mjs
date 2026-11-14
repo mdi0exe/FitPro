@@ -60,12 +60,13 @@ function collect() {
       const abs = path.join(dir, entry.name);
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
       if (entry.isDirectory()) {
-        // skip generated png mipmaps inside src-tauri/icons, but keep icon.svg
-        if (rel === "src-tauri/icons") continue;
         if (inExcludedDir(rel)) continue;
         walk(abs);
         continue;
       }
+      // Inside src-tauri/icons only the vector source matters; the generated
+      // PNG/ICNS mipmaps are binaries.
+      if (rel.startsWith("src-tauri/icons/") && path.extname(rel).toLowerCase() !== ".svg") continue;
       if (inExcludedDir(rel)) continue;
       if (EXCLUDE_FILES.has(rel)) continue;
       if (isBinaryExt(rel)) continue;

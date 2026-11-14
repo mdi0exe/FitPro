@@ -108,6 +108,7 @@ fn warmup(id: &str, text: &str, query: &str) -> WarmupItem {
         text: text.to_string(),
         query: query.to_string(),
         done: false,
+        done_date: None,
         // Filled from default-gifs.json by AppStateData::normalize().
         gif_url: None,
     }

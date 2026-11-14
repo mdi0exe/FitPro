@@ -79,6 +79,9 @@ pub struct WarmupItem {
     pub query: String,
     #[serde(default)]
     pub done: bool,
+    /// ISO date when this warm-up item was checked off.
+    #[serde(default)]
+    pub done_date: Option<String>,
     /// Direct `.gif` demo. `None` = never set, `Some("")` = removed by the user.
     #[serde(default)]
     pub gif_url: Option<String>,
@@ -96,6 +99,9 @@ pub struct SetLog {
     pub weight: f32,
     pub reps: u32,
     pub done: bool,
+    /// ISO date when this set was completed.
+    #[serde(default)]
+    pub done_date: Option<String>,
 }
 
 impl SetLog {
@@ -105,6 +111,7 @@ impl SetLog {
             weight,
             reps,
             done: false,
+            done_date: None,
         }
     }
 }
@@ -441,6 +448,10 @@ fn gif_needs_replacement(url: Option<&str>) -> bool {
         None => true,
         Some(value) => {
             let trimmed = value.trim();
+            // An explicit "none" means the student deleted the demo on purpose.
+            if trimmed == "none" {
+                return false;
+            }
             trimmed.is_empty()
                 || trimmed.contains("fitnessprogramer.com")
                 || trimmed.contains("giphy.com")
@@ -491,20 +502,8 @@ fn is_hhmm(value: &str) -> bool {
 
 /// `YYYY-MM-DD`, the only date shape the app stores.
 fn is_iso_date(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
-        return false;
-    }
-    let digits_ok = bytes
-        .iter()
-        .enumerate()
-        .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit());
-    if !digits_ok {
-        return false;
-    }
-    let month = value[5..7].parse::<u32>().unwrap_or(0);
-    let day = value[8..10].parse::<u32>().unwrap_or(0);
-    (1..=12).contains(&month) && (1..=31).contains(&day)
+    // A real calendar check: "2026-02-31" must not pass as a date.
+    value.len() == 10 && chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok()
 }
 
 // ---------------------------------------------------------------------------
@@ -689,8 +688,9 @@ pub struct AppStateData {
     /// `"full"` (gym + uni) | `"uni_only"` (no workout tabs) | `"gym_only"`.
     #[serde(default = "default_app_mode")]
     pub app_mode: String,
-    /// First-run wizard is shown once; explicit `false` in a legacy save too.
-    #[serde(default)]
+    /// First-run wizard is shown once. Legacy saves predate the key and were
+    /// already configured, so a missing value means `true`.
+    #[serde(default = "default_true")]
     pub onboarding_completed: bool,
 }
 
@@ -753,11 +753,16 @@ impl AppStateData {
         }
         self.activity_history.retain(|entry| !entry.date.is_empty());
         self.activity_history.sort_by(|a, b| b.date.cmp(&a.date));
+        // One row per calendar day: duplicates made the calendar count twice.
+        let mut seen_dates = std::collections::HashSet::new();
+        self.activity_history
+            .retain(|entry| seen_dates.insert(entry.date.clone()));
         self.activity_history.truncate(90);
         for entry in self.activity_history.iter_mut() {
             entry.water_glasses = entry.water_glasses.min(30);
             entry.diet_total = entry.diet_total.min(20);
-            entry.diet_done = entry.diet_done.min(entry.diet_total.max(5));
+            let max_done = if entry.diet_total == 0 { 5 } else { entry.diet_total };
+            entry.diet_done = entry.diet_done.min(max_done);
         }
 
         if !matches!(self.readiness.as_str(), "high" | "normal" | "low") {
@@ -862,25 +867,42 @@ impl AppStateData {
         if self.rest_seconds < 15 || self.rest_seconds > 600 {
             self.rest_seconds = DEFAULT_REST_SECONDS;
         }
-        if self.profile.target_weight <= 0.0 {
+        // Height/weights feed the BMI and protein formulas, so a zero or a NaN
+        // must never reach them (a NaN propagates through every later comparison).
+        if !self.profile.height_cm.is_finite() || self.profile.height_cm <= 0.0 {
+            self.profile.height_cm = 179.0;
+        } else {
+            self.profile.height_cm = self.profile.height_cm.clamp(120.0, 230.0);
+        }
+        if !self.profile.current_weight.is_finite() || self.profile.current_weight <= 0.0 {
+            self.profile.current_weight = 65.0;
+        }
+        if !self.profile.start_weight.is_finite() || self.profile.start_weight <= 0.0 {
+            self.profile.start_weight = self.profile.current_weight;
+        }
+        if !self.profile.target_weight.is_finite() || self.profile.target_weight <= 0.0 {
             self.profile.target_weight = 75.0;
         }
+        self.profile.age = self.profile.age.clamp(10, 100);
         // Older installs carry a 6-item grocery list (egg/budget bulking).
         // Only those exact legacy rows are migrated: a student may now pick a
         // different template, add custom meals or delete rows, and every one of
         // those lists must survive a save/load cycle untouched.
         // Deliberately short, distinctive substrings: matching "تخممرغ" would
         // also nuke a student's own "تخممرغ آبپز" custom meal.
-        let legacy_markers = [
-            "بمب پروتئین",
-            "عدسی یا خوراک سویا",
-            "وعده کامل سلف دانشگاه",
+        let legacy_exact = [
+            "۳ تا ۴ عدد تخم‌مرغ کامل (ارزان‌ترین بمب پروتئین)",
+            "وعده کامل سلف دانشگاه (با برنج و نان اضافه)",
         ];
         let legacy_diet = self.diet.items.is_empty()
             || self.diet.items.iter().any(|item| {
-                legacy_markers
-                    .iter()
-                    .any(|marker| item.text.contains(marker))
+                // AI-generated and user-added rows must never be mistaken for
+                // the old grocery list, even if they mention the same foods.
+                !item.id.starts_with("ai-")
+                    && !item.id.starts_with("custom-")
+                    && (legacy_exact.iter().any(|exact| item.text.trim() == *exact)
+                        || item.text.contains("عدسی یا خوراک سویا")
+                        || item.text.contains("بمب پروتئین"))
             });
         if legacy_diet {
             self.diet.items = default_diet_items();
@@ -958,9 +980,12 @@ impl AppStateData {
                 // stored prescription in ASCII digits so increment_reps works.
                 exercise.reps = to_ascii_digits(&exercise.reps);
                 if gif_needs_replacement(exercise.gif_url.as_deref()) {
-                    // A swapped movement shows its own substitute demo; the
-                    // programmed one stays in `original_gif_url` for the reset.
-                    exercise.gif_url = if exercise.is_swapped() {
+                    // A swapped movement shows its own substitute demo, but only
+                    // when the bundle actually ships one for this id — otherwise
+                    // a custom exercise would get a 404 path.
+                    exercise.gif_url = if exercise.is_swapped()
+                        && gifs.exercises.contains_key(&exercise.id)
+                    {
                         Some(format!("/gifs/{}-alt.gif", exercise.id))
                     } else {
                         gifs.exercises.get(&exercise.id).cloned()
@@ -968,6 +993,7 @@ impl AppStateData {
                 }
                 if exercise.is_swapped()
                     && gif_needs_replacement(exercise.original_gif_url.as_deref())
+                    && gifs.exercises.contains_key(&exercise.id)
                 {
                     exercise.original_gif_url = Some(format!("/gifs/{}.gif", exercise.id));
                 }
@@ -1005,11 +1031,15 @@ pub const OVERLOAD_STEP_KG: f32 = 2.5;
 /// * Logged sets are cleared so the new cycle starts from a clean slate.
 pub fn apply_overload(state: &mut AppStateData) -> usize {
     let mut changed = 0usize;
+    // A new overload cycle ends recovery week; leaving the flag on would make
+    // the next "end recovery" tap multiply the fresh weights by 1.25.
+    state.deload_active = false;
 
     for day in state.days.iter_mut() {
         // A new cycle starts from a clean slate: warm-up checkboxes included.
         for warmup in day.warmups.iter_mut() {
             warmup.done = false;
+            warmup.done_date = None;
         }
         for exercise in day.exercises.iter_mut() {
             if exercise.bodyweight || exercise.target_weight <= 0.0 {
@@ -1594,14 +1624,21 @@ mod tests {
     }
 
     #[test]
-    fn activity_history_is_sorted_and_trimmed() {
+    fn activity_history_is_sorted_trimmed_and_deduped() {
         let mut state = crate::storage::seed();
+        let start = chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
         for index in 0..120 {
+            let date = start + chrono::Duration::days(index);
             state.activity_history.push(DailyActivity {
-                date: format!("2026-01-{:02}", (index % 28) + 1),
+                date: date.format("%Y-%m-%d").to_string(),
                 ..Default::default()
             });
         }
+        // A repeated day must not occupy two rows in the calendar.
+        state.activity_history.push(DailyActivity {
+            date: start.format("%Y-%m-%d").to_string(),
+            ..Default::default()
+        });
         state.normalize();
 
         assert_eq!(state.activity_history.len(), 90);
@@ -1609,6 +1646,14 @@ mod tests {
             .activity_history
             .windows(2)
             .all(|pair| pair[0].date >= pair[1].date));
+        let mut dates: Vec<String> = state
+            .activity_history
+            .iter()
+            .map(|entry| entry.date.clone())
+            .collect();
+        let rows = dates.len();
+        dates.dedup();
+        assert_eq!(dates.len(), rows, "activity history must be unique per day");
     }
 
     #[test]
@@ -1720,7 +1765,9 @@ mod tests {
         let state: AppStateData = serde_json::from_value(value).unwrap();
         assert_eq!(state.theme, "dark");
         assert_eq!(state.app_mode, "full");
-        assert!(!state.onboarding_completed);
+        // Legacy saves predate the key and are already configured, so the
+        // wizard must not reappear for them (only a fresh seed sets `false`).
+        assert!(state.onboarding_completed);
         assert_eq!(state.profile.university_name, "دانشگاه من");
         assert_eq!(state.profile.workout_program_id, "upper-lower-4");
         assert_eq!(state.uni_reminders.food_reminder_day, 4);

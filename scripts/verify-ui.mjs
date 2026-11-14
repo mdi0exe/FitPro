@@ -69,7 +69,7 @@ await new Promise((r) => setTimeout(r, 500));
 await shot("01b-exercise-card");
 
 // Tab navigation
-for (const [index, name] of ["02-progress", "03-nutrition", "04-coach"].entries()) {
+for (const [index, name] of ["02-progress", "03-nutrition", "04-uni", "05-coach"].entries()) {
   const buttons = await page.$$("#nav-slot nav button");
   await buttons[index + 1].click();
   await new Promise((r) => setTimeout(r, 600));
@@ -106,9 +106,10 @@ if (gifButtons.length > 0) {
 // Open the exercise action menu
 const cards = await page.$$("[data-exercise]");
 if (cards.length > 0) {
-  const menuButtons = await cards[0].$$(".btn-icon");
-  if (menuButtons.length > 1) {
-    await menuButtons[1].click();
+  // Index-based selection broke once the card gained a history button.
+  const menuBtn = await cards[0].$('.btn-icon[aria-label="گزینه‌های حرکت"]');
+  if (menuBtn) {
+    await menuBtn.click();
     await new Promise((r) => setTimeout(r, 500));
     await shot("07-exercise-menu");
     await page.keyboard.press("Escape");

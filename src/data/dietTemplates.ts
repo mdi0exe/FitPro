@@ -93,12 +93,28 @@ export function dietTemplateItems(id: string): DietItem[] {
   return (DIET_TEMPLATES.find((template) => template.id === id) ?? DIET_TEMPLATES[0]).build();
 }
 
-/** The first row identifies the active template even after custom rows are added. */
+/**
+ * Identifies the active template even when a student deletes one meal (e.g.
+ * breakfast). The old check compared only the first row, so deleting it made
+ * every template look like "custom".
+ */
 export function activeDietTemplateId(items: DietItem[]): string {
-  const first = items[0]?.text ?? "";
-  return (
-    DIET_TEMPLATES.find((template) => template.build()[0].text === first)?.id ?? "custom"
-  );
+  const coreTexts = items
+    .filter((entry) => !entry.id.startsWith("custom-") && entry.id !== "diet-4" && entry.id !== "diet-5")
+    .map((entry) => entry.text.trim())
+    .filter(Boolean);
+  if (coreTexts.length === 0) return "custom";
+
+  for (const template of DIET_TEMPLATES) {
+    const templateTexts = new Set(
+      template
+        .build()
+        .filter((entry) => entry.id !== "diet-4" && entry.id !== "diet-5")
+        .map((entry) => entry.text.trim()),
+    );
+    if (coreTexts.every((text) => templateTexts.has(text))) return template.id;
+  }
+  return "custom";
 }
 
 /** One-tap custom rows: no keyboard needed for the common supplements. */

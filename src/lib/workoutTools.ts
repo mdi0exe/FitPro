@@ -4,7 +4,7 @@
  */
 import defaultGifs from "../data/default-gifs.json";
 import { btn, el, escapeHtml } from "./dom";
-import { fa, faNum, isoToday } from "./fa";
+import { fa, faNum, isoAddDays, isoToday } from "./fa";
 import { getState, persist, requestRender } from "./store";
 import type { Exercise, Readiness, WorkoutDay } from "../types";
 import { openModal, toast } from "../components/ui";
@@ -233,10 +233,22 @@ const ALTERNATIVE_MOVES: Record<string, AltSpec> = {
     query: "Dumbbell Wrist Curl gif",
     tip: "مچ را کامل باز و جمع کنید تا ساعد به سوزش بیفتد",
   },
+  "dorm-pushup": {
+    name: "شنا سوئدی دست جمع (الماسی) یا پرس دمبل روی زمین",
+    query: "Diamond Push-up gif",
+    tip: "آرنج‌ها نزدیک پهلو، فشار عالی روی سینه و پشت بازو بدون دستگاه",
+  },
+  "dorm-squat": {
+    name: "گابلت اسکات با دمبل (یا اسکات پرشی)",
+    query: "Dumbbell Goblet Squat gif",
+    tip: "دمبل یا کوله را نزدیک سینه نگه دارید و کمر را صاف حفظ کنید",
+  },
 };
 
 /** Exact muscle group for every movement in the bundled 4-day programme. */
 const EXERCISE_MUSCLE_MAP: Record<string, string> = {
+  "dorm-pushup": "chest",
+  "dorm-squat": "quads",
   // Day 1 — Upper A
   d1e1: "chest",
   d1e2: "back",
@@ -486,9 +498,10 @@ export function swapBusyExercise(exercise: Exercise): void {
   if (alt) {
     exercise.name = alt.name;
     exercise.query = alt.query;
-    // The substitute movement has its own bundled demo, so the card keeps
-    // showing the movement that is actually on the screen.
-    exercise.gifUrl = `/gifs/${exercise.id}-alt.gif`;
+    // The substitute movement has its own bundled demo for d1..d4; dorm moves keep their gif.
+    if (EXERCISE_GIFS[exercise.id]) {
+      exercise.gifUrl = `/gifs/${exercise.id}-alt.gif`;
+    }
     exercise.tip = alt.tip;
   } else {
     // Custom exercises have no curated alternative: rename so the card is honest.
@@ -1029,12 +1042,8 @@ export function getWorkoutStreak(): number {
   const active = new Set(history.filter((entry) => entry.setsDone > 0).map((entry) => entry.date));
   if (active.size === 0) return 0;
 
-  const iso = (offset: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() - offset);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-  };
+  const today = isoToday();
+  const iso = (offset: number) => isoAddDays(today, -offset);
 
   let cursor = active.has(iso(0)) ? 0 : active.has(iso(1)) ? 1 : -1;
   if (cursor === -1) return 0;

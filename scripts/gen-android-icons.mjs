@@ -501,6 +501,12 @@ if (fs.existsSync(path.join(ROOT, "src-tauri", "gen", "android"))) targets.push(
 
 for (const dir of targets) {
   for (const { name, launcher, round, foreground } of results) {
+    // Tauri ships webp launchers; leaving them next to our PNGs makes aapt2
+    // fail with "Duplicate resource".
+    for (const oldFile of ["ic_launcher.webp", "ic_launcher_round.webp", "ic_launcher_foreground.webp"]) {
+      const stale = path.join(dir, `mipmap-${name}`, oldFile);
+      if (fs.existsSync(stale)) fs.unlinkSync(stale);
+    }
     writeRes(dir, path.join(`mipmap-${name}`, "ic_launcher.png"), encodePng(launcher));
     writeRes(dir, path.join(`mipmap-${name}`, "ic_launcher_round.png"), encodePng(round));
     writeRes(dir, path.join(`mipmap-${name}`, "ic_launcher_foreground.png"), encodePng(foreground));

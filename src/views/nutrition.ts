@@ -117,7 +117,7 @@ function dietTemplateCard(): HTMLElement {
     el(
       "p",
       "text-[10px] leading-5 text-slate-500",
-      "آیتمهای دلخواهی که خودت اضافه کردهای هنگام تغییر الگو حفظ میشوند.",
+      "آیتم‌های دلخواهی که خودت اضافه کرده‌ای هنگام تغییر الگو حفظ می‌شوند.",
     ),
   );
   return card;
@@ -159,7 +159,7 @@ function openAddDietItemModal(): void {
     el(
       "p",
       "text-[11px] leading-6 text-slate-400",
-      "یک گزینه آماده لمس کن یا عنوان دلخواهت را بنویس (مثل کراتین، پروتئین وی یا میانوعده).",
+      "یک گزینه آماده لمس کن یا عنوان دلخواهت را بنویس (مثل کراتین، پروتئین وی یا میان‌وعده).",
     ),
   );
 
@@ -219,7 +219,7 @@ function openAddDietItemModal(): void {
 function removeDietItem(id: string): void {
   const state = getState();
   if (id === "diet-4") {
-    toast("ردیف آب با شمارنده همگام است و حذف نمیشود.", "info");
+    toast("ردیف آب با شمارنده همگام است و حذف نمی‌شود.", "info");
     return;
   }
   const index = state.diet.items.findIndex((entry) => entry.id === id);

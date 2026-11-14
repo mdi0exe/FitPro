@@ -5,7 +5,7 @@
  * keeps firing while the app is closed — no JS timer involved.
  */
 import { btn, el, svgIcon } from "../lib/dom";
-import { fa, faClock, isoToday } from "../lib/fa";
+import { fa, faClock, isoAddDays, isoToday } from "../lib/fa";
 import { icons } from "../lib/icons";
 import { cancelNotifications, ensureNotificationPermission, scheduleRepeatingNotification } from "../lib/notify";
 import { getState, persist, requestRender } from "../lib/store";
@@ -48,12 +48,8 @@ function languageState(): LanguageStudyState {
 /** Consecutive days ending today (or yesterday, so an evening session counts). */
 export function languageStreak(dates: string[]): number {
   const set = new Set(dates);
-  const iso = (offset: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() - offset);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-  };
+  const today = isoToday();
+  const iso = (offset: number) => isoAddDays(today, -offset);
   let cursor = set.has(iso(0)) ? 0 : set.has(iso(1)) ? 1 : -1;
   if (cursor === -1) return 0;
   let streak = 0;
@@ -118,6 +114,7 @@ export function renderLanguageStudyCard(): HTMLElement {
           lang.title = subject.value;
           softTap();
           persist(0);
+          if (lang.reminderEnabled) void scheduleLanguageAlarm(lang.reminderTime);
           toast(`هدف مطالعه روزانه: ${subject.value} 📚`);
           requestRender();
         },
@@ -169,7 +166,7 @@ export function renderLanguageStudyCard(): HTMLElement {
     "min-w-0",
     // `dir="ltr"` isolates the clock: otherwise the colon makes RTL reorder the digits.
     `<p class="text-[10px] text-slate-400">تایمر تمرکز • ${fa(target)} دقیقه</p>
-     <p data-lang-clock class="mt-0.5 text-center text-xl font-extrabold leading-tight text-cyan-300">${faClock(languageStudyTimer.remaining)}</p>`,
+     <p data-lang-clock dir="ltr" class="mt-0.5 text-center text-xl font-extrabold leading-tight text-cyan-300">${faClock(languageStudyTimer.remaining)}</p>`,
   );
 
   const controls = el("div", "flex shrink-0 items-center gap-1.5");

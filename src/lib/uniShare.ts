@@ -184,22 +184,35 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
     }
     if (Array.isArray(data.courses)) {
       const weekTypes = ["all", "odd", "even"];
+      // Imported JSON can carry "9:5" or an end time before the start; validate
+      // both so a shared timetable never renders an inverted slot.
+      const hhmm = (v: unknown, fb: string) =>
+        typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.trim()) ? v.trim() : fb;
       state.courses = data.courses
         .filter((course) => course && typeof course.name === "string" && course.name.trim())
         .slice(0, 60)
-        .map((course) => ({
-          id: typeof course.id === "string" && course.id ? course.id : uid("course"),
-          name: String(course.name).trim().slice(0, 80),
-          professor: typeof course.professor === "string" ? course.professor.trim().slice(0, 80) : "",
-          dayOfWeek: Number.isInteger(course.dayOfWeek)
-            ? Math.min(6, Math.max(0, course.dayOfWeek))
-            : 0,
-          startTime: typeof course.startTime === "string" ? course.startTime : "09:00",
-          endTime: typeof course.endTime === "string" ? course.endTime : "11:00",
-          weekType: (weekTypes.includes(String(course.weekType))
-            ? course.weekType
-            : "all") as CourseSession["weekType"],
-        }));
+        .map((course) => {
+          const startTime = hhmm(course.startTime, "09:00");
+          let endTime = hhmm(course.endTime, "11:00");
+          if (endTime <= startTime) {
+            const [h, m] = startTime.split(":").map((n) => Number.parseInt(n, 10) || 0);
+            const total = Math.min(23 * 60 + 59, h * 60 + m + 120);
+            endTime = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+          }
+          return {
+            id: typeof course.id === "string" && course.id ? course.id : uid("course"),
+            name: String(course.name).trim().slice(0, 80),
+            professor: typeof course.professor === "string" ? course.professor.trim().slice(0, 80) : "",
+            dayOfWeek: Number.isInteger(course.dayOfWeek)
+              ? Math.min(6, Math.max(0, course.dayOfWeek))
+              : 0,
+            startTime,
+            endTime,
+            weekType: (weekTypes.includes(String(course.weekType))
+              ? course.weekType
+              : "all") as CourseSession["weekType"],
+          };
+        });
       changed = true;
     }
   } else if (data.customShuttleJson === null) {

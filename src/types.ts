@@ -24,6 +24,8 @@ export interface WarmupItem {
   text: string;
   query: string;
   done: boolean;
+  /** ISO date when this warm-up item was checked off. */
+  doneDate?: string | null;
   /** Direct .gif demo; `null` = not set yet, `""` = deliberately removed. */
   gifUrl?: string | null;
 }
@@ -33,6 +35,8 @@ export interface SetLog {
   weight: number;
   reps: number;
   done: boolean;
+  /** ISO date when this set was completed. */
+  doneDate?: string | null;
 }
 
 export interface Exercise {

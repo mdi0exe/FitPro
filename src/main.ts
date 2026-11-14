@@ -231,12 +231,6 @@ async function boot(): Promise<void> {
     // the countdown: closing the app only pauses it.
     restoreWaterReminderOnBoot();
 
-    // Coming back from the background can be hours later — recompute the
-    // remaining time (and fire once if the deadline passed meanwhile).
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") restoreWaterReminderOnBoot();
-    });
-
     // Android requires a user gesture before audio playback is allowed.
     const unlock = () => {
       unlockAudio();
@@ -283,9 +277,23 @@ async function syncAfterBackground(): Promise<void> {
       // A debounced save queued just before the app was backgrounded must land
       // first, otherwise setState(loadState()) silently discards it.
       if (hasPendingSave()) await flushNow();
-      setState(await loadState());
+      const diskState = await loadState();
+      setState(diskState);
+      // Sync the localStorage mirror with the deadline updated by Kotlin's
+      // WaterBroadcastReceiver so restoreWaterReminderOnBoot doesn't read a stale timestamp.
+      try {
+        const nextAt = diskState.diet?.waterReminderNextAt ?? 0;
+        if (nextAt > 0) {
+          window.localStorage.setItem("persian-hypertrophy::water-next-at", String(nextAt));
+        } else {
+          window.localStorage.removeItem("persian-hypertrophy::water-next-at");
+        }
+      } catch {
+        /* storage unavailable */
+      }
     }
     if (ensureDailyDietReset()) persist(0);
+    restoreWaterReminderOnBoot();
     requestRender();
   } catch (error) {
     console.warn("resume sync failed", error);

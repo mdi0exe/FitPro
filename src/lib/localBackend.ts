@@ -8,7 +8,7 @@
 import type { AppStateData, Exercise, Milestone, SetLog } from "../types";
 import { createSeedState, localIso } from "../data/seed";
 import defaultGifs from "../data/default-gifs.json";
-import { en, fa, firstNumber } from "./fa";
+import { en, fa, firstNumber, localDateFromIso } from "./fa";
 import { uid } from "./dom";
 
 const STORAGE_KEY = "persian-hypertrophy::state::v1";
@@ -19,6 +19,8 @@ const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 function gifNeedsReplacement(url: string | null | undefined): boolean {
   if (!url) return true;
   const value = url.trim();
+  // An explicit "none" means the student deleted the demo on purpose.
+  if (value === "none") return false;
   return (
     value.length === 0 ||
     value.includes("fitnessprogramer.com") ||
@@ -34,16 +36,33 @@ function cleanText(value: unknown, maxChars: number, fallback: string): string {
   return text || fallback;
 }
 
+/** True for a real `YYYY-MM-DD` calendar date ("2026-02-31" is rejected). */
+function isIsoCalendarDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const dt = localDateFromIso(value);
+  return dt.getFullYear() === y && dt.getMonth() + 1 === m && dt.getDate() === d;
+}
+
 /** The old 6-item "budget bulking" grocery list, before the 3-meal plan. */
 export function isLegacyDiet(items: unknown): boolean {
   if (!Array.isArray(items) || items.length === 0) return true;
-  const markers = ["بمب پروتئین", "عدسی یا خوراک سویا", "وعده کامل سلف دانشگاه"];
-  return items.some(
-    (row) =>
-      row &&
-      typeof row.text === "string" &&
-      markers.some((marker) => row.text.includes(marker)),
-  );
+  const exactLegacy = new Set([
+    "۳ تا ۴ عدد تخم‌مرغ کامل (ارزان‌ترین بمب پروتئین)",
+    "وعده کامل سلف دانشگاه (با برنج و نان اضافه)",
+  ]);
+  return items.some((row) => {
+    if (!row || typeof row.text !== "string") return false;
+    const id = typeof row.id === "string" ? row.id : "";
+    // AI-generated and user-added rows must never be mistaken for the old list.
+    if (id.startsWith("ai-") || id.startsWith("custom-")) return false;
+    const text = row.text.trim();
+    return (
+      exactLegacy.has(text) ||
+      text.includes("بمب پروتئین") ||
+      text.includes("عدسی یا خوراک سویا")
+    );
+  });
 }
 
 export function normalizeState(input: AppStateData): AppStateData {
@@ -51,10 +70,27 @@ export function normalizeState(input: AppStateData): AppStateData {
   state.days = state.days ?? [];
   // Older localStorage snapshots predate the weekly calendar.
   state.activityHistory = Array.isArray(state.activityHistory) ? state.activityHistory : [];
+  const seenActivityDates = new Set<string>();
   state.activityHistory = state.activityHistory
     .filter((entry) => entry && typeof entry.date === "string" && entry.date.length > 0)
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 90);
+    // One row per calendar day: duplicates made the calendar count twice.
+    .filter((entry) => {
+      if (seenActivityDates.has(entry.date)) return false;
+      seenActivityDates.add(entry.date);
+      return true;
+    })
+    .slice(0, 90)
+    .map((entry) => {
+      const dietTotal = Math.min(20, Math.max(0, Number(entry.dietTotal) || 0));
+      const maxDone = dietTotal === 0 ? 5 : dietTotal;
+      return {
+        ...entry,
+        waterGlasses: Math.min(30, Math.max(0, Number(entry.waterGlasses) || 0)),
+        dietTotal,
+        dietDone: Math.min(maxDone, Math.max(0, Number(entry.dietDone) || 0)),
+      };
+    });
 
   // Per-exercise progression log. A saved file from before this existed simply
   // has no key, and a corrupted row must never break the chart.
@@ -82,6 +118,23 @@ export function normalizeState(input: AppStateData): AppStateData {
   // Runs before the `days.length === 0` short-circuit: a student who turned
   // the gym off still needs a valid theme, mode and university name.
   state.profile = state.profile ?? createSeedState().profile;
+  // Same guards as models.rs: BMI and the protein formula must never see a zero
+  // or a NaN, otherwise the dashboard shows "NaN" everywhere.
+  if (!Number.isFinite(state.profile.heightCm) || state.profile.heightCm <= 0) {
+    state.profile.heightCm = 179;
+  } else {
+    state.profile.heightCm = Math.min(230, Math.max(120, state.profile.heightCm));
+  }
+  if (!Number.isFinite(state.profile.currentWeight) || state.profile.currentWeight <= 0) {
+    state.profile.currentWeight = 65;
+  }
+  if (!Number.isFinite(state.profile.startWeight) || state.profile.startWeight <= 0) {
+    state.profile.startWeight = state.profile.currentWeight;
+  }
+  if (!Number.isFinite(state.profile.targetWeight) || state.profile.targetWeight <= 0) {
+    state.profile.targetWeight = 75;
+  }
+  state.profile.age = Math.min(100, Math.max(10, Math.round(Number(state.profile.age) || 25)));
   state.profile.universityName = cleanText(state.profile.universityName, 80, "دانشگاه من");
   state.profile.workoutProgramId = cleanText(
     state.profile.workoutProgramId,
@@ -96,7 +149,9 @@ export function normalizeState(input: AppStateData): AppStateData {
   state.onboardingCompleted =
     typeof state.onboardingCompleted === "boolean" ? state.onboardingCompleted : true;
 
-  if (state.days.length === 0) return createSeedState();
+  // `uni_only` mode has no workout days. Reseeding here used to wipe the whole
+  // state (courses, diet, history) every single load.
+  if (state.days.length === 0) return state;
 
   // Gym tools + uni tab fields (added after the first release).
   const seed = createSeedState();
@@ -144,7 +199,15 @@ export function normalizeState(input: AppStateData): AppStateData {
           ? course.dayOfWeek
           : 0,
         startTime: hhmm(course.startTime, "09:00"),
-        endTime: hhmm(course.endTime, "11:00"),
+        endTime: (() => {
+          const start = hhmm(course.startTime, "09:00");
+          const end = hhmm(course.endTime, "11:00");
+          if (end > start) return end;
+          // A class cannot end before it starts (usually a midnight wrap).
+          const [h, m] = start.split(":").map((n) => Number.parseInt(n, 10) || 0);
+          const total = Math.min(23 * 60 + 59, h * 60 + m + 120);
+          return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+        })(),
         weekType: (["all", "odd", "even"] as const).includes(course.weekType) ? course.weekType : "all",
       }))
       .slice(0, 60);
@@ -153,11 +216,9 @@ export function normalizeState(input: AppStateData): AppStateData {
     state.semesterWeekType = "odd";
   }
   // `null`/garbage both mean "anchor on the current week".
-  state.semesterWeekAnchorDate =
-    typeof state.semesterWeekAnchorDate === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(state.semesterWeekAnchorDate)
-      ? state.semesterWeekAnchorDate
-      : null;
+  state.semesterWeekAnchorDate = isIsoCalendarDate(state.semesterWeekAnchorDate)
+    ? state.semesterWeekAnchorDate
+    : null;
 
   const lang = state.languageStudy ?? seed.languageStudy;
   state.languageStudy = {
@@ -272,7 +333,7 @@ export function normalizeState(input: AppStateData): AppStateData {
       if (exercise.swappedDate && exercise.swappedDate !== localIso()) {
         if (exercise.originalName) exercise.name = exercise.originalName;
         if (exercise.originalQuery) exercise.query = exercise.originalQuery;
-        exercise.gifUrl = exercise.originalGifUrl ?? `/gifs/${exercise.id}.gif`;
+        exercise.gifUrl = exercise.originalGifUrl ?? exerciseGifs[exercise.id] ?? null;
         if (exercise.originalTip !== undefined && exercise.originalTip !== null) {
           exercise.tip = exercise.originalTip;
         }
@@ -286,14 +347,20 @@ export function normalizeState(input: AppStateData): AppStateData {
       // Same rule as models.rs: keep prescriptions in ASCII digits.
       exercise.reps = en(exercise.reps ?? "");
       if (gifNeedsReplacement(exercise.gifUrl)) {
-        // A swapped movement shows its own substitute demo; the programmed one
-        // stays in `originalGifUrl` so the daily reset restores it.
+        // A swapped movement shows its own substitute demo — but only when the
+        // bundle ships one for this id, or a custom exercise gets a 404 path.
         const swapped = Boolean(exercise.swappedDate && exercise.originalName);
-        exercise.gifUrl = swapped
-          ? `/gifs/${exercise.id}-alt.gif`
-          : (exerciseGifs[exercise.id] ?? null);
+        exercise.gifUrl =
+          swapped && exercise.id in exerciseGifs
+            ? `/gifs/${exercise.id}-alt.gif`
+            : (exerciseGifs[exercise.id] ?? null);
       }
-      if (exercise.swappedDate && exercise.originalName && gifNeedsReplacement(exercise.originalGifUrl)) {
+      if (
+        exercise.swappedDate &&
+        exercise.originalName &&
+        gifNeedsReplacement(exercise.originalGifUrl) &&
+        exercise.id in exerciseGifs
+      ) {
         exercise.originalGifUrl = `/gifs/${exercise.id}.gif`;
       }
       exercise.logs = syncLogs(exercise);
@@ -309,7 +376,15 @@ export function syncLogs(exercise: Exercise): SetLog[] {
   const rows: SetLog[] = [];
   for (let i = 1; i <= exercise.sets; i += 1) {
     const found = existing.find((log) => log.index === i);
-    rows.push(found ?? { index: i, weight: exercise.targetWeight, reps: fallbackReps, done: false });
+    rows.push(
+      found ?? {
+        index: i,
+        weight: exercise.targetWeight,
+        reps: fallbackReps,
+        done: false,
+        doneDate: null,
+      },
+    );
   }
   return rows;
 }
@@ -398,9 +473,15 @@ function pushMilestone(state: AppStateData, text: string, kind: Milestone["kind"
 export function localApplyOverload(): AppStateData {
   const state = localLoad();
   let changed = 0;
+  // A new overload cycle ends recovery week; otherwise the next "end recovery"
+  // tap multiplies the fresh weights by 1.25.
+  state.deloadActive = false;
 
   for (const day of state.days) {
-    for (const warmup of day.warmups) warmup.done = false;
+    for (const warmup of day.warmups) {
+      warmup.done = false;
+      warmup.doneDate = null;
+    }
     for (const exercise of day.exercises) {
       if (exercise.bodyweight || exercise.targetWeight <= 0) {
         const bumped = incrementReps(exercise.reps);
@@ -502,6 +583,7 @@ export function localReset(): AppStateData {
   }
   fresh.readiness = current.readiness;
   fresh.profile.workoutProgramId = 'upper-lower-4';
+  fresh.profile.goal = createSeedState().profile.goal;
   pushMilestone(fresh, "برنامه تمرینی به حالت پیش‌فرض بازگشت.", "system");
   writeRaw(fresh);
   return clone(fresh);

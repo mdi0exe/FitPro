@@ -25,6 +25,12 @@ export function applyProgram(state: AppStateData, programId: string): boolean {
   state.restSeconds = program.restSeconds;
   state.profile.goal = program.goalLabel;
   state.profile.workoutProgramId = program.id;
+  state.deloadActive = false;
+  try {
+    window.localStorage.removeItem("persian-hypertrophy::deload-snapshot");
+  } catch {
+    /* storage unavailable */
+  }
   return true;
 }
 
@@ -63,6 +69,12 @@ export function applyDeveloperPreset(state: AppStateData): void {
   state.customShuttleJson = null;
   state.appMode = "full";
   state.onboardingCompleted = true;
+  state.deloadActive = false;
+  try {
+    window.localStorage.removeItem("persian-hypertrophy::deload-snapshot");
+  } catch {
+    /* storage unavailable */
+  }
 
   state.theme = history.theme;
   state.weightHistory = history.weightHistory;

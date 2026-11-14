@@ -31,6 +31,7 @@ const PERMISSIONS = [
   "android.permission.SCHEDULE_EXACT_ALARM",
   "android.permission.USE_EXACT_ALARM",
   "android.permission.WAKE_LOCK",
+  "android.permission.RECEIVE_BOOT_COMPLETED",
 ];
 
 const MARKER = "<!-- exact-alarm-reminders -->";

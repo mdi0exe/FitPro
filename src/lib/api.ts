@@ -44,13 +44,10 @@ export function storageMode(): StorageMode {
 
 export async function loadState(): Promise<AppStateData> {
   if (isTauri()) {
-    try {
-      const state = await invoke<AppStateData>("get_app_state");
-      return normalizeState(state);
-    } catch (error) {
-      console.error("get_app_state failed, falling back to localStorage", error);
-      return localLoad();
-    }
+    // Deliberately no localStorage fallback: writing the browser seed over the
+    // native JSON would replace the student's real data with defaults.
+    const state = await invoke<AppStateData>("get_app_state");
+    return normalizeState(state);
   }
   return localLoad();
 }

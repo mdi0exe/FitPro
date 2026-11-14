@@ -109,7 +109,7 @@ export function openGifModal(options: GifModalOptions): void {
     actions.append(
       btn("btn-primary", "ذخیره گیف", () => {
         const value = input.value.trim();
-        if (value && !/^https?:\/\//i.test(value)) {
+        if (value && !/^(https?:\/\/|\/)/i.test(value)) {
           toast("لینک باید با http یا https شروع شود.", "error");
           return;
         }

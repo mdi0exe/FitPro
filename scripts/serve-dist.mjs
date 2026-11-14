@@ -9,6 +9,8 @@ const types = {
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".png": "image/png",
+  ".gif": "image/gif",
+  ".mp3": "audio/mpeg",
   ".svg": "image/svg+xml",
   ".woff2": "font/woff2",
   ".json": "application/json",
@@ -18,7 +20,8 @@ http
   .createServer((req, res) => {
     const url = decodeURIComponent((req.url || "/").split("?")[0]);
     let file = path.join(root, url === "/" ? "index.html" : url);
-    if (!file.startsWith(root)) file = path.join(root, "index.html");
+    // `startsWith(root)` alone lets "../APK-secret" through; require the separator.
+    if (file !== root && !file.startsWith(root + path.sep)) file = path.join(root, "index.html");
     if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(root, "index.html");
     const body = fs.readFileSync(file);
     res.writeHead(200, { "content-type": types[path.extname(file)] || "application/octet-stream" });

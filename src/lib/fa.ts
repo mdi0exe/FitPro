@@ -75,7 +75,12 @@ export function firstNumber(raw: string | null | undefined): number {
 /** `65` → `"۶۵"`, `67.5` → `"۶۷٫۵"` (Persian decimal separator). */
 export function faNum(value: number, digits = 0): string {
   const fixed = digits > 0 ? value.toFixed(digits) : String(Math.round(value));
-  const trimmed = digits > 0 ? fixed.replace(/\.0+$/, "") : fixed;
+  // Drop trailing zeros ("12.50" -> "12.5", "12.00" -> "12") so a 2-decimal
+  // plate label does not read "۲٫۵۰".
+  const trimmed =
+    digits > 0
+      ? fixed.replace(/(\.\d*?[1-9])0+$/, "$1").replace(/\.0+$/, "")
+      : fixed;
   return fa(trimmed.replace(".", "٫"));
 }
 
@@ -89,7 +94,9 @@ export function faWeight(value: number): string {
  * algorithm pushes the sign to the wrong side (`۲٫۵+` instead of `+۲٫۵`).
  */
 export function faSigned(value: number, digits = 1): string {
-  const sign = value >= 0 ? "+" : "−";
+  // A near-zero delta must read "۰", not "+۰" / "−۰٫۰".
+  if (Math.abs(value) < (digits > 0 ? 0.05 : 0.5)) return "۰";
+  const sign = value > 0 ? "+" : "−";
   return `\u200E${sign}${faNum(Math.abs(value), digits)}`;
 }
 
@@ -233,8 +240,13 @@ export function faClock(totalSeconds: number): string {
 /** Plain `mm:ss` clock (latin digits) for timer rings where width matters. */
 export function clock(totalSeconds: number): string {
   const safe = Math.max(0, Math.ceil(totalSeconds));
-  const minutes = Math.floor(safe / 60);
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
   const seconds = safe % 60;
+  // The water reminder can sit a whole night away, so >59 min needs hours.
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
@@ -290,6 +302,7 @@ export function makePersianNumericInput(
 
       if (ch >= "0" && ch <= "9") kept = FA_DIGITS[Number(ch)];
       else if (/[۰-۹]/.test(ch)) kept = ch;
+      else if (/[٠-٩]/.test(ch)) kept = FA_DIGITS[ch.charCodeAt(0) - 0x0660];
       else if (decimals && (ch === "." || ch === "٫")) {
         if (!seenSeparator) {
           seenSeparator = true;

@@ -32,6 +32,9 @@ export class CountdownTimer {
   }
 
   pause(): void {
+    if (this.running && this.endsAt > 0) {
+      this.remaining = Math.max(0, (this.endsAt - Date.now()) / 1000);
+    }
     this.running = false;
     this.stopLoop();
     this.paint();
