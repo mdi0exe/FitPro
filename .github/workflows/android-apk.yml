@@ -294,16 +294,20 @@ jobs:
           # Default is all: builds all 4 CPU architectures into a universal APK
           # (arm64-v8a, armeabi-v7a, x86_64, x86).
           TARGET_INPUT: ${{ inputs.target || 'all' }}
-          # Debug symbols are the bulk of the Rust .so (~120 MB each). They are
-          # useless in a downloadable APK, so strip them for CI only — this does
-          # not touch the local `[profile.dev]` used by `npm run tauri:dev`.
-          CARGO_PROFILE_DEV_STRIP: debuginfo
+          # Optimize Rust binary size in CI: strip all symbols, optimize for size (s),
+          # enable thin LTO and single codegen unit. Shrinks each .so from ~40MB to ~5-6MB.
+          CARGO_PROFILE_DEV_OPT_LEVEL: "s"
+          CARGO_PROFILE_DEV_STRIP: "symbols"
+          CARGO_PROFILE_DEV_LTO: "thin"
+          CARGO_PROFILE_DEV_CODEGEN_UNITS: "1"
+          CARGO_PROFILE_DEV_PANIC: "abort"
         run: |
           set -euo pipefail
           ARGS=(--apk --debug)
           case "${TARGET_INPUT}" in
             all)
-              echo "Building all four ABIs (universal APK, ~4x bigger)."
+              echo "Building all four ABIs with per-architecture split APKs."
+              ARGS+=(--split-per-abi)
               ;;
             armv7)
               echo "Building armeabi-v7a only (runs on 32-bit and most 64-bit phones)."
@@ -373,18 +377,26 @@ jobs:
             echo "## 📦 Android debug APK"
             echo ""
             if [ -d artifacts ] && [ -n "$(ls -A artifacts 2>/dev/null)" ]; then
-              echo "| File | Size |"
-              echo "| --- | --- |"
+              echo "| File | Size | Architecture |"
+              echo "| --- | --- | --- |"
               for file in artifacts/*.apk; do
                 [ -e "$file" ] || continue
-                printf '| `%s` | %s |\n' "$(basename "$file")" "$(du -h "$file" | cut -f1)"
+                name="$(basename "$file")"
+                size="$(du -h "$file" | cut -f1)"
+                arch="Universal"
+                case "$name" in
+                  *arm64-v8a*) arch="ARM64 (Modern phones, 99% of Android)" ;;
+                  *armeabi-v7a*) arch="ARM32 (Older phones)" ;;
+                  *x86_64*) arch="x86_64 (Emulators / PC)" ;;
+                  *x86*) arch="x86 (Emulators 32-bit)" ;;
+                esac
+                printf '| `%s` | %s | %s |\n' "$name" "$size" "$arch"
               done
               echo ""
-              echo "Download it from the **Artifacts** section of this run, then install with:"
-              echo ""
-              echo '```bash'
-              echo "adb install -r app-universal-debug.apk"
-              echo '```'
+              echo "Download the APK matching your device from the **Artifacts** section of this run:"
+              echo "- For standard Android phones (Samsung, Xiaomi, Pixel, etc.), use the **arm64-v8a** APK."
+              echo "- For older phones, use **armeabi-v7a**."
+              echo "- For PC emulators, use **x86_64**."
               echo ""
               echo "_Debug-signed APK — installable, not suitable for Play Store upload._"
             else
