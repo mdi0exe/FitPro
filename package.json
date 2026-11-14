@@ -18,7 +18,8 @@
     "gifs": "node scripts/download-dataset-gifs.mjs",
     "library": "node scripts/build-exercise-library.mjs",
     "icons": "node scripts/gen-icons.mjs",
-    "keystore": "node scripts/ensure-keystore.mjs"
+    "keystore": "node scripts/ensure-keystore.mjs",
+    "dump": "node scripts/dump-code.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",
