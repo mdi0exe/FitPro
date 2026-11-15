@@ -9,7 +9,7 @@ import { WEEK_DAYS } from "../data/courses";
 import { btn, el, escapeHtml, svgIcon, uid } from "../lib/dom";
 import { currentPersianWeekIsos, daysBetween, fa, isoAddDays, isoToday } from "../lib/fa";
 import { icons } from "../lib/icons";
-import { getState, persist, requestRender } from "../lib/store";
+import { flushNow, getState, persist, requestRender } from "../lib/store";
 import { softTap } from "../lib/timer";
 import type { CourseSession, SemesterWeekType } from "../types";
 import { confirmDialog, openModal, sectionTitle, toast } from "../components/ui";
@@ -352,23 +352,35 @@ function courseRow(course: CourseSession, week: SemesterWeekType): HTMLElement {
 // ---------------------------------------------------------------------------
 
 function openCourseModal(existing?: CourseSession): void {
-  const state = getState();
   let dayOfWeek = existing?.dayOfWeek ?? 0;
   let weekType: CourseSession["weekType"] = existing?.weekType ?? "all";
   let startTime = existing?.startTime ?? "09:00";
   let endTime = existing?.endTime ?? "11:00";
 
-  const body = el("div", "space-y-3");
+  const body = el("form", "space-y-3") as HTMLFormElement;
+  body.setAttribute("novalidate", "");
+  body.addEventListener("mousedown", (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
+      e.preventDefault();
+    }
+  });
+  body.addEventListener("submit", (e) => {
+    e.preventDefault();
+    save();
+  });
 
-  const nameInput = el("input", "field text-right");
+  const nameInput = el("input", "field text-right") as HTMLInputElement;
   nameInput.type = "text";
   nameInput.placeholder = "مثلاً: VLSI";
   nameInput.value = existing?.name ?? "";
+  nameInput.enterKeyHint = "done";
 
-  const profInput = el("input", "field text-right");
+  const profInput = el("input", "field text-right") as HTMLInputElement;
   profInput.type = "text";
   profInput.placeholder = "مثلاً: د. فرجی";
   profInput.value = existing?.professor ?? "";
+  profInput.enterKeyHint = "done";
 
   const textField = (label: string, input: HTMLElement): HTMLElement => {
     const wrap = el("div", "space-y-1");
@@ -446,10 +458,8 @@ function openCourseModal(existing?: CourseSession): void {
   };
   const shift = (delta: number) => {
     const length = Math.max(30, toMinutes(endTime) - toMinutes(startTime));
-    // Keep the whole class inside the day: shifting must never push 23:30 past
-    // midnight (which would wrap the end time back to 00:00).
-    const maxStart = 23 * 60 + 30 - length;
-    const nextStart = Math.min(Math.max(6 * 60, toMinutes(startTime) + delta), Math.max(6 * 60, maxStart));
+    const maxStart = 23 * 60 + 59 - length;
+    const nextStart = Math.min(Math.max(0, toMinutes(startTime) + delta), Math.max(0, maxStart));
     startTime = toHhmm(nextStart);
     endTime = toHhmm(nextStart + length);
     softTap();
@@ -504,26 +514,33 @@ function openCourseModal(existing?: CourseSession): void {
 
   // ---------------------------------------------------------------- footer
   const footer = el("div", "flex items-center gap-2");
+  let savedAlready = false;
 
   const save = () => {
+    if (savedAlready) return;
     const name = nameInput.value.trim();
     if (!name) {
       toast("نام درس را وارد کن.", "error");
       nameInput.focus();
       return;
     }
+    savedAlready = true;
     const professor = profInput.value.trim() || "—";
+    const liveState = getState();
+    liveState.courses = liveState.courses ?? [];
 
     if (existing) {
-      existing.name = name;
-      existing.professor = professor;
-      existing.dayOfWeek = dayOfWeek;
-      existing.startTime = startTime;
-      existing.endTime = endTime;
-      existing.weekType = weekType;
+      const target = liveState.courses.find((course) => course.id === existing.id);
+      if (target) {
+        target.name = name;
+        target.professor = professor;
+        target.dayOfWeek = dayOfWeek;
+        target.startTime = startTime;
+        target.endTime = endTime;
+        target.weekType = weekType;
+      }
     } else {
-      state.courses = state.courses ?? [];
-      state.courses.push({
+      liveState.courses.push({
         id: uid("course"),
         name,
         professor,
@@ -536,30 +553,37 @@ function openCourseModal(existing?: CourseSession): void {
 
     softTap();
     persist(0);
+    void flushNow();
     handle.close();
     toast(existing ? "درس بروزرسانی شد 🎓" : "درس به برنامه اضافه شد 🎓");
     requestRender();
   };
 
-  footer.append(btn("btn-primary flex-1", existing ? "ذخیره تغییرات" : "افزودن درس", save));
+  const saveBtn = btn("btn-primary flex-1", existing ? "ذخیره تغییرات" : "افزودن درس", save);
+  saveBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  footer.append(saveBtn);
 
   if (existing) {
-    footer.append(
-      btn("btn-danger px-3", "حذف", async () => {
-        const ok = await confirmDialog({
-          title: "حذف درس",
-          message: `«${existing.name}» از برنامه هفتگی حذف شود؟`,
-          confirmText: "حذف کن",
-          danger: true,
-        });
-        if (!ok) return;
-        state.courses = (state.courses ?? []).filter((course) => course.id !== existing.id);
-        persist(0);
-        handle.close();
-        toast("درس حذف شد.", "info");
-        requestRender();
-      }),
-    );
+    const deleteBtn = btn("btn-danger px-3", "حذف", async () => {
+      const ok = await confirmDialog({
+        title: "حذف درس",
+        message: `«${existing.name}» از برنامه هفتگی حذف شود؟`,
+        confirmText: "حذف کن",
+        danger: true,
+      });
+      if (!ok) return;
+      if (savedAlready) return;
+      savedAlready = true;
+      const liveState = getState();
+      liveState.courses = (liveState.courses ?? []).filter((course) => course.id !== existing.id);
+      persist(0);
+      void flushNow();
+      handle.close();
+      toast("درس حذف شد.", "info");
+      requestRender();
+    });
+    deleteBtn.addEventListener("mousedown", (e) => e.preventDefault());
+    footer.append(deleteBtn);
   }
 
   const handle = openModal({

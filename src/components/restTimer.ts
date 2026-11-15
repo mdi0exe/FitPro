@@ -62,7 +62,7 @@ export function mountRestTimer(): void {
 
   const actions = el("div", "flex shrink-0 items-center gap-1");
   actions.append(
-    btn("btn-icon", svgIcon(icons.minus, "h-4 w-4"), () => restTimer.add(-15), {
+    btn("btn-icon", svgIcon(icons.minus, "h-4 w-4"), () => bumpRest(-15), {
       "aria-label": "کاهش ۱۵ ثانیه",
       title: "−۱۵ ثانیه",
     }),
@@ -170,5 +170,7 @@ export function bumpRest(delta: number): void {
       "زمان اجرای ست بعدی است.",
       Date.now() + restTimer.remaining * 1000,
     );
+  } else {
+    void cancelNotifications([REST_TIMER_NOTIF_ID]);
   }
 }

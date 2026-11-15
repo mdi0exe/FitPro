@@ -55,19 +55,30 @@ export function openModal(options: ModalOptions): ModalHandle {
   });
   header.append(titles, closeButton);
 
-  const body = el("div", "min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(var(--safe-bottom)+1.25rem)] pt-4");
+  const body = el(
+    "div",
+    `min-h-0 flex-1 overflow-y-auto px-5 ${options.footer ? "pb-4" : "pb-[calc(var(--safe-bottom)+1.25rem)]"} pt-4`,
+  );
   body.append(options.body);
 
   sheet.append(header, body);
   if (options.footer) {
-    const footer = el("div", "border-t border-slate-800/80 bg-slate-900/80 px-5 py-3");
+    const footer = el(
+      "div",
+      "shrink-0 border-t border-slate-800/80 bg-slate-900/80 px-5 py-3 pb-[calc(var(--safe-bottom)+0.75rem)]",
+    );
     footer.append(options.footer);
     sheet.append(footer);
   }
 
   backdrop.append(sheet);
+  let pointerDownOnBackdrop = false;
+  backdrop.addEventListener("pointerdown", (event) => {
+    pointerDownOnBackdrop = event.target === backdrop;
+  });
   backdrop.addEventListener("click", (event) => {
-    if (event.target === backdrop) handle.close();
+    if (event.target === backdrop && pointerDownOnBackdrop) handle.close();
+    pointerDownOnBackdrop = false;
   });
 
   let overlayId = "";

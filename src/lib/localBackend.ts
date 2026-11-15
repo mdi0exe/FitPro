@@ -377,13 +377,18 @@ export function syncLogs(exercise: Exercise): SetLog[] {
   for (let i = 1; i <= exercise.sets; i += 1) {
     const found = existing.find((log) => log.index === i);
     rows.push(
-      found ?? {
-        index: i,
-        weight: exercise.targetWeight,
-        reps: fallbackReps,
-        done: false,
-        doneDate: null,
-      },
+      found
+        ? {
+            ...found,
+            doneDate: found.doneDate ?? null,
+          }
+        : {
+            index: i,
+            weight: exercise.targetWeight,
+            reps: fallbackReps,
+            done: false,
+            doneDate: null,
+          },
     );
   }
   return rows;

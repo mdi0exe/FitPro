@@ -53,7 +53,7 @@ on:
       target:
         description: "Which ABI(s) to build — all (universal APK), or a single ABI"
         type: choice
-        default: all
+        default: aarch64
         options:
           - all
           - aarch64
@@ -65,7 +65,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -293,7 +293,7 @@ jobs:
           CI: "true"
           # Default is all: builds all 4 CPU architectures into a universal APK
           # (arm64-v8a, armeabi-v7a, x86_64, x86).
-          TARGET_INPUT: ${{ inputs.target || 'all' }}
+          TARGET_INPUT: ${{ inputs.target || 'aarch64' }}
           # Optimize Rust binary size in CI: strip all symbols, optimize for size (s),
           # enable thin LTO and single codegen unit. Shrinks each .so from ~40MB to ~5-6MB.
           CARGO_PROFILE_DEV_OPT_LEVEL: "s"
@@ -361,6 +361,22 @@ jobs:
           done
           echo "All required permissions are packaged in the APK."
 
+      - name: Publish direct arm64 APK to GitHub Releases (no ZIP)
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="apk-latest"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" artifacts/*.apk artifacts/SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" artifacts/*.apk artifacts/SHA256SUMS.txt \
+              --target "${GITHUB_SHA}" \
+              --title "Latest Android Debug APK (arm64)" \
+              --notes "Direct arm64-v8a APK download (without ZIP). Commit: ${GITHUB_SHA}"
+          fi
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -375,6 +391,8 @@ jobs:
         run: |
           {
             echo "## 📦 Android debug APK"
+            echo ""
+            echo "📥 **Direct APK download (no ZIP):** ${{ github.server_url }}/${{ github.repository }}/releases/tag/apk-latest"
             echo ""
             if [ -d artifacts ] && [ -n "$(ls -A artifacts 2>/dev/null)" ]; then
               echo "| File | Size | Architecture |"

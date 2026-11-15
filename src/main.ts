@@ -22,6 +22,7 @@ import {
   setRenderHook,
   setState,
   visibleTabs,
+  waitForInflightFlush,
 } from "./lib/store";
 import { mountRestTimer } from "./components/restTimer";
 import { installWakeLockLifecycle, syncWakeLockWithMode } from "./lib/workoutTools";
@@ -282,6 +283,7 @@ async function syncAfterBackground(): Promise<void> {
       // A debounced save queued just before the app was backgrounded must land
       // first, otherwise setState(loadState()) silently discards it.
       if (hasPendingSave()) await flushNow();
+      await waitForInflightFlush();
       const diskState = await loadState();
       setState(diskState);
       // Sync the localStorage mirror with the deadline updated by Kotlin's

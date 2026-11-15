@@ -513,6 +513,7 @@ fn is_iso_date(value: &str) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CourseSession {
+    #[serde(default)]
     pub id: String,
     #[serde(default)]
     pub name: String,
@@ -1836,5 +1837,16 @@ mod tests {
         assert_eq!(state.diet.items[0].text, "صبحانه خانه: املت و نان");
         assert_eq!(state.diet.items[2].id, "custom-1");
         assert!(state.diet.items[0].done, "ticks must survive a reload");
+    }
+
+    #[test]
+    fn course_session_without_id_deserializes() {
+        let json = r#"{"name":"VLSI","professor":"د. فرجی"}"#;
+        let course: CourseSession = serde_json::from_str(json).unwrap();
+        assert_eq!(course.id, "");
+        let mut state = crate::storage::seed();
+        state.courses = vec![course];
+        state.normalize();
+        assert!(!state.courses[0].id.is_empty());
     }
 }

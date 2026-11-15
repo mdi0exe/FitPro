@@ -13,7 +13,8 @@ import { btn, el, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { openModal, toast } from "../components/ui";
 import type { CourseSession } from "../types";
-import { getState, persist, requestRender } from "./store";
+import { en } from "./fa";
+import { flushNow, getState, persist, requestRender } from "./store";
 import { copyText } from "./clipboard";
 import { pruneBusAlarms } from "../views/uni";
 
@@ -140,20 +141,97 @@ function openShareJsonModal(initial: string, mode: "export" | "import", scope: U
   });
 }
 
+function cleanJsonString(raw: string): string {
+  let text = raw.trim();
+  if (text.startsWith("```")) {
+    text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  }
+  return text;
+}
+
+function normalizeCourseTime(v: unknown, fallback = ""): string {
+  if (typeof v !== "string" && typeof v !== "number") return fallback;
+  const s = en(String(v)).replace(/[\s\u200c]/g, "").trim();
+  const match = /^(\d{1,2}):(\d{1,2})$/.exec(s);
+  if (match) {
+    const h = Number.parseInt(match[1], 10);
+    const m = Number.parseInt(match[2], 10);
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    }
+  }
+  return fallback;
+}
+
+const COURSE_DAY_MAP: Record<string, number> = {
+  شنبه: 6,
+  یکشنبه: 0,
+  "یک‌شنبه": 0,
+  "یک شنبه": 0,
+  دوشنبه: 1,
+  "دو‌شنبه": 1,
+  "دو شنبه": 1,
+  سه‌شنبه: 2,
+  "سه شنبه": 2,
+  سهشنبه: 2,
+  چهارشنبه: 3,
+  "چهار‌شنبه": 3,
+  "چهار شنبه": 3,
+  پنجشنبه: 4,
+  "پنج‌شنبه": 4,
+  "پنج شنبه": 4,
+  جمعه: 5,
+};
+
+function normalizeCourseDay(value: unknown): number {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 6) {
+    return value;
+  }
+  if (!value) return 0;
+  const normalized = en(String(value))
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .trim();
+
+  const num = Number.parseInt(normalized, 10);
+  if (Number.isInteger(num) && num >= 0 && num <= 6) {
+    return num;
+  }
+
+  if (normalized in COURSE_DAY_MAP) {
+    return COURSE_DAY_MAP[normalized];
+  }
+  const stripped = normalized.replace(/[\s\u200c]/g, "");
+  if (stripped in COURSE_DAY_MAP) {
+    return COURSE_DAY_MAP[stripped];
+  }
+
+  return 0;
+}
+
 /**
  * Validates and applies a shared payload. Every field is optional and a bad
  * paste never corrupts state: unknown shapes are ignored, out-of-range numbers
  * are clamped, and only the scope's own keys are written.
  */
 export function applyShareJson(raw: string, close: () => void, scope: UniShareScope): void {
+  const cleaned = cleanJsonString(raw);
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw.trim());
+    parsed = JSON.parse(cleaned);
   } catch {
     toast("متن واردشده JSON معتبر نیست.", "error");
     return;
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+  if (Array.isArray(parsed)) {
+    if (scope === "courses") {
+      parsed = { courses: parsed };
+    } else {
+      toast("ساختار JSON باید یک شیء باشد.", "error");
+      return;
+    }
+  }
+  if (!parsed || typeof parsed !== "object") {
     toast("ساختار JSON باید یک شیء باشد.", "error");
     return;
   }
@@ -168,17 +246,13 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
     }
     if (Array.isArray(data.courses)) {
       const weekTypes = ["all", "odd", "even"];
-      // Imported JSON can carry "9:5" or an end time before the start; validate
-      // both so a shared timetable never renders an inverted slot.
-      const hhmm = (v: unknown, fb: string) =>
-        typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.trim()) ? v.trim() : fb;
       state.courses = data.courses
         .filter((course) => course && typeof course.name === "string" && course.name.trim())
         .slice(0, 60)
         .map((course) => {
-          const startTime = hhmm(course.startTime, "09:00");
-          let endTime = hhmm(course.endTime, "11:00");
-          if (endTime <= startTime) {
+          const startTime = normalizeCourseTime(course.startTime, "09:00");
+          let endTime = normalizeCourseTime(course.endTime, "");
+          if (!endTime || endTime <= startTime) {
             const [h, m] = startTime.split(":").map((n) => Number.parseInt(n, 10) || 0);
             const total = Math.min(23 * 60 + 59, h * 60 + m + 120);
             endTime = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
@@ -187,9 +261,7 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
             id: typeof course.id === "string" && course.id ? course.id : uid("course"),
             name: String(course.name).trim().slice(0, 80),
             professor: typeof course.professor === "string" ? course.professor.trim().slice(0, 80) : "",
-            dayOfWeek: Number.isInteger(course.dayOfWeek)
-              ? Math.min(6, Math.max(0, course.dayOfWeek))
-              : 0,
+            dayOfWeek: normalizeCourseDay(course.dayOfWeek),
             startTime,
             endTime,
             weekType: (weekTypes.includes(String(course.weekType))
@@ -209,10 +281,10 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
   ) {
     state.customShuttleJson = data.customShuttleJson.trim();
     changed = true;
-  } else if (parseShuttleJson(raw)) {
+  } else if (parseShuttleJson(cleaned) || parseShuttleJson(raw)) {
     // Some AI answers return the raw `{ railway, suburbs }` object instead of
     // wrapping it in `{ customShuttleJson }`; accept both shapes.
-    state.customShuttleJson = raw.trim();
+    state.customShuttleJson = (parseShuttleJson(cleaned) ? cleaned : raw).trim();
     changed = true;
   }
 
@@ -224,6 +296,7 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
   persist(0);
   // A new timetable invalidates alarms for departures that no longer exist.
   if (scope === "shuttle") void pruneBusAlarms();
+  void flushNow();
   close();
   toast(
     scope === "courses"

@@ -10,9 +10,9 @@ let activeTab: TabId = "workout";
 const listeners = new Set<() => void>();
 
 let saveTimer: number | null = null;
-/** The write currently on the wire (null when idle). */
-let inflightFlush: Promise<void> | null = null;
+let flushing = false;
 let queued = false;
+let activeFlushPromise: Promise<void> | null = null;
 
 /** Tabs visible in each modular layout, in bottom-nav order. */
 export function visibleTabs(mode: AppMode | undefined): TabId[] {
@@ -117,38 +117,41 @@ export function persist(delay = 350): void {
   }, delay);
 }
 
-/** True when a debounced `persist()` write is still queued. */
 export function hasPendingSave(): boolean {
-  return saveTimer !== null;
+  return saveTimer !== null || flushing || queued;
+}
+
+export async function waitForInflightFlush(): Promise<void> {
+  while (activeFlushPromise) await activeFlushPromise;
 }
 
 export async function flushNow(): Promise<void> {
-  const current = state;
-  if (!current) return;
-  if (inflightFlush) {
-    // A write is already on the wire. Mark that another pass is needed and
-    // wait for the running one — the old `return` here resolved immediately,
-    // so callers could read a stale file right after awaiting flushNow().
+  if (!state) return;
+  if (saveTimer !== null) {
+    window.clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (flushing) {
     queued = true;
-    await inflightFlush;
-    // The running pass may already have started the queued pass.
-    if (inflightFlush) await inflightFlush;
+    if (activeFlushPromise) await activeFlushPromise;
     return;
   }
-  inflightFlush = (async () => {
+  flushing = true;
+  activeFlushPromise = (async () => {
     try {
-      await saveState(current);
+      while (state) {
+        queued = false;
+        await saveState(state);
+        if (!queued) break;
+      }
     } catch (error) {
       console.error("failed to persist app state", error);
     } finally {
-      inflightFlush = null;
+      flushing = false;
+      activeFlushPromise = null;
     }
   })();
-  await inflightFlush;
-  if (queued) {
-    queued = false;
-    await flushNow();
-  }
+  await activeFlushPromise;
 }
 
 /**
