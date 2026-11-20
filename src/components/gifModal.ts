@@ -46,7 +46,7 @@ export function openGifModal(options: GifModalOptions): void {
         preview.append(
           el(
             "div",
-            "px-6 py-8 text-center text-xs leading-6 text-rose-300",
+            "px-6 py-8 text-center text-xs leading-6 text-rose-600 font-bold",
             "این تصویر بارگذاری نشد. لینک باید مستقیم به فایل تصویری ختم شود و به اینترنت دسترسی باشد.",
           ),
         );
@@ -114,7 +114,7 @@ export function openGifModal(options: GifModalOptions): void {
           toast("لینک باید با http یا https شروع شود.", "error");
           return;
         }
-        options.onSaveUrl?.(value || null);
+        options.onSaveUrl?.(value || "none");
         renderPreview(value || null);
         toast(value ? "گیف ذخیره شد و در کارت حرکت نمایش داده می‌شود." : "گیف حذف شد.");
       }),

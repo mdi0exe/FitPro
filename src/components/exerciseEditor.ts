@@ -189,7 +189,7 @@ export function openExerciseEditor(options: {
   gifInput.type = "url";
   gifInput.dir = "ltr";
   gifInput.placeholder = "https://…/move.gif";
-  gifInput.value = initial?.gifUrl ?? "";
+  gifInput.value = initial?.gifUrl === "none" ? "" : (initial?.gifUrl ?? "");
   const gifField = field("لینک مستقیم گیف (اختیاری)");
   gifField.append(gifInput);
 
@@ -234,7 +234,7 @@ export function openExerciseEditor(options: {
 
     const gifUrl = gifInput.value.trim();
     // Bundled demos are app paths (`/gifs/d1e1.svg`); custom links must be http(s).
-    if (gifUrl && !/^(https?:\/\/|\/)/i.test(gifUrl)) {
+    if (gifUrl && gifUrl !== "none" && !/^(https?:\/\/|\/)/i.test(gifUrl)) {
       toast("لینک تصویر باید با http یا https شروع شود.", "error");
       return;
     }
@@ -246,7 +246,7 @@ export function openExerciseEditor(options: {
       targetWeight: Math.max(0, targetWeight),
       tip: tipInput.value.trim(),
       query: queryInput.value.trim() || `${name} gif`,
-      gifUrl: gifUrl || null,
+      gifUrl: gifUrl || (initial?.gifUrl === "none" ? "none" : null),
     });
     handle.close();
   };

@@ -21,7 +21,7 @@ import { WORKOUT_PROGRAMS } from "../data/programs";
 import { applyDeveloperPreset, applyProgram } from "../lib/appSettings";
 import { syncWakeLockWithMode } from "../lib/workoutTools";
 import { openModal, toast, type ModalHandle } from "./ui";
-import { idealWeightCalculatorCard } from "./idealWeight";
+import { idealWeightCalculatorCard, type BuildType } from "./idealWeight";
 import { softTap } from "../lib/timer";
 import type { AppMode } from "../types";
 
@@ -62,6 +62,7 @@ export function openOnboardingModal(): void {
   let currentWeight = state.profile.currentWeight || 65;
   let targetWeight = state.profile.targetWeight || 75;
   let heightCm = state.profile.heightCm || 179;
+  let idealBuild: BuildType = "standard";
   const age = state.profile.age || 25;
 
   const body = el("div", "space-y-4");
@@ -187,6 +188,15 @@ export function openOnboardingModal(): void {
         ),
       );
     });
+    if (programId !== state.profile.workoutProgramId) {
+      progList.append(
+        el(
+          "p",
+          "rounded-xl border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] leading-5 text-amber-200",
+          "⚠️ توجه: تغییر برنامه، روزها و حرکات تمرینی را با برنامه جدید جایگزین می‌کند.",
+        ),
+      );
+    }
   };
   paintPrograms();
 
@@ -231,6 +241,10 @@ export function openOnboardingModal(): void {
         compact: true,
         height: heightCm,
         currentWeight,
+        build: idealBuild,
+        onBuildChange: (next) => {
+          idealBuild = next;
+        },
         onHeightChange: (value) => {
           heightCm = value;
           paintWeights();
@@ -259,6 +273,7 @@ export function openOnboardingModal(): void {
     "✅ ذخیره و ورود به برنامه",
     () => {
       const isFirstRun = !state.onboardingCompleted;
+      const weightChanged = currentWeight !== state.profile.currentWeight;
       state.appMode = appMode;
       state.profile.name = nameInput.value.trim() || "کاربر";
       state.profile.universityName = uniInput.value.trim() || "دانشگاه من";
@@ -270,13 +285,15 @@ export function openOnboardingModal(): void {
       state.profile.heightCm = heightCm;
       state.profile.age = age;
 
-      const today = isoToday();
-      const existingWeight = state.weightHistory.find((entry) => entry.date === today);
-      if (existingWeight) existingWeight.weight = currentWeight;
-      else if (state.weightHistory.length === 0 || isFirstRun) {
-        state.weightHistory = [{ date: today, weight: currentWeight }];
-      } else {
-        state.weightHistory.push({ date: today, weight: currentWeight });
+      if (isFirstRun || state.weightHistory.length === 0 || weightChanged) {
+        const today = isoToday();
+        const existingWeight = state.weightHistory.find((entry) => entry.date === today);
+        if (existingWeight) existingWeight.weight = currentWeight;
+        else if (state.weightHistory.length === 0 || isFirstRun) {
+          state.weightHistory = [{ date: today, weight: currentWeight }];
+        } else {
+          state.weightHistory.push({ date: today, weight: currentWeight });
+        }
       }
 
       if (appMode !== "uni_only") applyProgram(state, programId);

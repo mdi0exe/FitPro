@@ -87,7 +87,8 @@ export function hasFortnightlyCourses(): boolean {
  * division never drifts.
  */
 function weeksSinceAnchor(referenceIso = isoToday()): number {
-  const anchor = getState().semesterWeekAnchorDate ?? currentWeekStartIso(referenceIso);
+  const rawAnchor = getState().semesterWeekAnchorDate;
+  const anchor = rawAnchor ? currentWeekStartIso(rawAnchor) : currentWeekStartIso(referenceIso);
   return Math.floor(daysBetween(anchor, currentWeekStartIso(referenceIso)) / 7);
 }
 

@@ -352,7 +352,8 @@ function reminderCard(): HTMLElement {
   });
   gymBox.append(gymTimes);
 
-  card.append(foodBox, gymBox);
+  if (getState().appMode === "uni_only") card.append(foodBox);
+  else card.append(foodBox, gymBox);
   return card;
 }
 
@@ -542,10 +543,23 @@ function busAlarmId(key: string, weekday: number): number {
   return 10000 + (Math.abs(hashCode(key)) % 50000) * 8 + weekday;
 }
 
-/** Moves `hhmm` earlier by `delta` minutes (same day for every published time). */
-function shiftEarlier(hhmm: string, delta: number): { hour: number; minute: number } {
-  const total = ((parseMinutes(hhmm) - delta) % 1440 + 1440) % 1440;
-  return { hour: Math.floor(total / 60), minute: total % 60 };
+export async function cancelBusAlarms(keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  const idsToCancel: number[] = [];
+  for (const key of keys) {
+    for (let weekday = 1; weekday <= 7; weekday += 1) {
+      idsToCancel.push(busAlarmId(key, weekday));
+    }
+  }
+  await cancelNotifications(idsToCancel);
+}
+
+/** Moves `hhmm` earlier by `delta` minutes. */
+function shiftEarlier(hhmm: string, delta: number): { hour: number; minute: number; dayDelta: number } {
+  const raw = parseMinutes(hhmm) - delta;
+  const dayDelta = raw < 0 ? -1 : 0;
+  const total = ((raw % 1440) + 1440) % 1440;
+  return { hour: Math.floor(total / 60), minute: total % 60, dayDelta };
 }
 
 async function toggleBusAlarm(
@@ -574,12 +588,13 @@ async function toggleBusAlarm(
   let scheduled = false;
   if (granted) {
     for (const weekday of GROUP_WEEKDAYS[group]) {
+      const shiftedDay = ((weekday - 1 + at.dayDelta + 7) % 7) + 1;
       scheduled =
         (await scheduleRepeatingNotification(
           busAlarmId(key, weekday),
           `🚌 ۱۵ دقیقه تا سرویس ${fa(time)}`,
           `${routeTitle} ساعت ${fa(time)} حرکت می‌کند. آماده باش!`,
-          { hour: at.hour, minute: at.minute, weekday },
+          { hour: at.hour, minute: at.minute, weekday: shiftedDay },
         )) || scheduled;
     }
   }
@@ -786,11 +801,12 @@ export async function syncUniAlarms(): Promise<void> {
     if (!time) continue;
     const at = shiftEarlier(time, 15);
     for (const weekday of GROUP_WEEKDAYS[group]) {
+      const shiftedDay = ((weekday - 1 + at.dayDelta + 7) % 7) + 1;
       await scheduleRepeatingNotification(
         busAlarmId(key, weekday),
         `🚌 ۱۵ دقیقه تا سرویس ${fa(time)}`,
         `${title} ساعت ${fa(time)} حرکت می‌کند. آماده باش!`,
-        { hour: at.hour, minute: at.minute, weekday },
+        { hour: at.hour, minute: at.minute, weekday: shiftedDay },
       );
     }
   }

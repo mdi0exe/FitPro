@@ -5,13 +5,21 @@ import { loadState } from "./lib/api";
 import { isoToday } from "./lib/fa";
 import { clear, el, escapeHtml } from "./lib/dom";
 import { installNavigation } from "./lib/navigation";
-import { restoreWaterReminderOnBoot, unlockAudio } from "./lib/timer";
+import {
+  cardioTimer,
+  onWaterTimerTick,
+  pauseWaterLoopForBackground,
+  restoreWaterReminderOnBoot,
+  syncWaterMirrorFromState,
+  unlockAudio,
+} from "./lib/timer";
 import {
   applyTheme,
   ensureDailyDietReset,
   flushNow,
   getActiveTab,
   getState,
+  getStateGeneration,
   hasPendingSave,
   homeTab,
   initState,
@@ -27,7 +35,7 @@ import {
 import { mountRestTimer } from "./components/restTimer";
 import { installWakeLockLifecycle, syncWakeLockWithMode } from "./lib/workoutTools";
 import { syncUniAlarms } from "./views/uni";
-import { syncLanguageStudyAlarm } from "./views/uniLanguage";
+import { languageStudyTimer, syncLanguageStudyAlarm } from "./views/uniLanguage";
 import { renderUni } from "./views/uni";
 import { renderHeader, renderNav } from "./components/shell";
 import { toast } from "./components/ui";
@@ -143,6 +151,10 @@ function renderView(keepScroll = false): void {
   if (!view) return;
 
   const tab = getActiveTab();
+  if (tab !== "nutrition") onWaterTimerTick(null);
+  if (tab !== "workout") cardioTimer.onTick = null;
+  if (tab !== "uni") languageStudyTimer.onTick = null;
+
   // Switching tabs is the only moment the entrance animation should replay.
   // Re-rendering after a tap inside the same tab must not restart it.
   const sameTab = lastRenderedTab === tab;
@@ -260,6 +272,10 @@ void boot();
 let syncingAfterBackground = false;
 
 document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    pauseWaterLoopForBackground();
+    return;
+  }
   if (document.visibilityState !== "visible") return;
   void syncAfterBackground();
 });
@@ -279,29 +295,29 @@ async function syncAfterBackground(): Promise<void> {
   if (syncingAfterBackground) return;
   syncingAfterBackground = true;
   try {
+    let needsRender = false;
     if (hasNativeWaterBridge()) {
       // A debounced save queued just before the app was backgrounded must land
       // first, otherwise setState(loadState()) silently discards it.
       if (hasPendingSave()) await flushNow();
       await waitForInflightFlush();
+      const genBefore = getStateGeneration();
+      const beforeJson = JSON.stringify(getState());
       const diskState = await loadState();
-      setState(diskState);
-      // Sync the localStorage mirror with the deadline updated by Kotlin's
-      // WaterBroadcastReceiver so restoreWaterReminderOnBoot doesn't read a stale timestamp.
-      try {
-        const nextAt = diskState.diet?.waterReminderNextAt ?? 0;
-        if (nextAt > 0) {
-          window.localStorage.setItem("persian-hypertrophy::water-next-at", String(nextAt));
-        } else {
-          window.localStorage.removeItem("persian-hypertrophy::water-next-at");
-        }
-      } catch {
-        /* storage unavailable */
+      // If a foreground picker (photo / backup restore) mutated state while
+      // loadState was in flight, never overwrite it with the older snapshot.
+      if (getStateGeneration() === genBefore && JSON.stringify(diskState) !== beforeJson) {
+        setState(diskState);
+        needsRender = true;
       }
+      syncWaterMirrorFromState();
     }
-    if (ensureDailyDietReset()) persist(0);
+    if (ensureDailyDietReset()) {
+      persist(0);
+      needsRender = true;
+    }
     restoreWaterReminderOnBoot();
-    requestRender();
+    if (needsRender) requestRender();
   } catch (error) {
     console.warn("resume sync failed", error);
   } finally {

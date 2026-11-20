@@ -4,14 +4,14 @@
 import { btn, el, svgIcon, uid } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { faDate, faNum, faSigned, isoToday } from "../lib/fa";
-import { saveBackupFile } from "../lib/api";
+import { isTauri, saveBackupFile } from "../lib/api";
 import { getState, persist, requestRender, setState } from "../lib/store";
 import { normalizeState } from "../lib/localBackend";
 import type { AppStateData, ProgressPhoto } from "../types";
 import { confirmDialog, openModal, sectionTitle, toast } from "../components/ui";
-import { restoreWaterReminderOnBoot } from "../lib/timer";
-import { syncWakeLockWithMode } from "../lib/workoutTools";
-import { syncUniAlarms } from "../views/uni";
+import { restoreWaterReminderOnBoot, syncWaterMirrorFromState } from "../lib/timer";
+import { clearDeloadSnapshot, syncWakeLockWithMode } from "../lib/workoutTools";
+import { cancelBusAlarms, syncUniAlarms } from "../views/uni";
 import { syncLanguageStudyAlarm } from "../views/uniLanguage";
 
 let showAllPhotos = false;
@@ -222,9 +222,13 @@ export function renderBackupRestoreCard(): HTMLElement {
           toast("این فایل پشتیبان معتبر نیست.", "error");
           return;
         }
+        const oldAlarms = [...(getState().uniReminders?.activeBusAlarms ?? [])];
+        void cancelBusAlarms(oldAlarms);
+        clearDeloadSnapshot();
         const restored = normalizeState(parsed as AppStateData);
         setState(restored);
         persist(0);
+        syncWaterMirrorFromState();
         restoreWaterReminderOnBoot();
         void syncUniAlarms();
         void syncLanguageStudyAlarm();
@@ -292,6 +296,12 @@ async function shareBackup(hint: HTMLElement): Promise<void> {
     } catch (error) {
       console.warn("native shareBackupFile failed", error);
     }
+  }
+
+  if (isTauri()) {
+    toast("اشتراک‌گذاری در این دستگاه ممکن نشد؛ از دکمه «ذخیره مستقیم در پوشه Download» استفاده کن.", "error");
+    setHint(hint, "اشتراک‌گذاری در این دستگاه ممکن نشد؛ از دکمه «ذخیره مستقیم در پوشه Download» استفاده کن.", "error");
+    return;
   }
 
   // 2. Web Share API (desktop / mobile browsers)

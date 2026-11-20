@@ -37,6 +37,20 @@ export function isWakeLockActive(): boolean {
   return wakeLockSentinel !== null;
 }
 
+/** Repaints every button in the DOM marked with data-wakelock-btn. */
+export function paintWakeLockButtons(): void {
+  const active = isWakeLockActive();
+  const buttons = document.querySelectorAll<HTMLButtonElement>("[data-wakelock-btn]");
+  for (const b of buttons) {
+    b.className = `rounded-xl border px-2 py-1.5 text-[10px] font-bold transition ${
+      active
+        ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
+        : "border-slate-800 bg-slate-950 text-slate-400"
+    }`;
+    b.textContent = active ? "📱 صفحه روشن" : "📱 صفحه خاموش";
+  }
+}
+
 /** Re-acquires the lock; browsers drop it whenever the page is hidden. */
 export async function requestGymWakeLock(): Promise<void> {
   // The university-only layout has no gym session, so keeping the screen on
@@ -54,12 +68,15 @@ export async function requestGymWakeLock(): Promise<void> {
   }
   try {
     wakeLockSentinel = await wakeLockApi.request("screen");
+    paintWakeLockButtons();
     wakeLockSentinel.addEventListener("release", () => {
       wakeLockSentinel = null;
+      paintWakeLockButtons();
     });
   } catch {
     // Battery saver or a policy blocked it.
     wakeLockDesired = false;
+    paintWakeLockButtons();
   }
 }
 
@@ -72,6 +89,7 @@ export async function toggleGymWakeLock(): Promise<boolean> {
       /* already released */
     }
     wakeLockSentinel = null;
+    paintWakeLockButtons();
     toast("قفل روشن ماندن صفحه خاموش شد.", "info");
     return false;
   }
@@ -80,9 +98,11 @@ export async function toggleGymWakeLock(): Promise<boolean> {
   await requestGymWakeLock();
   if (!wakeLockSentinel) {
     wakeLockDesired = false;
+    paintWakeLockButtons();
     toast("این مرورگر از روشن نگه داشتن صفحه پشتیبانی نمی‌کند.", "error");
     return false;
   }
+  paintWakeLockButtons();
   toast("روشن ماندن صفحه حین تمرین فعال شد 📱");
   return true;
 }
@@ -102,6 +122,7 @@ export async function syncWakeLockWithMode(): Promise<void> {
       /* already released */
     }
     wakeLockSentinel = null;
+    paintWakeLockButtons();
     return;
   }
   await requestGymWakeLock();
@@ -536,7 +557,7 @@ export function swapBusyExercise(exercise: Exercise): void {
     if (baseId in EXERCISE_GIFS) {
       exercise.gifUrl = `/gifs/${baseId}-alt.gif`;
     } else {
-      exercise.gifUrl = null;
+      exercise.gifUrl = exercise.gifUrl ?? null;
     }
     exercise.tip = alt.tip;
   } else {
@@ -668,7 +689,7 @@ export function openSwapExerciseModal(exercise: Exercise): void {
   // Automatically selects the detected muscle, but the chips let the student
   // browse a neighbouring group when that classification is not what they want.
   let activeMuscleKey = guessMuscleKey(exercise);
-  const curated = ALTERNATIVE_MOVES[exercise.id];
+  const curated = ALTERNATIVE_MOVES[baseExerciseId(exercise.id)];
 
   const body = el("div", "space-y-2.5");
   const desc = el("p", "text-[11px] leading-6 text-slate-400");
@@ -1142,6 +1163,7 @@ export function toggleDeloadWeek(): void {
   state.deloadActive = entering;
 
   const snapshot = entering ? {} : readDeloadSnapshot();
+  const hasSnapshot = Object.keys(snapshot).length > 0;
 
   for (const day of state.days) {
     for (const exercise of day.exercises) {
@@ -1154,7 +1176,11 @@ export function toggleDeloadWeek(): void {
       } else {
         // Older saves used the bare exercise id as the key.
         const original = snapshot[key] ?? snapshot[exercise.id];
-        exercise.targetWeight = original ?? roundToPlate(exercise.targetWeight * 1.25);
+        if (original !== undefined) {
+          exercise.targetWeight = original;
+        } else if (!hasSnapshot) {
+          exercise.targetWeight = roundToPlate(exercise.targetWeight * 1.25);
+        }
       }
 
       for (const log of exercise.logs) {
@@ -1236,6 +1262,7 @@ export function renderReadinessAndToolsBar(): HTMLElement {
       }`,
       isWakeLockActive() ? "📱 صفحه روشن" : "📱 صفحه خاموش",
       () => void toggleGymWakeLock().then(() => requestRender()),
+      { "data-wakelock-btn": "1" },
     ),
     btn(
       "rounded-xl border border-slate-800 bg-slate-950 px-2 py-1.5 text-[10px] font-bold text-slate-300 transition",

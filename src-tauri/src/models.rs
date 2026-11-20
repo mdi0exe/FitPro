@@ -708,6 +708,17 @@ fn clean_text(value: &str, max_chars: usize) -> String {
     value.trim().chars().take(max_chars).collect::<String>()
 }
 
+fn base_exercise_id(id: &str) -> &str {
+    if let Some((prefix, rest)) = id.split_once('-') {
+        let is_prefixed = (prefix.starts_with("ppl") && prefix.len() > 3 && prefix[3..].bytes().all(|b| b.is_ascii_digit()))
+            || (prefix.starts_with("dorm") && prefix.len() > 4 && prefix[4..].bytes().all(|b| b.is_ascii_digit()));
+        if is_prefixed && !rest.is_empty() {
+            return rest;
+        }
+    }
+    id
+}
+
 impl AppStateData {
     /// Keep every exercise's `logs` vector in sync with its `sets` count.
     pub fn normalize(&mut self) {
@@ -859,12 +870,6 @@ impl AppStateData {
             };
         }
 
-        if self.days.is_empty() {
-            return;
-        }
-        if self.active_day >= self.days.len() {
-            self.active_day = 0;
-        }
         if self.rest_seconds < 15 || self.rest_seconds > 600 {
             self.rest_seconds = DEFAULT_REST_SECONDS;
         }
@@ -954,11 +959,29 @@ impl AppStateData {
             self.diet.water_reminder_next_at = 0;
         }
 
+        if self.days.is_empty() {
+            return;
+        }
+        if self.active_day >= self.days.len() {
+            self.active_day = 0;
+        }
+
         let gifs = default_gifs();
         let today = crate::timeutil::today_iso();
         for day in self.days.iter_mut() {
+            let week_start = crate::timeutil::current_week_start_iso();
             let day_id = day.id.clone();
             for warmup in day.warmups.iter_mut() {
+                if warmup.done
+                    && warmup
+                        .done_date
+                        .as_deref()
+                        .map(|d| d < week_start.as_str())
+                        .unwrap_or(false)
+                {
+                    warmup.done = false;
+                    warmup.done_date = None;
+                }
                 // A missing/blank/hotlinked demo is replaced by the bundled
                 // file: `fitnessprogramer.com` answers 403 inside the WebView.
                 if gif_needs_replacement(warmup.gif_url.as_deref()) {
@@ -980,25 +1003,48 @@ impl AppStateData {
                 // Users on a Persian/Android keyboard may type "۱۰-۱۲"; keep the
                 // stored prescription in ASCII digits so increment_reps works.
                 exercise.reps = to_ascii_digits(&exercise.reps);
+                let base_id = base_exercise_id(&exercise.id).to_string();
                 if gif_needs_replacement(exercise.gif_url.as_deref()) {
                     // A swapped movement shows its own substitute demo, but only
                     // when the bundle actually ships one for this id — otherwise
                     // a custom exercise would get a 404 path.
                     exercise.gif_url = if exercise.is_swapped()
-                        && gifs.exercises.contains_key(&exercise.id)
+                        && gifs.exercises.contains_key(&base_id)
                     {
-                        Some(format!("/gifs/{}-alt.gif", exercise.id))
+                        Some(format!("/gifs/{base_id}-alt.gif"))
                     } else {
-                        gifs.exercises.get(&exercise.id).cloned()
+                        gifs.exercises.get(&base_id).cloned()
                     };
                 }
                 if exercise.is_swapped()
                     && gif_needs_replacement(exercise.original_gif_url.as_deref())
-                    && gifs.exercises.contains_key(&exercise.id)
+                    && gifs.exercises.contains_key(&base_id)
                 {
-                    exercise.original_gif_url = Some(format!("/gifs/{}.gif", exercise.id));
+                    exercise.original_gif_url = Some(format!("/gifs/{base_id}.gif"));
                 }
                 exercise.sync_logs();
+
+                let prescribed_reps = parse_first_number(&exercise.reps).unwrap_or(0);
+                for log in exercise.logs.iter_mut() {
+                    if log.done
+                        && log
+                            .done_date
+                            .as_deref()
+                            .map(|d| d < week_start.as_str())
+                            .unwrap_or(false)
+                    {
+                        log.done = false;
+                        log.done_date = None;
+                        if !exercise.bodyweight && exercise.target_weight > 0.0 && log.weight < exercise.target_weight {
+                            log.weight = exercise.target_weight;
+                            if prescribed_reps > 0 {
+                                log.reps = prescribed_reps;
+                            }
+                        } else if prescribed_reps > log.reps {
+                            log.reps = prescribed_reps;
+                        }
+                    }
+                }
             }
         }
     }

@@ -79,6 +79,11 @@ export function openShuttleAiImportModal(): void {
         return;
       }
 
+      if (raw.length > 20_000) {
+        toast("حجم JSON سرویس‌ها بیش از حد مجاز است (حداکثر ۲۰ کیلوبایت).", "error");
+        return;
+      }
+
       const parsed = parseShuttleJson(raw);
       if (!parsed) {
         status.textContent = "❌ ساختار JSON معتبر نیست: باید «railway» و «suburbs» داشته باشد و ساعت‌ها به شکل HH:MM باشند.";

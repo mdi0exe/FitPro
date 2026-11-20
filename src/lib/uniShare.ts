@@ -168,18 +168,23 @@ const COURSE_DAY_MAP: Record<string, number> = {
   یکشنبه: 0,
   "یک‌شنبه": 0,
   "یک شنبه": 0,
+  "1شنبه": 0,
   دوشنبه: 1,
   "دو‌شنبه": 1,
   "دو شنبه": 1,
+  "2شنبه": 1,
   سه‌شنبه: 2,
   "سه شنبه": 2,
   سهشنبه: 2,
+  "3شنبه": 2,
   چهارشنبه: 3,
   "چهار‌شنبه": 3,
   "چهار شنبه": 3,
+  "4شنبه": 3,
   پنجشنبه: 4,
   "پنج‌شنبه": 4,
   "پنج شنبه": 4,
+  "5شنبه": 4,
   جمعه: 5,
 };
 
@@ -193,10 +198,7 @@ function normalizeCourseDay(value: unknown): number {
     .replace(/ك/g, "ک")
     .trim();
 
-  const num = Number.parseInt(normalized, 10);
-  if (Number.isInteger(num) && num >= 0 && num <= 6) {
-    return num;
-  }
+  if (/^[0-6]$/.test(normalized)) return Number(normalized);
 
   if (normalized in COURSE_DAY_MAP) {
     return COURSE_DAY_MAP[normalized];
@@ -215,6 +217,10 @@ function normalizeCourseDay(value: unknown): number {
  * are clamped, and only the scope's own keys are written.
  */
 export function applyShareJson(raw: string, close: () => void, scope: UniShareScope): void {
+  if (scope === "shuttle" && raw.length > 20_000) {
+    toast("حجم JSON سرویس‌ها بیش از حد مجاز است (حداکثر ۲۰ کیلوبایت).", "error");
+    return;
+  }
   const cleaned = cleanJsonString(raw);
   let parsed: unknown;
   try {
@@ -236,6 +242,10 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
     return;
   }
   const data = parsed as Partial<UniSharePayload>;
+  if (scope === "shuttle" && typeof data.customShuttleJson === "string" && data.customShuttleJson.length > 20_000) {
+    toast("حجم JSON سرویس‌ها بیش از حد مجاز است (حداکثر ۲۰ کیلوبایت).", "error");
+    return;
+  }
   const state = getState();
   let changed = false;
 
@@ -246,7 +256,7 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
     }
     if (Array.isArray(data.courses)) {
       const weekTypes = ["all", "odd", "even"];
-      state.courses = data.courses
+      const validCourses = data.courses
         .filter((course) => course && typeof course.name === "string" && course.name.trim())
         .slice(0, 60)
         .map((course) => {
@@ -269,6 +279,12 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
               : "all") as CourseSession["weekType"],
           };
         });
+
+      if (data.courses.length > 0 && validCourses.length === 0) {
+        toast("هیچ درس معتبری در JSON پیدا نشد.", "error");
+        return;
+      }
+      state.courses = validCourses;
       changed = true;
     }
   } else if (data.customShuttleJson === null) {

@@ -7,6 +7,8 @@
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use tauri::{AppHandle, Manager};
 
@@ -35,6 +37,14 @@ pub fn state_path(app: &AppHandle) -> Result<PathBuf, String> {
 // ---------------------------------------------------------------------------
 // Load / save
 // ---------------------------------------------------------------------------
+
+/// Serialises read-modify-write cycles across concurrent Tauri commands.
+pub fn with_state_lock<T>(f: impl FnOnce() -> T) -> T {
+    static IO_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let lock = IO_LOCK.get_or_init(|| Mutex::new(()));
+    let _guard = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    f()
+}
 
 /// Loads the state from disk, seeding a fresh programme on first launch.
 pub fn load(app: &AppHandle) -> Result<AppStateData, String> {
@@ -76,7 +86,9 @@ pub fn load(app: &AppHandle) -> Result<AppStateData, String> {
 /// Persists the state atomically (temp file + rename).
 pub fn save(app: &AppHandle, state: &AppStateData) -> Result<(), String> {
     let path = state_path(app)?;
-    let tmp = path.with_extension("json.tmp");
+    static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+    let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+    let tmp = path.with_extension(format!("rs.{}.{seq}.tmp", std::process::id()));
     let json = serde_json::to_string_pretty(state)
         .map_err(|err| format!("تبدیل داده به JSON ناموفق بود: {err}"))?;
 

@@ -70,7 +70,7 @@ export function renderWeeklyActivityCard(): HTMLElement {
          ${hasDiet ? '<span class="h-1.5 w-1.5 rounded-full bg-cyan-400"></span>' : ""}
        </span>`,
       () => {
-        selectedDateIso = iso;
+        selectedDateIso = iso === today ? null : iso;
         requestRender();
       },
       {

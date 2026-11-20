@@ -67,11 +67,12 @@ function weightHero(): HTMLElement {
     ),
   );
 
+  const goodChange = isLoss ? gained <= 0 : gained >= 0;
   const badge = el("div", "shrink-0 text-center");
   badge.append(
     el(
       "p",
-      `text-sm font-extrabold ${gained >= 0 ? "text-emerald-400" : "text-rose-400"}`,
+      `text-sm font-extrabold ${goodChange ? "text-emerald-400" : "text-rose-400"}`,
       faSigned(gained),
     ),
     el("p", "mt-0.5 text-[9px] text-slate-500", "تغییر از شروع"),
@@ -158,7 +159,7 @@ async function submitWeight(weight: number): Promise<void> {
   try {
     const next = await logBodyWeight(weight);
     setState(next);
-    toast("وزن ثبت شد. مسیر ۶۵ → ۷۵ ادامه دارد! 📈");
+    toast(`وزن ثبت شد. مسیر ${faNum(next.profile.startWeight, 1)} ← ${faNum(next.profile.targetWeight, 1)} ادامه دارد! 📈`);
     requestRender();
   } catch (error) {
     toast(error instanceof Error ? error.message : "ثبت وزن ناموفق بود.", "error");
@@ -212,7 +213,7 @@ function chartCard(history: WeightEntry[]): HTMLElement {
 
   const chart = el("div", "mt-2");
   chart.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" class="h-40 w-full" preserveAspectRatio="none">
+    <svg viewBox="0 0 ${width} ${height}" class="h-40 w-full">
       <defs>
         <linearGradient id="weightFill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="rgba(52,211,153,0.35)" />

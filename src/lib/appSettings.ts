@@ -54,6 +54,9 @@ export function applyDeveloperPreset(state: AppStateData): void {
     universityName: DEVELOPER_UNIVERSITY,
     workoutProgramId: DEVELOPER_PROGRAM_ID,
   };
+  if (history.weightHistory.length > 0) {
+    state.profile.currentWeight = history.weightHistory[history.weightHistory.length - 1].weight;
+  }
   state.days = findProgram(DEVELOPER_PROGRAM_ID).buildDays();
   state.activeDay = 0;
   state.restSeconds = seed.restSeconds;

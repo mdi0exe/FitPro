@@ -273,6 +273,10 @@ function checklist(): HTMLElement {
     row.append(box, textWrap);
 
     row.addEventListener("click", () => {
+      if (item.id === "diet-4") {
+        setWaterGlasses(item.done ? 0 : WATER_GOAL);
+        return;
+      }
       item.done = !item.done;
       persist(0);
       if (item.done) {
@@ -287,14 +291,16 @@ function checklist(): HTMLElement {
 
     const rowWrap = el("div", "flex items-stretch gap-1.5");
     rowWrap.append(row);
-    rowWrap.append(
-      btn(
-        "btn-icon h-9 w-9 shrink-0 text-[11px]",
-        "✕",
-        () => removeDietItem(item.id),
-        { "aria-label": `حذف ${item.text}`, title: "حذف این ردیف" },
-      ),
-    );
+    if (item.id !== "diet-4") {
+      rowWrap.append(
+        btn(
+          "btn-icon h-9 w-9 shrink-0 text-[11px]",
+          "✕",
+          () => removeDietItem(item.id),
+          { "aria-label": `حذف ${item.text}`, title: "حذف این ردیف" },
+        ),
+      );
+    }
     card.append(rowWrap);
   });
 

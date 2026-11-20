@@ -167,6 +167,7 @@ export function openValuePicker(options: PickerOptions): void {
         options.applyAllLabel ?? "اعمال برای همه ست‌های این حرکت",
         () => {
           options.onApplyAll?.(value);
+          handle.close();
         },
       ),
     );

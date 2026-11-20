@@ -19,7 +19,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { toast } from "../components/ui";
 import { isTauri } from "./api";
-import { fa } from "./fa";
+import { fa, isoToday } from "./fa";
 import { adjustTimestampForWaterQuietHours } from "./quietHours";
 import { getState, persist, requestRender, syncTodayActivity, syncWaterChecklist } from "./store";
 
@@ -145,6 +145,7 @@ declare global {
       showWaterNotification: (title: string, body: string) => void;
       scheduleWaterNotification: (triggerAtMs: number) => void;
       cancelWaterNotification: () => void;
+      setLightStatusBar?: (light: boolean) => void;
       /** MediaStore.Downloads writer — returns the public path, throws on failure. */
       saveBackupToDownloads?: (fileName: string, contents: string) => string;
       /** Native ACTION_SEND share sheet — returns false when no app can handle it. */
@@ -157,6 +158,7 @@ declare global {
 
 /** Fixed id so an immediate alert replaces its scheduled twin. */
 export const WATER_NOTIFICATION_ID = 7701;
+export const WATER_SCHEDULED_NOTIFICATION_ID = 7704;
 
 /** Action group shown under the water notification on Android. */
 export const WATER_ACTION_TYPE_ID = "water-reminder-actions";
@@ -243,6 +245,11 @@ export async function initNotificationActions(): Promise<void> {
       const state = getState();
       const glasses = Math.max(0, Math.min(20, Math.round(Number(newCount) || 0)));
       if (glasses <= 0) return;
+      const today = isoToday();
+      if (state.diet.lastResetDate !== today) {
+        state.diet.lastResetDate = today;
+        for (const item of state.diet.items) item.done = false;
+      }
       state.diet.waterGlasses = glasses;
       if (glasses >= 8) {
         const water = state.diet.items.find((item) => item.id === "diet-4");
@@ -354,9 +361,9 @@ export async function scheduleWaterNotificationAt(nextAtMs: number): Promise<voi
 
   try {
     await ensureChannel();
-    await cancel([WATER_NOTIFICATION_ID]).catch(() => undefined);
+    await cancel([WATER_SCHEDULED_NOTIFICATION_ID]).catch(() => undefined);
     sendNotification({
-      id: WATER_NOTIFICATION_ID,
+      id: WATER_SCHEDULED_NOTIFICATION_ID,
       channelId: CHANNEL_ID,
       title: "💧 وقت نوشیدن آب است!",
       body: "۱ لیوان آب بنوش (۷۰٪ حجم عضله آب است و برای ریکاوری حیاتی است).",
@@ -378,8 +385,8 @@ export async function cancelScheduledWaterNotification(): Promise<void> {
     console.warn("native water alarm cancel failed", error);
   }
   try {
-    // Same notification id, so this also dismisses a reminder that is on screen.
-    await cancel([WATER_NOTIFICATION_ID]);
+    // Dismiss both the immediate alert and any scheduled alarm.
+    await cancel([WATER_NOTIFICATION_ID, WATER_SCHEDULED_NOTIFICATION_ID]);
   } catch {
     /* nothing scheduled */
   }

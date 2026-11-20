@@ -47,6 +47,10 @@ export interface IdealWeightOptions {
   height?: number;
   /** Keeps an outer draft in sync when the height changes. */
   onHeightChange?: (heightCm: number) => void;
+  /** Build type to start from. */
+  build?: BuildType;
+  /** Keeps an outer draft in sync when the build changes. */
+  onBuildChange?: (next: BuildType) => void;
   /** Current weight to compare against — the wizard passes its draft. */
   currentWeight?: number;
   /** Replaces the default "write to profile.targetWeight" behaviour. */
@@ -60,7 +64,7 @@ export function idealWeightCalculatorCard(options: IdealWeightOptions = {}): HTM
     230,
     Math.max(120, Math.round(options.height ?? state.profile.heightCm ?? 175)),
   );
-  let build: BuildType = "standard";
+  let build: BuildType = options.build ?? "standard";
 
   const card = el("div", "card space-y-3");
   card.setAttribute("data-ideal-weight", "card");
@@ -114,6 +118,7 @@ export function idealWeightCalculatorCard(options: IdealWeightOptions = {}): HTM
   builds.forEach((item, index) => {
     const button = btn("", "", () => {
       build = item.key;
+      options.onBuildChange?.(build);
       paint();
     });
     buildButtons[index] = button;

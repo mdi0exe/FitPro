@@ -39,18 +39,22 @@ export function installNavigation(onBackAtRoot: () => void): void {
   });
 }
 
+let pendingReleases = 0;
+let releaseScheduled = false;
+
 /** Pushes a history entry and registers the overlay's close callback. */
 export function pushOverlay(close: () => void): string {
   sequence += 1;
   const id = `overlay-${sequence}`;
   stack.push({ id, close });
-  history.pushState({ overlay: id }, "");
+  if (pendingReleases > 0) {
+    pendingReleases -= 1;
+    history.replaceState({ overlay: id }, "");
+  } else {
+    history.pushState({ overlay: id }, "");
+  }
   return id;
 }
-
-/** Releases an overlay that was closed from the UI (X, backdrop, action). */
-let pendingReleases = 0;
-let releaseScheduled = false;
 
 /** True when `id` is the modal the Escape key should close. */
 export function isTopOverlay(id: string): boolean {
@@ -75,7 +79,8 @@ export function releaseOverlay(id: string): void {
     if (steps <= 0) return;
     const state = history.state as { overlay?: string } | null;
     if (state?.overlay) {
-      suppressed += steps;
+      // history.go(-steps) dispatches ONE popstate event regardless of steps.
+      suppressed += 1;
       history.go(-steps);
     }
   });

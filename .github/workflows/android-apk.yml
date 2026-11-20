@@ -365,11 +365,19 @@ jobs:
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_INPUT: ${{ inputs.target || 'aarch64' }}
         run: |
           set -euo pipefail
           TAG="apk-latest"
           if gh release view "$TAG" >/dev/null 2>&1; then
+            for old in $(gh release view "$TAG" --json assets -q '.assets[].name | select(endswith(".apk"))'); do
+              gh release delete-asset "$TAG" "$old" -y || true
+            done
             gh release upload "$TAG" artifacts/*.apk artifacts/SHA256SUMS.txt --clobber
+            gh release edit "$TAG" \
+              --target "${GITHUB_SHA}" \
+              --title "Latest Android Debug APK (${TARGET_INPUT:-aarch64})" \
+              --notes "Direct APK download (without ZIP). Commit: ${GITHUB_SHA}"
           else
             gh release create "$TAG" artifacts/*.apk artifacts/SHA256SUMS.txt \
               --target "${GITHUB_SHA}" \

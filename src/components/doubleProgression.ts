@@ -63,12 +63,16 @@ function logMilestone(text: string): void {
  * range), never to today's ticked sets — the workout is already done, and
  * rewriting it would misreport what was lifted.
  */
-function applyChoice(exercise: Exercise, choice: "weight" | "rep" | "hold"): void {
+function applyChoice(
+  exercise: Exercise,
+  choice: "weight" | "rep" | "hold",
+  baseWeight = exercise.targetWeight,
+): void {
   const bodyweight = exercise.bodyweight || exercise.targetWeight <= 0;
   const range = exercise.reps;
 
   if (choice === "weight" && !bodyweight) {
-    exercise.targetWeight = roundStep(exercise.targetWeight + WEIGHT_STEP);
+    exercise.targetWeight = roundStep(baseWeight + WEIGHT_STEP);
     // حفظ دامنه تکرار (مثلاً ۸ تا ۱۲) به‌جای پاک کردن سقف دامنه
     const floorReps = bottomOfRange(range);
     for (const log of exercise.logs) {
@@ -80,13 +84,21 @@ function applyChoice(exercise: Exercise, choice: "weight" | "rep" | "hold"): voi
     toast(`${exercise.name}: ${faNum(exercise.targetWeight, 1)} کیلو × ${fa(floorReps)} تکرار برای جلسه بعد.`);
   } else if (choice === "weight") {
     // Bodyweight movements progress by reps only.
-    exercise.reps = bumpRange(range);
-    logMilestone(`${exercise.name}: دامنه تکرارها به ${faReps(exercise.reps)} رفت.`);
-    toast(`${exercise.name}: دامنه تکرارها به ${faReps(exercise.reps)} رفت.`);
+    if (bumpRange(range) === range) {
+      toast("هدف جلسه بعد: ۱ تکرار بیشتر در هر ست");
+    } else {
+      exercise.reps = bumpRange(range);
+      logMilestone(`${exercise.name}: دامنه تکرارها به ${faReps(exercise.reps)} رفت.`);
+      toast(`${exercise.name}: دامنه تکرارها به ${faReps(exercise.reps)} رفت.`);
+    }
   } else if (choice === "rep") {
-    exercise.reps = bumpRange(range);
-    logMilestone(`${exercise.name}: یک تکرار به دامنه اضافه شد (${faReps(exercise.reps)}).`);
-    toast(`${exercise.name}: دامنه تکرارها ${faReps(exercise.reps)} شد.`);
+    if (bumpRange(range) === range) {
+      toast("هدف جلسه بعد: ۱ تکرار بیشتر در هر ست");
+    } else {
+      exercise.reps = bumpRange(range);
+      logMilestone(`${exercise.name}: یک تکرار به دامنه اضافه شد (${faReps(exercise.reps)}).`);
+      toast(`${exercise.name}: دامنه تکرارها ${faReps(exercise.reps)} شد.`);
+    }
   } else {
     toast("همان وزن و تکرارها برای جلسه بعد حفظ شد.", "info");
   }
@@ -107,7 +119,8 @@ export function openDoubleProgressionModal(
   const top = topSet(exercise);
   const bodyweight = exercise.bodyweight || exercise.targetWeight <= 0;
   const range = exercise.reps;
-  const nextWeight = roundStep(exercise.targetWeight + WEIGHT_STEP);
+  const baseWeight = Math.max(exercise.targetWeight, top?.weight ?? 0);
+  const nextWeight = roundStep(baseWeight + WEIGHT_STEP);
 
   const body = el("div", "space-y-3");
   body.append(
@@ -136,10 +149,10 @@ export function openDoubleProgressionModal(
     {
       id: "weight",
       title: bodyweight
-        ? `دامنه تکرارها: ${faReps(bumpRange(range))}`
+        ? (bumpRange(range) === range ? "۱ تکرار بیشتر در هر ست" : `دامنه تکرارها: ${faReps(bumpRange(range))}`)
         : `${faNum(nextWeight, 1)} کیلوگرم × ${fa(bottomOfRange(range))} تکرار`,
       hint: bodyweight
-        ? "حرکت وزن بدن است؛ پیشرفت با تکرار انجام می‌شود."
+        ? (bumpRange(range) === range ? "تلاش برای ثبت رکورد شخصی جدید." : "حرکت وزن بدن است؛ پیشرفت با تکرار انجام می‌شود.")
         : `‎+${faNum(WEIGHT_STEP, 1)} کیلو و برگشت تکرارها به کف دامنه (${fa(bottomOfRange(range))}).`,
       tone: suggestWeight ? "border-emerald-400 bg-emerald-500/15" : "border-slate-800 bg-slate-950/50",
     },
@@ -157,6 +170,10 @@ export function openDoubleProgressionModal(
     },
   ];
 
+  if (bodyweight && bumpRange(range) === range) {
+    options.splice(1, 1);
+  }
+
   const list = el("div", "space-y-1.5");
   options.forEach((option, index) => {
     const card = btn(
@@ -164,7 +181,7 @@ export function openDoubleProgressionModal(
       `<span class="text-[11px] font-extrabold text-slate-100">${escapeHtml(option.title)}</span>
        <span class="mt-0.5 text-[10px] leading-5 text-slate-400">${escapeHtml(option.hint)}</span>`,
       () => {
-        applyChoice(exercise, option.id);
+        applyChoice(exercise, option.id, baseWeight);
         handle.close();
       },
       { "aria-label": `انتخاب گزینه ${index + 1}` },

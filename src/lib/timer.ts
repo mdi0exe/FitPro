@@ -11,7 +11,7 @@ export class CountdownTimer {
   private endsAt = 0;
 
   onTick: TickHandler | null = null;
-  onDone: (() => void) | null = null;
+  onDone: ((overdueSec?: number) => void) | null = null;
 
   constructor(seconds: number) {
     this.total = seconds;
@@ -55,6 +55,9 @@ export class CountdownTimer {
 
   add(delta: number): void {
     this.remaining = Math.min(3600, Math.max(0, this.remaining + delta));
+    if (this.remaining > this.total) {
+      this.total = this.remaining;
+    }
     if (this.running) {
       if (this.remaining <= 0.05) {
         this.finish();
@@ -71,7 +74,7 @@ export class CountdownTimer {
       const left = (this.endsAt - Date.now()) / 1000;
       this.remaining = Math.max(0, left);
       this.paint();
-      if (left <= 0) this.finish();
+      if (left <= 0) this.finish(Math.max(0, -left));
     }, 200);
   }
 
@@ -82,12 +85,12 @@ export class CountdownTimer {
     }
   }
 
-  private finish(): void {
+  private finish(overdueSec = 0): void {
     this.stopLoop();
     this.running = false;
     this.remaining = 0;
     this.paint();
-    this.onDone?.();
+    this.onDone?.(overdueSec);
   }
 
   private paint(): void {
@@ -133,6 +136,7 @@ let audioContext: AudioContext | null = null;
 let masterBus: AudioNode | null = null;
 const decoded = new Map<SoundKey, AudioBuffer>();
 const inflight = new Map<SoundKey, Promise<AudioBuffer | null>>();
+const failedDecode = new Set<SoundKey>();
 
 function getAudioContext(): AudioContext | null {
   try {
@@ -175,6 +179,8 @@ async function ensureRunning(ctx: AudioContext): Promise<void> {
 
 /** Fetch + decode once; `null` means "use the media-element fallback". */
 function loadBuffer(ctx: AudioContext, key: SoundKey): Promise<AudioBuffer | null> {
+  if (failedDecode.has(key)) return Promise.resolve(null);
+
   const cached = decoded.get(key);
   if (cached) return Promise.resolve(cached);
 
@@ -190,6 +196,7 @@ function loadBuffer(ctx: AudioContext, key: SoundKey): Promise<AudioBuffer | nul
       decoded.set(key, buffer);
       return buffer;
     } catch (error) {
+      failedDecode.add(key);
       console.warn(`sound "${key}" is not decodable here; using media fallback`, error);
       return null;
     } finally {
@@ -435,6 +442,20 @@ function stopWaterLoop(): void {
   waterLoopInterval = 0;
 }
 
+export function pauseWaterLoopForBackground(): void {
+  stopWaterLoop();
+}
+
+export function syncWaterMirrorFromState(): void {
+  try {
+    const nextAt = getState().diet?.waterReminderNextAt ?? 0;
+    if (nextAt > 0) window.localStorage.setItem(WATER_MIRROR_KEY, String(Math.trunc(nextAt)));
+    else window.localStorage.removeItem(WATER_MIRROR_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /** Alerts once, then advances the deadline to the next full interval. */
 function fireWaterReminder(advancedTo: number): void {
   writeWaterNextAt(advancedTo);
@@ -464,11 +485,21 @@ function tickWater(): void {
   const nextAt = readWaterNextAtFromState();
   const now = Date.now();
 
-  if (nextAt > 0 && nextAt <= now) {
+  if (nextAt <= 0) {
+    const fresh = adjustTimestampForWaterQuietHours(now + totalSec * 1000);
+    writeWaterNextAt(fresh);
+    persist(0);
+    void scheduleWaterNotificationAt(fresh);
+    waterTickListener?.(Math.max(0, Math.ceil((fresh - now) / 1000)), totalSec);
+    return;
+  }
+
+  if (nextAt <= now) {
     // The deadline passed while the app was closed or backgrounded. `waterAlert`
     // stays silent inside the sleep window; the next deadline is pushed to 09:00.
-    fireWaterReminder(adjustTimestampForWaterQuietHours(now + totalSec * 1000));
-    waterTickListener?.(totalSec, totalSec);
+    const advancedTo = adjustTimestampForWaterQuietHours(now + totalSec * 1000);
+    fireWaterReminder(advancedTo);
+    waterTickListener?.(Math.max(0, Math.ceil((advancedTo - now) / 1000)), totalSec);
     return;
   }
 
@@ -541,6 +572,8 @@ export function restoreWaterReminderOnBoot(): void {
 
   if (!diet.waterReminderEnabled) {
     stopWaterLoop();
+    writeWaterNextAt(0);
+    void cancelScheduledWaterNotification();
     return;
   }
 

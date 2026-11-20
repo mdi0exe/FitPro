@@ -349,7 +349,7 @@ function warmupCard(day: WorkoutDay): HTMLElement {
       persist(0);
       if (item.done) {
         softTap();
-      } else if (dayDone(day) === 0 && !day.warmups.some((w) => w.done)) {
+      } else {
         clearTodayWorkoutActivity();
       }
       const nowDone = day.warmups.filter((w) => w.done).length;
@@ -445,10 +445,12 @@ function cardioTimerBlock(): HTMLElement {
   };
 
   cardioTimer.onTick = () => paintCardio();
-  cardioTimer.onDone = () => {
+  cardioTimer.onDone = (overdueSec = 0) => {
     void cancelNotifications([CARDIO_TIMER_NOTIF_ID]);
-    alarm();
-    toast("۵ دقیقه هوازی تمام شد. حالا گرم کردن پویا! 🔥");
+    if (overdueSec <= 3) {
+      alarm();
+      toast("۵ دقیقه هوازی تمام شد. حالا گرم کردن پویا! 🔥");
+    }
     paintCardio();
   };
 
@@ -517,16 +519,20 @@ async function restartDay(day: WorkoutDay): Promise<void> {
     const prescribedReps = firstNumber(exercise.reps);
     for (const log of exercise.logs) {
       log.done = false;
+      log.doneDate = null;
       // If Double Progression raised the prescription, bring the set up to the new target.
       if (!exercise.bodyweight && exercise.targetWeight > 0 && log.weight < exercise.targetWeight) {
         log.weight = exercise.targetWeight;
         if (prescribedReps > 0) log.reps = prescribedReps;
-      } else if ((exercise.bodyweight || exercise.targetWeight <= 0) && prescribedReps > log.reps) {
+      } else if (prescribedReps > log.reps) {
         log.reps = prescribedReps;
       }
     }
   }
-  for (const warmup of day.warmups) warmup.done = false;
+  for (const warmup of day.warmups) {
+    warmup.done = false;
+    warmup.doneDate = null;
+  }
 
   persist(0);
   toast("این روز از نو آماده شد. برو سنگین بزن! 💪", "info");
@@ -742,7 +748,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     onChange: (value) => {
       log.weight = value;
       if (log.done) recordExerciseHistory(exercise);
-      if (log.done && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
+      if (log.done && !isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
       persist();
     },
     onOpenPicker: (current, setValue) =>
@@ -757,7 +763,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
         onChange: (value) => {
           log.weight = value;
           if (log.done) recordExerciseHistory(exercise);
-          if (log.done && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
+          if (log.done && !isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
           setValue(value);
           persist();
         },
@@ -773,7 +779,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     onChange: (value) => {
       log.reps = value;
       if (log.done) recordExerciseHistory(exercise);
-      if (log.done && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
+      if (log.done && !isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
       persist();
     },
     onOpenPicker: (current, setValue) =>
@@ -789,7 +795,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
         onChange: (value) => {
           log.reps = value;
           if (log.done) recordExerciseHistory(exercise);
-          if (log.done && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
+          if (log.done && !isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
           setValue(value);
           persist();
         },
@@ -869,9 +875,7 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
       } else {
         clearTodayExerciseHistory(exercise.id);
       }
-      if (dayDone(day) === 0 && !day.warmups.some((w) => w.done)) {
-        clearTodayWorkoutActivity();
-      }
+      clearTodayWorkoutActivity();
     }
     refreshProgress(day, exercise);
   });
@@ -896,7 +900,7 @@ function applyToAllSets(exercise: Exercise, field: "weight" | "reps", value: num
   for (const log of exercise.logs) {
     if (field === "weight") log.weight = value;
     else log.reps = value;
-    if (log.done) checkAndUpdatePR(exercise, log.weight, log.reps);
+    if (log.done && !isExerciseSwapped(exercise)) checkAndUpdatePR(exercise, log.weight, log.reps);
   }
   // Editing a finished set must move today's chart point as well.
   if (exercise.logs.some((log) => log.done)) recordExerciseHistory(exercise);

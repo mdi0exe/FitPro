@@ -1,11 +1,17 @@
 /** Application state container + debounced persistence. */
 import type { AppMode, AppStateData, DailyActivity, TabId } from "../types";
+import { toast } from "../components/ui";
 import { saveState, setFlushHook } from "./api";
-import { fa, isoToday } from "./fa";
+import { currentPersianWeekIsos, fa, firstNumber, isoToday } from "./fa";
 import { ensureDailySwappedExercisesReset } from "./workoutTools";
 
 let state: AppStateData | null = null;
 let activeTab: TabId = "workout";
+
+let stateGeneration = 0;
+export function getStateGeneration(): number {
+  return stateGeneration;
+}
 
 const listeners = new Set<() => void>();
 
@@ -13,6 +19,7 @@ let saveTimer: number | null = null;
 let flushing = false;
 let queued = false;
 let activeFlushPromise: Promise<void> | null = null;
+let lastFlushErrorToast = 0;
 
 /** Tabs visible in each modular layout, in bottom-nav order. */
 export function visibleTabs(mode: AppMode | undefined): TabId[] {
@@ -38,9 +45,11 @@ export function applyTheme(): void {
   // theme so a light app does not sit under a near-black system bar.
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", isLight ? "#f1f5f9" : "#020617");
+  window.AndroidWater?.setLightStatusBar?.(isLight);
 }
 
 export function initState(next: AppStateData): void {
+  stateGeneration += 1;
   state = next;
   activeTab = homeTab(next.appMode);
   applyTheme();
@@ -52,6 +61,7 @@ export function getState(): AppStateData {
 }
 
 export function setState(next: AppStateData): void {
+  stateGeneration += 1;
   // The backend command that produced `next` already wrote it to disk; dropping
   // the pending debounce prevents an older snapshot from overwriting it.
   cancelPendingSave();
@@ -107,6 +117,7 @@ export function requestRender(): void {
 
 /** Debounced write-through to Rust (or localStorage). */
 export function persist(delay = 350): void {
+  stateGeneration += 1;
   // Every user action funnels through here, so this is the one place that has
   // to keep today's calendar entry truthful.
   syncTodayActivity();
@@ -146,6 +157,11 @@ export async function flushNow(): Promise<void> {
       }
     } catch (error) {
       console.error("failed to persist app state", error);
+      const now = Date.now();
+      if (now - lastFlushErrorToast > 5000) {
+        lastFlushErrorToast = now;
+        toast("خطا در ذخیره اطلاعات روی حافظه دستگاه", "error");
+      }
     } finally {
       flushing = false;
       activeFlushPromise = null;
@@ -161,21 +177,51 @@ export async function flushNow(): Promise<void> {
 export function ensureDailyDietReset(): boolean {
   const current = getState();
   const today = isoToday();
+  const weekStart = currentPersianWeekIsos(today)[0];
+  const dietFromEarlierWeek = Boolean(
+    current.diet.lastResetDate && current.diet.lastResetDate < weekStart,
+  );
   let changed = false;
 
   if (current.diet.lastResetDate !== today) {
     current.diet.lastResetDate = today;
     for (const item of current.diet.items) item.done = false;
     current.diet.waterGlasses = 0;
-    // `waterReminderNextAt` is deliberately untouched: the reminder cycle has to
-    // survive midnight (and app restarts) instead of starting over.
     changed = true;
   }
 
-  // A "machine is busy" swap is a one-day override, so a new calendar day puts
-  // every substituted movement back on the programme.
-  if (ensureDailySwappedExercisesReset()) changed = true;
+  // Automatic weekly reset on Saturday: clear last week's ticks while keeping
+  // weights/reps and applying any Double Progression bumps for the new week.
+  const isOldWeek = (done: boolean, doneDate?: string | null) =>
+    done && ((Boolean(doneDate) && doneDate! < weekStart) || (!doneDate && dietFromEarlierWeek));
 
+  for (const day of current.days) {
+    for (const warmup of day.warmups) {
+      if (isOldWeek(warmup.done, warmup.doneDate)) {
+        warmup.done = false;
+        warmup.doneDate = null;
+        changed = true;
+      }
+    }
+    for (const exercise of day.exercises) {
+      const prescribedReps = firstNumber(exercise.reps);
+      for (const log of exercise.logs) {
+        if (isOldWeek(log.done, log.doneDate)) {
+          log.done = false;
+          log.doneDate = null;
+          if (!exercise.bodyweight && exercise.targetWeight > 0 && log.weight < exercise.targetWeight) {
+            log.weight = exercise.targetWeight;
+            if (prescribedReps > 0) log.reps = prescribedReps;
+          } else if (prescribedReps > log.reps) {
+            log.reps = prescribedReps;
+          }
+          changed = true;
+        }
+      }
+    }
+  }
+
+  if (ensureDailySwappedExercisesReset()) changed = true;
   return changed;
 }
 
@@ -308,19 +354,21 @@ export function syncTodayActivity(): boolean {
 export function clearTodayWorkoutActivity(): void {
   if (!state) return;
   const today = isoToday();
-  const anyDoneToday = state.days.some(
-    (day) =>
-      day.exercises.some((ex) =>
-        ex.logs.some((log) => log.done && log.doneDate === today),
-      ) || day.warmups.some((wu) => wu.done && wu.doneDate === today),
+  const anySetDoneToday = state.days.some((day) =>
+    day.exercises.some((ex) =>
+      ex.logs.some((log) => log.done && log.doneDate === today),
+    ),
   );
-  if (anyDoneToday) return;
+  if (anySetDoneToday) return;
   const entry = state.activityHistory.find((item) => item.date === today);
   if (!entry) return;
   entry.workoutTitle = "";
   entry.completedExercises = [];
   entry.setsDone = 0;
-  entry.warmupsDone = 0;
+  entry.warmupsDone = state.days.reduce(
+    (sum, day) => sum + day.warmups.filter((wu) => wu.done && wu.doneDate === today).length,
+    0,
+  );
   persist(0);
 }
 

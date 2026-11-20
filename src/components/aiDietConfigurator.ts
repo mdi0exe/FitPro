@@ -205,17 +205,16 @@ export function applyAiDietJson(raw: string): { ok: boolean; message: string } {
     const water: DietItem = state.diet.items.find((item) => item.id === "diet-4") ?? waterRow();
     const isWaterRow = (text: string) =>
       /(۸\s*لیوان|نوشیدن\s*۸|آب\s*کافی\s*روزانه)/.test(text);
-    state.diet.items = [
-      ...plan.checklist
-        .filter((entry) => !isWaterRow(entry.text))
-        .map((entry, index) => ({
-          id: `ai-${index + 1}`,
-          text: entry.text,
-          hint: entry.hint,
-          done: false,
-        })),
-      water,
-    ];
+    const custom = state.diet.items.filter((item) => item.id.startsWith("custom-"));
+    const aiRows = plan.checklist
+      .filter((entry) => !isWaterRow(entry.text))
+      .map((entry, index) => ({
+        id: `ai-${index + 1}`,
+        text: entry.text,
+        hint: entry.hint,
+        done: false,
+      }));
+    state.diet.items = [...aiRows, water, ...custom];
     syncWaterChecklist();
     applied.push("چک‌لیست");
   }
@@ -256,7 +255,7 @@ export function openAiDietConfigurator(): void {
     ),
   );
 
-  const promptBox = el("textarea", "field h-28 w-full resize-none text-left text-[10px] leading-5");
+  const promptBox = el("textarea", "field h-28 w-full resize-none text-right text-[10px] leading-5");
   promptBox.value = prompt;
   promptBox.readOnly = true;
   promptBox.setAttribute("dir", "rtl");

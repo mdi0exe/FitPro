@@ -15,7 +15,7 @@ import { btn, el, escapeHtml } from "../lib/dom";
 import { fa, faDate, faNum, isoToday } from "../lib/fa";
 import { getState, persist, requestRender } from "../lib/store";
 import type { Exercise, ExerciseHistoryEntry } from "../types";
-import { openModal, toast } from "./ui";
+import { confirmDialog, openModal, toast } from "./ui";
 
 /** Keeps the state file small: ~4 months of daily rows per movement. */
 const MAX_ENTRIES = 120;
@@ -185,13 +185,12 @@ export function openExerciseHistoryModal(exercise: Exercise): void {
       .reverse()
       .forEach((row) => {
         const line = el("div", "flex items-center justify-between rounded-lg bg-slate-950/50 px-2.5 py-1.5 text-[10px]");
+        const label = isBodyweight
+          ? `${fa(row.reps)} تکرار • ${fa(row.setsCompleted)} ست`
+          : `${faNum(row.weight, 1)} کیلو × ${fa(row.reps)} • ${fa(row.setsCompleted)} ست`;
         line.append(
           el("span", "text-slate-400", faDate(row.date, { withYear: false })),
-          el(
-            "span",
-            "font-bold text-slate-200",
-            `${faNum(row.weight, 1)} کیلو × ${fa(row.reps)} • ${fa(row.setsCompleted)} ست`,
-          ),
+          el("span", "font-bold text-slate-200", label),
         );
         table.append(line);
       });
@@ -206,7 +205,7 @@ export function openExerciseHistoryModal(exercise: Exercise): void {
     );
   }
 
-  const footer = el("div", "grid grid-cols-2 gap-2");
+  const footer = el("div", entries.length > 0 ? "grid grid-cols-2 gap-2" : "w-full");
   const handle = openModal({
     title: "روند این حرکت",
     subtitle: exercise.name,
@@ -215,17 +214,28 @@ export function openExerciseHistoryModal(exercise: Exercise): void {
   });
   footer.append(
     btn(
-      "btn-primary",
+      entries.length > 0 ? "btn-primary" : "btn-primary w-full",
       "بستن",
       () => handle.close(),
     ),
-    btn("btn-ghost", "پاک کردن سابقه", () => {
-      const state = getState();
-      delete state.exerciseHistory[exercise.id];
-      persist(0);
-      handle.close();
-      toast("سابقه این حرکت پاک شد.", "info");
-      requestRender();
-    }),
   );
+  if (entries.length > 0) {
+    footer.append(
+      btn("btn-ghost", "پاک کردن سابقه", async () => {
+        const confirmed = await confirmDialog({
+          title: "پاک کردن سابقه",
+          message: "تمام تاریخچه این حرکت پاک شود؟",
+          confirmText: "پاک کن",
+          danger: true,
+        });
+        if (!confirmed) return;
+        const state = getState();
+        delete state.exerciseHistory[exercise.id];
+        persist(0);
+        handle.close();
+        toast("سابقه این حرکت پاک شد.", "info");
+        requestRender();
+      }),
+    );
+  }
 }

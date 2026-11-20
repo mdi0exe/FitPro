@@ -62,7 +62,9 @@ export function parseFaFloat(raw: string | null | undefined, fallback = 0): numb
     .replace(/[٬\s\u200c]/g, "")
     .replace(/٫/g, ".");
   if (!/\d/.test(text)) return fallback;
-  const value = Number.parseFloat(text.replace(/[^\d.]/g, ""));
+  const match = /\d+(?:\.\d+)?/.exec(text);
+  if (!match) return fallback;
+  const value = Number.parseFloat(match[0]);
   return Number.isFinite(value) ? value : fallback;
 }
 
@@ -105,7 +107,7 @@ export function faSigned(value: number, digits = 1): string {
  * `"8-10"` → `"۸ تا ۱۰"`, `"10 هر پا"` → `"۱۰ هر پا"`.
  */
 export function faReps(reps: string): string {
-  const range = /^(\d+)\s*-\s*(\d+)$/.exec(reps.trim());
+  const range = /^(\d+)\s*[-–—]\s*(\d+)$/.exec(reps.trim());
   if (range) return `${fa(range[1])} تا ${fa(range[2])}`;
   return fa(reps);
 }
@@ -303,7 +305,7 @@ export function makePersianNumericInput(
       if (ch >= "0" && ch <= "9") kept = FA_DIGITS[Number(ch)];
       else if (/[۰-۹]/.test(ch)) kept = ch;
       else if (/[٠-٩]/.test(ch)) kept = FA_DIGITS[ch.charCodeAt(0) - 0x0660];
-      else if (decimals && (ch === "." || ch === "٫")) {
+      else if (decimals && (ch === "." || ch === "٫" || ch === ",")) {
         if (!seenSeparator) {
           seenSeparator = true;
           kept = "٫";

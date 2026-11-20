@@ -8,7 +8,7 @@
 import type { AppStateData, Exercise, Milestone, SetLog } from "../types";
 import { createSeedState, localIso } from "../data/seed";
 import defaultGifs from "../data/default-gifs.json";
-import { en, fa, firstNumber, localDateFromIso } from "./fa";
+import { en, fa, faNum, firstNumber, localDateFromIso } from "./fa";
 import { uid } from "./dom";
 
 const STORAGE_KEY = "persian-hypertrophy::state::v1";
@@ -149,10 +149,6 @@ export function normalizeState(input: AppStateData): AppStateData {
   state.onboardingCompleted =
     typeof state.onboardingCompleted === "boolean" ? state.onboardingCompleted : true;
 
-  // `uni_only` mode has no workout days. Reseeding here used to wipe the whole
-  // state (courses, diet, history) every single load.
-  if (state.days.length === 0) return state;
-
   // Gym tools + uni tab fields (added after the first release).
   const seed = createSeedState();
   state.deloadActive = Boolean(state.deloadActive);
@@ -248,7 +244,7 @@ export function normalizeState(input: AppStateData): AppStateData {
   } else {
     state.customShuttleJson = null;
   }
-  state.activeDay = Math.min(Math.max(0, state.activeDay ?? 0), state.days.length - 1);  if (!state.restSeconds || state.restSeconds < 15 || state.restSeconds > 600) {
+  if (!state.restSeconds || state.restSeconds < 15 || state.restSeconds > 600) {
     state.restSeconds = 90;
   }
   // Same migration as models.rs: only the old 6-item grocery list is replaced.
@@ -318,55 +314,60 @@ export function normalizeState(input: AppStateData): AppStateData {
   const exerciseGifs = defaultGifs.exercises as Record<string, string>;
   const warmupGifs = defaultGifs.warmups as Record<string, string>;
 
-  for (const day of state.days) {
-    for (const warmup of day.warmups ?? []) {
-      // Same rule as `gif_needs_replacement` in models.rs: a blank or
-      // Cloudflare-blocked hotlink falls back to the bundled offline demo.
-      if (gifNeedsReplacement(warmup.gifUrl)) {
-        warmup.gifUrl = warmupGifs[`${day.id}:${warmup.id}`] ?? null;
-      }
-    }
-    for (const exercise of day.exercises) {
-      // A "machine is busy" swap only covers the day it was made on. A restored
-      // backup can still carry yesterday's substitute, so put the programmed
-      // movement back before resolving its demo (mirrors models.rs::normalize).
-      if (exercise.swappedDate && exercise.swappedDate !== localIso()) {
-        if (exercise.originalName) exercise.name = exercise.originalName;
-        if (exercise.originalQuery) exercise.query = exercise.originalQuery;
-        exercise.gifUrl = exercise.originalGifUrl ?? exerciseGifs[exercise.id] ?? null;
-        if (exercise.originalTip !== undefined && exercise.originalTip !== null) {
-          exercise.tip = exercise.originalTip;
+  if (state.days.length > 0) {
+    state.activeDay = Math.min(Math.max(0, state.activeDay ?? 0), state.days.length - 1);
+    for (const day of state.days) {
+      for (const warmup of day.warmups ?? []) {
+        // Same rule as `gif_needs_replacement` in models.rs: a blank or
+        // Cloudflare-blocked hotlink falls back to the bundled offline demo.
+        if (gifNeedsReplacement(warmup.gifUrl)) {
+          warmup.gifUrl = warmupGifs[`${day.id}:${warmup.id}`] ?? null;
         }
-        exercise.swappedDate = null;
-        exercise.originalName = null;
-        exercise.originalQuery = null;
-        exercise.originalGifUrl = null;
-        exercise.originalTip = null;
       }
-      exercise.sets = Math.min(12, Math.max(1, exercise.sets || 1));
-      // Same rule as models.rs: keep prescriptions in ASCII digits.
-      exercise.reps = en(exercise.reps ?? "");
-      if (gifNeedsReplacement(exercise.gifUrl)) {
-        // A swapped movement shows its own substitute demo — but only when the
-        // bundle ships one for this id, or a custom exercise gets a 404 path.
-        const swapped = Boolean(exercise.swappedDate && exercise.originalName);
-        exercise.gifUrl =
-          swapped && exercise.id in exerciseGifs
-            ? `/gifs/${exercise.id}-alt.gif`
-            : (exerciseGifs[exercise.id] ?? null);
+      for (const exercise of day.exercises) {
+        // A "machine is busy" swap only covers the day it was made on. A restored
+        // backup can still carry yesterday's substitute, so put the programmed
+        // movement back before resolving its demo (mirrors models.rs::normalize).
+        if (exercise.swappedDate && exercise.swappedDate !== localIso()) {
+          if (exercise.originalName) exercise.name = exercise.originalName;
+          if (exercise.originalQuery) exercise.query = exercise.originalQuery;
+          exercise.gifUrl = exercise.originalGifUrl ?? exerciseGifs[exercise.id] ?? null;
+          if (exercise.originalTip !== undefined && exercise.originalTip !== null) {
+            exercise.tip = exercise.originalTip;
+          }
+          exercise.swappedDate = null;
+          exercise.originalName = null;
+          exercise.originalQuery = null;
+          exercise.originalGifUrl = null;
+          exercise.originalTip = null;
+        }
+        exercise.sets = Math.min(12, Math.max(1, exercise.sets || 1));
+        // Same rule as models.rs: keep prescriptions in ASCII digits.
+        exercise.reps = en(exercise.reps ?? "");
+        const baseId = exercise.id.replace(/^(ppl\d+|dorm\d+)-/, "");
+        if (gifNeedsReplacement(exercise.gifUrl)) {
+          // A swapped movement shows its own substitute demo — but only when the
+          // bundle ships one for this id, or a custom exercise gets a 404 path.
+          const swapped = Boolean(exercise.swappedDate && exercise.originalName);
+          exercise.gifUrl =
+            swapped && baseId in exerciseGifs
+              ? `/gifs/${baseId}-alt.gif`
+              : (exerciseGifs[baseId] ?? null);
+        }
+        if (
+          exercise.swappedDate &&
+          exercise.originalName &&
+          gifNeedsReplacement(exercise.originalGifUrl) &&
+          baseId in exerciseGifs
+        ) {
+          exercise.originalGifUrl = `/gifs/${baseId}.gif`;
+        }
+        exercise.logs = syncLogs(exercise);
       }
-      if (
-        exercise.swappedDate &&
-        exercise.originalName &&
-        gifNeedsReplacement(exercise.originalGifUrl) &&
-        exercise.id in exerciseGifs
-      ) {
-        exercise.originalGifUrl = `/gifs/${exercise.id}.gif`;
-      }
-      exercise.logs = syncLogs(exercise);
     }
   }
-  state.weightHistory = (state.weightHistory ?? []).slice(-400);
+  state.weightHistory = Array.isArray(state.weightHistory) ? state.weightHistory.slice(-400) : [];
+  state.milestones = Array.isArray(state.milestones) ? state.milestones.slice(0, 60) : [];
   return state;
 }
 
@@ -410,6 +411,7 @@ function writeRaw(state: AppStateData): void {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
     console.error("failed to persist state in localStorage", error);
+    throw error;
   }
 }
 
@@ -530,18 +532,25 @@ export function localLogWeight(weight: number): AppStateData {
   if (existing) existing.weight = rounded;
   else state.weightHistory.push({ date: today, weight: rounded });
   state.weightHistory.sort((a, b) => a.date.localeCompare(b.date));
+  state.weightHistory = state.weightHistory.slice(-400);
 
-  if (rounded >= state.profile.targetWeight && previous < state.profile.targetWeight) {
+  const target = state.profile.targetWeight;
+  const isLoss = target < state.profile.startWeight;
+  const reachedGoal = isLoss
+    ? rounded <= target && previous > target
+    : rounded >= target && previous < target;
+
+  if (reachedGoal) {
     pushMilestone(
       state,
-      `به هدف ${fa(state.profile.targetWeight)} کیلوگرمی رسیدی! حالا هدف بعدی: کیفیت عضله و حفظ وزن.`,
+      `به هدف ${faNum(target, 1)} کیلوگرمی رسیدی! حالا هدف بعدی: کیفیت عضله و حفظ وزن.`,
       "goal",
     );
   } else if (previous !== rounded) {
-    const delta = rounded - previous;
+    const delta = Math.round((rounded - previous) * 10) / 10;
     pushMilestone(
       state,
-      `وزن امروز ثبت شد: ${fa(rounded)} کیلوگرم (\u200E${delta > 0 ? "+" : "−"}${fa(Math.abs(delta))} کیلوگرم نسبت به ثبت قبلی).`,
+      `وزن امروز ثبت شد: ${faNum(rounded, 1)} کیلوگرم (\u200E${delta > 0 ? "+" : "−"}${faNum(Math.abs(delta), 1)} کیلوگرم نسبت به ثبت قبلی).`,
       "weight",
     );
   }

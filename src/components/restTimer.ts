@@ -88,8 +88,12 @@ export function mountRestTimer(): void {
     ring.style.strokeDashoffset = `${CIRCUMFERENCE * (1 - progress)}`;
     timeLabel.textContent = fa(clock(remaining));
   };
-  restTimer.onDone = () => {
+  restTimer.onDone = (overdueSec = 0) => {
     void cancelNotifications([REST_TIMER_NOTIF_ID]);
+    if (overdueSec > 3) {
+      stopRest();
+      return;
+    }
     if (caption) {
       caption.textContent = "استراحت تمام شد. ست بعدی را آغاز کنید.";
       caption.className = "text-[10px] font-bold text-emerald-300";
@@ -149,6 +153,10 @@ export function stopRest(): void {
  * the auto-hide swallow it.
  */
 export function bumpRest(delta: number): void {
+  if (delta < 0 && (!restTimer.running || restTimer.remaining + delta <= 0.5)) {
+    stopRest();
+    return;
+  }
   if (hideHandle !== null) {
     window.clearTimeout(hideHandle);
     hideHandle = null;

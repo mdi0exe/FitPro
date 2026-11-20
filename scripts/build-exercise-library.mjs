@@ -263,6 +263,7 @@ function persianName(english, equipment, muscleLabel = "حرکت") {
   }
 
   const equipmentFa = EQUIPMENT_FA[equipment] ?? "دستگاه";
+  const equipWords = equipmentFa.split(/\s+/);
   const head = parts[0] ?? `تمرین ${muscleLabel}`;
   const modifiers = [];
   for (const [needle, label] of MODIFIER_FA) {
@@ -270,7 +271,7 @@ function persianName(english, equipment, muscleLabel = "حرکت") {
     if (!hasWord(rest, needle)) continue;
     // Never repeat the equipment: `ez barbell` + a `barbell` modifier printed
     // «هالتر هالتر خم», and `cable` + `cable` printed «سیم‌کش … سیم‌کش».
-    if (equipmentFa.includes(label) || label.includes(equipmentFa)) continue;
+    if (equipmentFa === label || label.includes(equipmentFa) || (label === "هالتر" && equipWords[0] === "هالتر")) continue;
     if (head.includes(label)) continue;
     modifiers.push(label);
     rest = replaceWord(rest, needle);
@@ -335,7 +336,6 @@ const MOVEMENT_CUE_FA = {
   "دیپ": "تنه را کمی جلو ببر و تا زاویه ۹۰ درجه آرنج پایین برو.",
   "دیپ پشت بازو": "بدون تاب دادن بدن پایین برو و در بالا آرنج را کامل باز کن.",
   "ساق": "در پایین دامنه کشش کامل و در بالا یک ثانیه توقف کن.",
-  "ساق تک‌پا": "روی یک پا بایست و در بالا مچ را کاملاً جمع کن.",
   "پشت پا": "حرکت را کنترل‌شده انجام بده و در جمع شدن یک ثانیه فشرده نگه دار.",
   "جلو پا": "در بالا زانو را یک ثانیه صاف نگه دار و وزنه را آرام برگردان.",
   "هیپ تراست": "در بالا باسن را یک ثانیه فشرده نگه دار و کمر را قوس نده.",

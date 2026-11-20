@@ -232,9 +232,11 @@ export function renderLanguageStudyCard(): HTMLElement {
     const node = timerBox.querySelector("[data-lang-clock]");
     if (node) node.textContent = faClock(remaining);
   };
-  languageStudyTimer.onDone = () => {
+  languageStudyTimer.onDone = (overdueSec = 0) => {
     void cancelNotifications([LANG_TIMER_NOTIF_ID]);
-    alarm();
+    if (overdueSec <= 3) {
+      alarm();
+    }
     const current = languageState();
     const day = isoToday();
     if (!current.completedDates.includes(day)) {
@@ -263,6 +265,7 @@ export function renderLanguageStudyCard(): HTMLElement {
           if (lang.targetMinutes === minutes) return;
           lang.targetMinutes = minutes;
           languageStudyTimer.reset(minutes * 60);
+          void cancelNotifications([LANG_TIMER_NOTIF_ID]);
           softTap();
           persist(0);
           requestRender();

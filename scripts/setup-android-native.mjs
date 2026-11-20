@@ -263,26 +263,80 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
 
         private fun writeAtomically(file: File, root: JSONObject) {
             val json = root.toString(2)
-            val tmp = File(file.parentFile, file.name + ".tmp")
+            val tmp = File(file.parentFile, file.name + ".kt." + System.nanoTime() + ".tmp")
             tmp.writeText(json, Charsets.UTF_8)
             if (!tmp.renameTo(file)) {
                 file.writeText(json, Charsets.UTF_8)
                 tmp.delete()
             }
         }
+
+        /** Arms the next OS alarm from the saved interval, without the app running. */
+        fun rescheduleFromState(context: Context) {
+            try {
+                val file = stateFile(context)
+                if (!file.exists()) return
+
+                val root = JSONObject(file.readText(Charsets.UTF_8))
+                val diet = root.optJSONObject("diet") ?: return
+                if (!diet.optBoolean("waterReminderEnabled", false)) return
+
+                val minutes = diet.optInt("waterReminderMinutes", 60).coerceIn(15, 240)
+                val nextAt = quietHoursAdjusted(System.currentTimeMillis() + minutes * 60_000L)
+                diet.put("waterReminderNextAt", nextAt)
+                writeAtomically(file, root)
+                scheduleAt(context, nextAt)
+            } catch (_: Exception) {
+                // Nothing to reschedule.
+            }
+        }
+
+        /** Re-arms the water alarm after a reboot or an app update. */
+        fun restoreAlarmOnBoot(context: Context) {
+            try {
+                val file = stateFile(context)
+                if (!file.exists()) return
+                val root = JSONObject(file.readText(Charsets.UTF_8))
+                val diet = root.optJSONObject("diet") ?: return
+                if (!diet.optBoolean("waterReminderEnabled", false)) return
+                val savedNext = diet.optLong("waterReminderNextAt", 0L)
+                val now = System.currentTimeMillis()
+                if (savedNext > now + 1000L) {
+                    scheduleAt(context, quietHoursAdjusted(savedNext))
+                } else {
+                    rescheduleFromState(context)
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
         when (intent?.action) {
-            Intent.ACTION_BOOT_COMPLETED,
-            Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                restoreAlarmOnBoot(context)
-            }
-
             ACTION_SHOW_REMINDER -> {
+                val file = stateFile(context)
+                if (!file.exists()) {
+                    cancelSchedule(context)
+                    return
+                }
+                val root = try {
+                    JSONObject(file.readText(Charsets.UTF_8))
+                } catch (_: Exception) {
+                    cancelSchedule(context)
+                    return
+                }
+                val diet = root.optJSONObject("diet")
+                if (diet == null || !diet.optBoolean("waterReminderEnabled", false)) {
+                    cancelSchedule(context)
+                    return
+                }
+
                 val calendar = Calendar.getInstance()
                 if (calendar.get(Calendar.HOUR_OF_DAY) in 0..8) {
-                    scheduleAt(context, quietHoursAdjusted(System.currentTimeMillis()))
+                    val nextAt = quietHoursAdjusted(System.currentTimeMillis())
+                    diet.put("waterReminderNextAt", nextAt)
+                    writeAtomically(file, root)
+                    scheduleAt(context, nextAt)
                     return
                 }
                 showNotification(
@@ -354,13 +408,13 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
             val glasses = (diet.optInt("waterGlasses", 0) + 1).coerceAtMost(20)
             diet.put("waterGlasses", glasses)
 
-            if (glasses >= 8) {
-                val items = diet.optJSONArray("items")
-                if (items != null) {
-                    for (index in 0 until items.length()) {
-                        val item = items.optJSONObject(index) ?: continue
-                        if (item.optString("id") == "diet-4") item.put("done", true)
-                    }
+            var dietDoneCount = 0
+            val allItems = diet.optJSONArray("items")
+            if (allItems != null) {
+                for (index in 0 until allItems.length()) {
+                    val item = allItems.optJSONObject(index) ?: continue
+                    if (glasses >= 8 && item.optString("id") == "diet-4") item.put("done", true)
+                    if (item.optBoolean("done", false)) dietDoneCount += 1
                 }
             }
 
@@ -384,13 +438,19 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
                     put("completedExercises", org.json.JSONArray())
                     put("setsDone", 0)
                     put("warmupsDone", 0)
-                    put("dietDone", 0)
-                    put("dietTotal", diet.optJSONArray("items")?.length() ?: 5)
+                    put("dietDone", dietDoneCount)
+                    put("dietTotal", allItems?.length() ?: 5)
                     put("waterGlasses", glasses)
                 }
-                history.put(0, todayEntry)
+                val updatedHistory = org.json.JSONArray()
+                updatedHistory.put(todayEntry)
+                for (i in 0 until history.length().coerceAtMost(89)) {
+                    updatedHistory.put(history.get(i))
+                }
+                root.put("activityHistory", updatedHistory)
             } else {
                 todayEntry.put("waterGlasses", glasses)
+                todayEntry.put("dietDone", dietDoneCount)
             }
 
             writeAtomically(file, root)
@@ -399,43 +459,15 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
             0
         }
     }
+}
 
-    /** Arms the next OS alarm from the saved interval, without the app running. */
-    private fun rescheduleFromState(context: Context) {
-        try {
-            val file = stateFile(context)
-            if (!file.exists()) return
-
-            val root = JSONObject(file.readText(Charsets.UTF_8))
-            val diet = root.optJSONObject("diet") ?: return
-            if (!diet.optBoolean("waterReminderEnabled", false)) return
-
-            val minutes = diet.optInt("waterReminderMinutes", 60).coerceIn(15, 240)
-            val nextAt = quietHoursAdjusted(System.currentTimeMillis() + minutes * 60_000L)
-            diet.put("waterReminderNextAt", nextAt)
-            writeAtomically(file, root)
-            scheduleAt(context, nextAt)
-        } catch (_: Exception) {
-            // Nothing to reschedule.
-        }
-    }
-
-    /** Re-arms the water alarm after a reboot or an app update. */
-    private fun restoreAlarmOnBoot(context: Context) {
-        try {
-            val file = stateFile(context)
-            if (!file.exists()) return
-            val root = JSONObject(file.readText(Charsets.UTF_8))
-            val diet = root.optJSONObject("diet") ?: return
-            if (!diet.optBoolean("waterReminderEnabled", false)) return
-            val savedNext = diet.optLong("waterReminderNextAt", 0L)
-            val now = System.currentTimeMillis()
-            if (savedNext > now + 1000L) {
-                scheduleAt(context, quietHoursAdjusted(savedNext))
-            } else {
-                rescheduleFromState(context)
+class BootCompletedReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        when (intent?.action) {
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                WaterBroadcastReceiver.restoreAlarmOnBoot(context)
             }
-        } catch (_: Exception) {
         }
     }
 }
@@ -466,8 +498,10 @@ import android.provider.OpenableColumns
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowInsetsControllerCompat
 import java.io.File
 import java.io.FileNotFoundException
+import java.lang.ref.WeakReference
 
 /**
  * Zero-XML ContentProvider so the app can attach a real .json file to the
@@ -536,7 +570,21 @@ class BackupFileProvider : ContentProvider() {
  * the app's own assets. Besides the water alarm it now owns the two backup
  * entry points, which cannot be implemented from Rust or a WebView alone.
  */
-class AndroidWaterBridge(private val context: Context) {
+class AndroidWaterBridge(activity: MainActivity) {
+    private val context = activity.applicationContext
+    private val activityRef = java.lang.ref.WeakReference(activity)
+
+    @JavascriptInterface
+    fun setLightStatusBar(light: Boolean) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            val act = activityRef.get() ?: return@post
+            androidx.core.view.WindowInsetsControllerCompat(act.window, act.window.decorView).apply {
+                isAppearanceLightStatusBars = light
+                isAppearanceLightNavigationBars = light
+            }
+        }
+    }
+
     @JavascriptInterface
     fun showWaterNotification(title: String, body: String) {
         WaterBroadcastReceiver.showNotification(context, title, body)
@@ -638,7 +686,6 @@ class AndroidWaterBridge(private val context: Context) {
             val chooser = Intent.createChooser(sendIntent, "ارسال فایل پشتیبان").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            if (chooser.resolveActivity(context.packageManager) == null) return false
             Handler(Looper.getMainLooper()).post {
                 try {
                     context.startActivity(chooser)
@@ -741,6 +788,13 @@ const receiverTag = [
   `        <!-- ${MARKER}: the water action stays in the background -->`,
   `        <receiver`,
   `            android:name=".WaterBroadcastReceiver"`,
+  `            android:exported="false" />`,
+].join("\n");
+
+const bootReceiverTag = [
+  `        <!-- ${MARKER}: restores the alarm after boot / update -->`,
+  `        <receiver`,
+  `            android:name=".BootCompletedReceiver"`,
   `            android:exported="true">`,
   `            <intent-filter>`,
   `                <action android:name="android.intent.action.BOOT_COMPLETED" />`,
@@ -750,13 +804,14 @@ const receiverTag = [
 ].join("\n");
 
 if (!manifest.includes("WaterBroadcastReceiver")) {
-  manifest = manifest.replace("</application>", `${receiverTag}\n    </application>`);
+  manifest = manifest.replace("</application>", `${receiverTag}\n${bootReceiverTag}\n    </application>`);
   manifestChanged = true;
-} else if (!manifest.includes("BOOT_COMPLETED")) {
+} else if (!manifest.includes("BootCompletedReceiver")) {
   manifest = manifest.replace(
     /<!--\s*fitpro-native-water[\s\S]*?<\/receiver>|<receiver[^>]*WaterBroadcastReceiver[^>]*>[\s\S]*?<\/receiver>|<receiver[^>]*WaterBroadcastReceiver[^>]*\/>/,
     receiverTag.trim()
   );
+  manifest = manifest.replace("</application>", `${bootReceiverTag}\n    </application>`);
   manifestChanged = true;
 }
 

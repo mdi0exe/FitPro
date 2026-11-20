@@ -6,7 +6,7 @@ import { resetToDefaults, storageMode } from "../lib/api";
 import { ensureNotificationPermission, pushSystemNotification } from "../lib/notify";
 import { alarm, stopWaterReminder, waterAlert } from "../lib/timer";
 import { syncWakeLockWithMode } from "../lib/workoutTools";
-import { syncUniAlarms } from "./uni";
+import { cancelBusAlarms, syncUniAlarms } from "./uni";
 import { syncLanguageStudyAlarm } from "./uniLanguage";
 import { applyTheme, getState, persist, requestRender, setState } from "../lib/store";
 import { applyDeveloperPreset } from "../lib/appSettings";
@@ -376,6 +376,8 @@ async function loadDeveloperPreset(): Promise<void> {
   if (!confirmed) return;
 
   stopWaterReminder();
+  const oldAlarms = [...(getState().uniReminders?.activeBusAlarms ?? [])];
+  void cancelBusAlarms(oldAlarms);
   applyDeveloperPreset(getState());
   applyTheme();
   persist(0);
