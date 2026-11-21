@@ -67,7 +67,12 @@ export function openShuttleAiImportModal(): void {
 
   footer.append(
     btn("btn-primary text-xs", "💾 ذخیره و اعمال", () => {
-      const raw = area.value.trim();
+      let raw = area.value.trim();
+      if (raw.startsWith("```")) {
+        raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      } else if (!raw.startsWith("{") && raw.includes("{") && raw.includes("}")) {
+        raw = raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1).trim();
+      }
 
       if (!raw) {
         state.customShuttleJson = null;

@@ -244,7 +244,7 @@ export function renderWeeklyActivityCard(): HTMLElement {
            ${item.setsDone > 0 ? "✓ تمرین" : "استراحت"}
          </span>`,
         () => {
-          selectedDateIso = item.date;
+          selectedDateIso = item.date === today ? null : item.date;
           requestRender();
         },
         { "aria-label": `نمایش فعالیت ${faDate(item.date)}` },

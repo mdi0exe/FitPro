@@ -377,11 +377,10 @@ async function loadDeveloperPreset(): Promise<void> {
 
   stopWaterReminder();
   const oldAlarms = [...(getState().uniReminders?.activeBusAlarms ?? [])];
-  void cancelBusAlarms(oldAlarms);
   applyDeveloperPreset(getState());
   applyTheme();
   persist(0);
-  void syncUniAlarms();
+  void cancelBusAlarms(oldAlarms).then(() => syncUniAlarms());
   void syncLanguageStudyAlarm();
   void syncWakeLockWithMode();
   toast('پروفایل پیش‌فرض توسعه‌دهنده بارگذاری شد ⚡');

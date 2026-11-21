@@ -133,7 +133,7 @@ export function renderHeader(): HTMLElement {
     const goalText = el(
       "span",
       "shrink-0 text-[9px] text-slate-500",
-      `${fa(Math.round(percent))}٪ تا ${faNum(profile.targetWeight, 0)} کیلو`,
+      `${fa(Math.round(percent))}٪ تا ${faNum(profile.targetWeight, 1)} کیلو`,
     );
     goalRow.append(bar, goalText);
     inner.append(row, goalRow);

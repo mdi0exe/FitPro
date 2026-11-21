@@ -209,9 +209,9 @@ export function ensureDailyDietReset(): boolean {
         if (isOldWeek(log.done, log.doneDate)) {
           log.done = false;
           log.doneDate = null;
-          if (!exercise.bodyweight && exercise.targetWeight > 0 && log.weight < exercise.targetWeight) {
+          if (!exercise.bodyweight && exercise.targetWeight > 0 && (current.deloadActive || log.weight < exercise.targetWeight)) {
             log.weight = exercise.targetWeight;
-            if (prescribedReps > 0) log.reps = prescribedReps;
+            if (!current.deloadActive && prescribedReps > 0) log.reps = prescribedReps;
           } else if (prescribedReps > log.reps) {
             log.reps = prescribedReps;
           }

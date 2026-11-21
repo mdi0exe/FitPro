@@ -968,6 +968,7 @@ impl AppStateData {
 
         let gifs = default_gifs();
         let today = crate::timeutil::today_iso();
+        let deload_active = self.deload_active;
         for day in self.days.iter_mut() {
             let week_start = crate::timeutil::current_week_start_iso();
             let day_id = day.id.clone();
@@ -1035,9 +1036,9 @@ impl AppStateData {
                     {
                         log.done = false;
                         log.done_date = None;
-                        if !exercise.bodyweight && exercise.target_weight > 0.0 && log.weight < exercise.target_weight {
+                        if !exercise.bodyweight && exercise.target_weight > 0.0 && (deload_active || log.weight < exercise.target_weight) {
                             log.weight = exercise.target_weight;
-                            if prescribed_reps > 0 {
+                            if !deload_active && prescribed_reps > 0 {
                                 log.reps = prescribed_reps;
                             }
                         } else if prescribed_reps > log.reps {

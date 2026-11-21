@@ -223,14 +223,13 @@ export function renderBackupRestoreCard(): HTMLElement {
           return;
         }
         const oldAlarms = [...(getState().uniReminders?.activeBusAlarms ?? [])];
-        void cancelBusAlarms(oldAlarms);
         clearDeloadSnapshot();
         const restored = normalizeState(parsed as AppStateData);
         setState(restored);
         persist(0);
         syncWaterMirrorFromState();
         restoreWaterReminderOnBoot();
-        void syncUniAlarms();
+        void cancelBusAlarms(oldAlarms).then(() => syncUniAlarms());
         void syncLanguageStudyAlarm();
         void syncWakeLockWithMode();
         toast("پشتیبان با موفقیت بازیابی شد ✅");

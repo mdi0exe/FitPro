@@ -34,13 +34,13 @@ export function exerciseHistoryFor(exerciseId: string): ExerciseHistoryEntry[] {
  * half-session is distinguishable from a full one.
  */
 export function recordExerciseHistory(exercise: Exercise): void {
-  const done = exercise.logs.filter((log) => log.done);
+  const today = isoToday();
+  const done = exercise.logs.filter((log) => log.done && (!log.doneDate || log.doneDate === today));
   if (done.length === 0) return;
 
   const score = (log: { weight: number; reps: number }) =>
     log.weight > 0 ? log.weight * log.reps : log.reps;
   const top = done.reduce((best, log) => (score(log) > score(best) ? log : best), done[0]);
-  const today = isoToday();
   const state = getState();
   state.exerciseHistory = state.exerciseHistory ?? {};
   const history = state.exerciseHistory[exercise.id] ?? [];

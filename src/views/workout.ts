@@ -521,9 +521,9 @@ async function restartDay(day: WorkoutDay): Promise<void> {
       log.done = false;
       log.doneDate = null;
       // If Double Progression raised the prescription, bring the set up to the new target.
-      if (!exercise.bodyweight && exercise.targetWeight > 0 && log.weight < exercise.targetWeight) {
+      if (!exercise.bodyweight && exercise.targetWeight > 0 && (getState().deloadActive || log.weight < exercise.targetWeight)) {
         log.weight = exercise.targetWeight;
-        if (prescribedReps > 0) log.reps = prescribedReps;
+        if (!getState().deloadActive && prescribedReps > 0) log.reps = prescribedReps;
       } else if (prescribedReps > log.reps) {
         log.reps = prescribedReps;
       }
@@ -870,7 +870,8 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
         startRest();
       }
     } else {
-      if (exercise.logs.some((entry) => entry.done)) {
+      const today = isoToday();
+      if (exercise.logs.some((entry) => entry.done && (!entry.doneDate || entry.doneDate === today))) {
         recordExerciseHistory(exercise);
       } else {
         clearTodayExerciseHistory(exercise.id);

@@ -22,7 +22,9 @@ import { applyDeveloperPreset, applyProgram } from "../lib/appSettings";
 import { syncWakeLockWithMode } from "../lib/workoutTools";
 import { openModal, toast, type ModalHandle } from "./ui";
 import { idealWeightCalculatorCard, type BuildType } from "./idealWeight";
-import { softTap } from "../lib/timer";
+import { softTap, stopWaterReminder } from "../lib/timer";
+import { cancelBusAlarms, syncUniAlarms } from "../views/uni";
+import { syncLanguageStudyAlarm } from "../views/uniLanguage";
 import type { AppMode } from "../types";
 
 const POPULAR_UNIS = [
@@ -81,14 +83,18 @@ export function openOnboardingModal(): void {
        </div>
        <span class="chip chip-amber shrink-0">۱ لمس</span>`,
       () => {
+        stopWaterReminder();
+        const oldAlarms = [...(state.uniReminders?.activeBusAlarms ?? [])];
         applyDeveloperPreset(state);
         softTap();
         applyTheme();
         setActiveTab(homeTab(state.appMode));
         persist(0);
+        void cancelBusAlarms(oldAlarms).then(() => syncUniAlarms());
+        void syncLanguageStudyAlarm();
         void syncWakeLockWithMode();
         handle.close();
-        toast("پروفایل پیشفرض توسعهدهنده با موفقیت بارگذاری شد ⚡");
+        toast("پروفایل پیش‌فرض توسعه‌دهنده با موفقیت بارگذاری شد ⚡");
         requestRender();
       },
       { "aria-label": "پروفایل پیشفرض توسعه دهنده" },

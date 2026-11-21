@@ -1,6 +1,12 @@
 /** Application bootstrap: loads state, builds the shell and wires rendering. */
 import "./styles.css";
 
+const fontLink = document.createElement("link");
+fontLink.rel = "stylesheet";
+fontLink.href =
+  "https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap";
+document.head.append(fontLink);
+
 import { loadState } from "./lib/api";
 import { isoToday } from "./lib/fa";
 import { clear, el, escapeHtml } from "./lib/dom";
