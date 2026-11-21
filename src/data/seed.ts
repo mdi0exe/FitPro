@@ -421,6 +421,7 @@ export function createSeedState(): AppStateData {
     activityHistory: [],
     exerciseHistory: {},
     deloadActive: false,
+    deloadSnapshot: {},
     readiness: "normal",
     personalRecords: {},
     progressPhotos: [],

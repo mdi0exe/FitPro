@@ -78,6 +78,21 @@ function applyChoice(
     for (const log of exercise.logs) {
       if (!log.done) log.reps = floorReps;
     }
+    const state = getState();
+    // اگر کاربر در هفته ریکاوری پیشرفت کرد، اسنپ‌شات هم +۲٫۵ شود تا بعد از ریکاوری پاک نشود
+    if (state.deloadActive && state.deloadSnapshot) {
+      for (const key of Object.keys(state.deloadSnapshot)) {
+        if (key === exercise.id || key.endsWith(`:${exercise.id}`)) {
+          state.deloadSnapshot[key] = roundStep(state.deloadSnapshot[key] + WEIGHT_STEP);
+        }
+      }
+      try {
+        window.localStorage.setItem(
+          "persian-hypertrophy::deload-snapshot",
+          JSON.stringify(state.deloadSnapshot),
+        );
+      } catch { /* ignore */ }
+    }
     logMilestone(
       `${exercise.name}: وزنه به ${faNum(exercise.targetWeight, 1)} کیلوگرم رفت (بازه ${faReps(range)}، شروع از ${fa(floorReps)}).`,
     );

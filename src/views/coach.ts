@@ -10,6 +10,7 @@ import { cancelBusAlarms, syncUniAlarms } from "./uni";
 import { syncLanguageStudyAlarm } from "./uniLanguage";
 import { applyTheme, getState, persist, requestRender, setState } from "../lib/store";
 import { applyDeveloperPreset } from "../lib/appSettings";
+import { clearProgressionAsked } from "./workout";
 import type { AppStateData } from "../types";
 import { confirmDialog, sectionTitle, toast } from "../components/ui";
 import { renderBackupRestoreCard } from "../components/progressPhotos";
@@ -171,20 +172,20 @@ function profileEditor(state: AppStateData): HTMLElement {
   nameInput.value = state.profile.name;
   nameWrap.append(nameInput);
 
-  const numberField = (label: string, value: number) => {
+  const numberField = (label: string, value: number, decimals = true) => {
     const box = el("div", "space-y-1");
     box.append(el("label", "label", label));
     const input = el("input", "field field-sm");
-    input.value = faNum(value, 1);
+    input.value = faNum(value, decimals ? 1 : 0);
     // Text input + `inputMode="decimal"`: the keyboard is still numeric, but the
     // value stays readable and every keystroke is echoed in Persian digits.
-    makePersianNumericInput(input);
+    makePersianNumericInput(input, { decimals });
     box.append(input);
     return { box, input };
   };
 
-  const age = numberField("سن", state.profile.age);
-  const height = numberField("قد (سانتی‌متر)", state.profile.heightCm);
+  const age = numberField("سن", state.profile.age, false);
+  const height = numberField("قد (سانتی‌متر)", state.profile.heightCm, false);
   const start = numberField("وزن شروع (کیلو)", state.profile.startWeight);
   const target = numberField("وزن هدف (کیلو)", state.profile.targetWeight);
 
@@ -375,6 +376,7 @@ async function loadDeveloperPreset(): Promise<void> {
   });
   if (!confirmed) return;
 
+  clearProgressionAsked();
   stopWaterReminder();
   const oldAlarms = [...(getState().uniReminders?.activeBusAlarms ?? [])];
   applyDeveloperPreset(getState());
@@ -397,6 +399,7 @@ async function resetPlan(): Promise<void> {
   });
   if (!confirmed) return;
 
+  clearProgressionAsked();
   try {
     const next = await resetToDefaults();
     try {

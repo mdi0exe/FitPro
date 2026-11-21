@@ -9,6 +9,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant, SystemTime};
 
 use tauri::{AppHandle, Manager};
 
@@ -46,46 +47,95 @@ pub fn with_state_lock<T>(f: impl FnOnce() -> T) -> T {
     f()
 }
 
+/// قفل فایل مشترک با WaterBroadcastReceiver.kt روی gym_state.lock
+fn acquire_cross_process_lock(state_file: &PathBuf) -> Option<PathBuf> {
+    let lock_path = state_file.with_file_name("gym_state.lock");
+    let deadline = Instant::now() + Duration::from_millis(1500);
+    while Instant::now() < deadline {
+        if let Ok(meta) = fs::metadata(&lock_path) {
+            let stale = meta
+                .modified()
+                .ok()
+                .and_then(|m| SystemTime::now().duration_since(m).ok())
+                .map(|age| age > Duration::from_secs(5))
+                .unwrap_or(false);
+            if stale {
+                let _ = fs::remove_file(&lock_path);
+            }
+        }
+        if fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock_path)
+            .is_ok()
+        {
+            return Some(lock_path);
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    None
+}
+
 /// Loads the state from disk, seeding a fresh programme on first launch.
 pub fn load(app: &AppHandle) -> Result<AppStateData, String> {
     let path = state_path(app)?;
-
-    if !path.exists() {
-        let state = seed();
-        save(app, &state)?;
-        return Ok(state);
-    }
-
-    let raw = fs::read_to_string(&path)
-        .map_err(|err| format!("خواندن فایل برنامه ناموفق بود: {err}"))?;
-
-    match serde_json::from_str::<AppStateData>(&raw) {
-        Ok(mut state) => {
-            state.normalize();
-            Ok(state)
+    let _lock = acquire_cross_process_lock(&path);
+    let result = (|| {
+        if !path.exists() {
+            let state = seed();
+            save_unlocked(&path, &state)?;
+            return Ok(state);
         }
-        Err(err) => {
-            // Never lose the user's file: keep a timestamped copy, then reseed.
-            let backup = path.with_extension(format!("corrupt-{}.json", timeutil::today_iso()));
-            let _ = fs::rename(&path, &backup);
 
-            let mut state = seed();
-            state.push_milestone(
-                &timeutil::today_iso(),
-                "فایل ذخیره‌سازی قابل خواندن نبود؛ برنامه با داده‌های پیش‌فرض بازسازی شد.",
-                "system",
-            );
-            state.normalize();
-            let _ = save(app, &state);
-            eprintln!("gym_state.json was corrupt and has been reseeded: {err}");
-            Ok(state)
+        let raw = fs::read_to_string(&path)
+            .map_err(|err| format!("خواندن فایل برنامه ناموفق بود: {err}"))?;
+
+        match serde_json::from_str::<AppStateData>(&raw) {
+            Ok(mut state) => {
+                let before = serde_json::to_string(&state).ok();
+                state.normalize();
+                // اگر ریست هفتگی/روزانه تغییری داد، روی دیسک هم ثبت شود
+                if before.as_deref() != serde_json::to_string(&state).ok().as_deref() {
+                    let _ = save_unlocked(&path, &state);
+                }
+                Ok(state)
+            }
+            Err(err) => {
+                // Never lose the user's file: keep a timestamped copy, then reseed.
+                let backup = path.with_extension(format!("corrupt-{}.json", timeutil::today_iso()));
+                let _ = fs::rename(&path, &backup);
+
+                let mut state = seed();
+                state.push_milestone(
+                    &timeutil::today_iso(),
+                    "فایل ذخیره‌سازی قابل خواندن نبود؛ برنامه با داده‌های پیش‌فرض بازسازی شد.",
+                    "system",
+                );
+                state.normalize();
+                let _ = save_unlocked(&path, &state);
+                eprintln!("gym_state.json was corrupt and has been reseeded: {err}");
+                Ok(state)
+            }
         }
+    })();
+    if let Some(lock_path) = _lock {
+        let _ = fs::remove_file(lock_path);
     }
+    result
 }
 
 /// Persists the state atomically (temp file + rename).
 pub fn save(app: &AppHandle, state: &AppStateData) -> Result<(), String> {
     let path = state_path(app)?;
+    let _lock = acquire_cross_process_lock(&path);
+    let res = save_unlocked(&path, state);
+    if let Some(lock_path) = _lock {
+        let _ = fs::remove_file(lock_path);
+    }
+    res
+}
+
+fn save_unlocked(path: &PathBuf, state: &AppStateData) -> Result<(), String> {
     static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
     let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
     let tmp = path.with_extension(format!("rs.{}.{seq}.tmp", std::process::id()));
@@ -101,10 +151,10 @@ pub fn save(app: &AppHandle, state: &AppStateData) -> Result<(), String> {
             .map_err(|err| format!("همگام‌سازی فایل موقت ناموفق بود: {err}"))?;
     }
 
-    if fs::rename(&tmp, &path).is_err() {
+    if fs::rename(&tmp, path).is_err() {
         // Some Windows configurations refuse to replace an existing file.
-        let _ = fs::remove_file(&path);
-        fs::rename(&tmp, &path).map_err(|err| format!("جایگزینی فایل برنامه ناموفق بود: {err}"))?;
+        let _ = fs::remove_file(path);
+        fs::rename(&tmp, path).map_err(|err| format!("جایگزینی فایل برنامه ناموفق بود: {err}"))?;
     }
 
     Ok(())
@@ -535,6 +585,7 @@ pub fn seed() -> AppStateData {
         activity_history: Vec::new(),
         exercise_history: std::collections::HashMap::new(),
         deload_active: false,
+        deload_snapshot: std::collections::HashMap::new(),
         readiness: "normal".to_string(),
         personal_records: std::collections::HashMap::new(),
         progress_photos: Vec::new(),

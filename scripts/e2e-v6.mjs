@@ -161,7 +161,7 @@ function quietAdjusted(ms) {
   const photos = readFile("src/components/progressPhotos.ts");
   const tools = readFile("src/lib/workoutTools.ts");
 
-  check("GIF fallback uses .gif", workout.includes("`/gifs/${exercise.id}.gif`"));
+  check("GIF fallback uses .gif", workout.includes("`/gifs/${baseId}.gif`"));
   check("GIF fallback no longer uses .svg", !workout.includes("`${exercise.id}.svg`"));
   check("native save uses MediaStore.Downloads", native.includes("MediaStore.Downloads.EXTERNAL_CONTENT_URI"));
   check("native share uses ACTION_SEND", native.includes("Intent.ACTION_SEND"));

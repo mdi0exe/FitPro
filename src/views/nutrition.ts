@@ -19,7 +19,7 @@ import {
   startNewWaterReminderCycle,
   stopWaterReminder,
 } from "../lib/timer";
-import { openModal, progressBar, sectionTitle, toast, type ModalHandle } from "../components/ui";
+import { confirmDialog, openModal, progressBar, sectionTitle, toast, type ModalHandle } from "../components/ui";
 import { aiPlanBadge, openAiDietConfigurator } from "../components/aiDietConfigurator";
 
 const RING_RADIUS = 26;
@@ -274,7 +274,18 @@ function checklist(): HTMLElement {
 
     row.addEventListener("click", () => {
       if (item.id === "diet-4") {
-        setWaterGlasses(item.done ? 0 : WATER_GOAL);
+        if (item.done) {
+          void confirmDialog({
+            title: "ریست شمارنده آب",
+            message: "شمارنده آب امروز به صفر برگردد؟",
+            confirmText: "صفر کن",
+            danger: true,
+          }).then((ok) => {
+            if (ok) setWaterGlasses(0);
+          });
+        } else {
+          setWaterGlasses(WATER_GOAL);
+        }
         return;
       }
       item.done = !item.done;

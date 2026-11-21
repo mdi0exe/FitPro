@@ -314,6 +314,7 @@ export function openOnboardingModal(): void {
       applyTheme();
       persist(0);
       void syncWakeLockWithMode();
+      void syncUniAlarms();
       handle.close();
       toast("تنظیمات شخصی شما ذخیره شد 🎉");
       requestRender();

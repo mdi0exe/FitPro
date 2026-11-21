@@ -291,8 +291,7 @@ jobs:
       - name: Build debug APK
         env:
           CI: "true"
-          # Default is all: builds all 4 CPU architectures into a universal APK
-          # (arm64-v8a, armeabi-v7a, x86_64, x86).
+          # Default is aarch64: builds arm64-v8a only (use workflow_dispatch for all/armv7).
           TARGET_INPUT: ${{ inputs.target || 'aarch64' }}
           # Optimize Rust binary size in CI: strip all symbols, optimize for size (s),
           # enable thin LTO and single codegen unit. Shrinks each .so from ~40MB to ~5-6MB.

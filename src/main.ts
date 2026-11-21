@@ -8,7 +8,7 @@ fontLink.href =
 document.head.append(fontLink);
 
 import { loadState } from "./lib/api";
-import { isoToday } from "./lib/fa";
+import { currentPersianWeekIsos, isoToday } from "./lib/fa";
 import { clear, el, escapeHtml } from "./lib/dom";
 import { installNavigation } from "./lib/navigation";
 import {
@@ -34,7 +34,6 @@ import {
   requestRender,
   setActiveTab,
   setRenderHook,
-  setState,
   visibleTabs,
   waitForInflightFlush,
 } from "./lib/store";
@@ -51,7 +50,7 @@ import { renderProgress } from "./views/progress";
 import { renderNutrition } from "./views/nutrition";
 import { renderCoach } from "./views/coach";
 import { openOnboardingModal } from "./components/onboarding";
-import type { TabId } from "./types";
+import type { AppStateData, TabId } from "./types";
 
 const app = document.getElementById("app") as HTMLElement;
 
@@ -211,6 +210,14 @@ async function boot(): Promise<void> {
     // sees a dark flash on cold start.
     applyTheme();
 
+    if (
+      state.courses.some((c) => c.weekType === "odd" || c.weekType === "even") &&
+      !state.semesterWeekAnchorDate
+    ) {
+      state.semesterWeekAnchorDate = currentPersianWeekIsos(isoToday())[0];
+      persist(0);
+    }
+
     // A new calendar day starts with an empty nutrition checklist.
     if (ensureDailyDietReset()) persist(0);
 
@@ -277,6 +284,17 @@ void boot();
 // Keep the UI in sync if the app is resumed on a new day.
 let syncingAfterBackground = false;
 
+function backgroundSyncFingerprint(s: AppStateData): string {
+  const today = s.activityHistory?.[0];
+  return [
+    s.diet.lastResetDate,
+    s.diet.waterGlasses,
+    s.diet.waterReminderNextAt,
+    s.diet.items.map((i) => (i.done ? "1" : "0")).join(""),
+    today ? `${today.date}:${today.waterGlasses}:${today.dietDone}` : "",
+  ].join("|");
+}
+
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     pauseWaterLoopForBackground();
@@ -308,12 +326,20 @@ async function syncAfterBackground(): Promise<void> {
       if (hasPendingSave()) await flushNow();
       await waitForInflightFlush();
       const genBefore = getStateGeneration();
-      const beforeJson = JSON.stringify(getState());
+      const live = getState();
+      const beforeFp = backgroundSyncFingerprint(live);
       const diskState = await loadState();
       // If a foreground picker (photo / backup restore) mutated state while
       // loadState was in flight, never overwrite it with the older snapshot.
-      if (getStateGeneration() === genBefore && JSON.stringify(diskState) !== beforeJson) {
-        setState(diskState);
+      if (getStateGeneration() === genBefore && backgroundSyncFingerprint(diskState) !== beforeFp) {
+        live.diet.lastResetDate = diskState.diet.lastResetDate;
+        live.diet.waterGlasses = diskState.diet.waterGlasses;
+        live.diet.waterReminderNextAt = diskState.diet.waterReminderNextAt;
+        live.diet.items.forEach((item, idx) => {
+          const fromDisk = diskState.diet.items[idx];
+          if (fromDisk && fromDisk.id === item.id) item.done = fromDisk.done;
+        });
+        live.activityHistory = diskState.activityHistory;
         needsRender = true;
       }
       syncWaterMirrorFromState();

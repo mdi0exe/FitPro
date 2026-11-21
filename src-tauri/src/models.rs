@@ -657,6 +657,8 @@ pub struct AppStateData {
     /// Deload week is on (weights were lowered for recovery).
     #[serde(default)]
     pub deload_active: bool,
+    #[serde(default)]
+    pub deload_snapshot: std::collections::HashMap<String, f32>,
     /// "high" | "normal" | "low"
     #[serde(default)]
     pub readiness: String,
@@ -825,6 +827,9 @@ impl AppStateData {
             // An end before the start would render an empty bar: give it the
             // standard 2-hour slot instead of swapping the two values.
             if course.end_time <= course.start_time {
+                if course.start_time.as_str() >= "23:59" {
+                    course.start_time = "23:00".to_string();
+                }
                 course.end_time = plus_minutes(&course.start_time, 120);
             }
             if !matches!(course.week_type.as_str(), "all" | "odd" | "even") {
@@ -969,17 +974,19 @@ impl AppStateData {
         let gifs = default_gifs();
         let today = crate::timeutil::today_iso();
         let deload_active = self.deload_active;
+        let week_start = crate::timeutil::current_week_start_iso();
+        let diet_from_earlier_week = !self.diet.last_reset_date.is_empty()
+            && self.diet.last_reset_date.as_str() < week_start.as_str();
+        let is_old_week = |done: bool, done_date: Option<&str>| -> bool {
+            done && match done_date {
+                Some(d) => d < week_start.as_str(),
+                None => diet_from_earlier_week,
+            }
+        };
         for day in self.days.iter_mut() {
-            let week_start = crate::timeutil::current_week_start_iso();
             let day_id = day.id.clone();
             for warmup in day.warmups.iter_mut() {
-                if warmup.done
-                    && warmup
-                        .done_date
-                        .as_deref()
-                        .map(|d| d < week_start.as_str())
-                        .unwrap_or(false)
-                {
+                if is_old_week(warmup.done, warmup.done_date.as_deref()) {
                     warmup.done = false;
                     warmup.done_date = None;
                 }
@@ -1027,13 +1034,7 @@ impl AppStateData {
 
                 let prescribed_reps = parse_first_number(&exercise.reps).unwrap_or(0);
                 for log in exercise.logs.iter_mut() {
-                    if log.done
-                        && log
-                            .done_date
-                            .as_deref()
-                            .map(|d| d < week_start.as_str())
-                            .unwrap_or(false)
-                    {
+                    if is_old_week(log.done, log.done_date.as_deref()) {
                         log.done = false;
                         log.done_date = None;
                         if !exercise.bodyweight && exercise.target_weight > 0.0 && (deload_active || log.weight < exercise.target_weight) {
@@ -1082,6 +1083,7 @@ pub fn apply_overload(state: &mut AppStateData) -> usize {
     // A new overload cycle ends recovery week; leaving the flag on would make
     // the next "end recovery" tap multiply the fresh weights by 1.25.
     state.deload_active = false;
+    state.deload_snapshot.clear();
 
     for day in state.days.iter_mut() {
         // A new cycle starts from a clean slate: warm-up checkboxes included.
@@ -1310,6 +1312,7 @@ mod tests {
             activity_history: Vec::new(),
             exercise_history: std::collections::HashMap::new(),
             deload_active: false,
+            deload_snapshot: std::collections::HashMap::new(),
             readiness: String::new(),
             personal_records: std::collections::HashMap::new(),
             progress_photos: Vec::new(),
@@ -1738,6 +1741,7 @@ mod tests {
         let mut value = serde_json::to_value(crate::storage::seed()).unwrap();
         for key in [
             "deloadActive",
+            "deloadSnapshot",
             "readiness",
             "personalRecords",
             "progressPhotos",
@@ -1748,6 +1752,7 @@ mod tests {
         let mut state: AppStateData = serde_json::from_value(value).unwrap();
 
         assert!(!state.deload_active);
+        assert!(state.deload_snapshot.is_empty());
         assert!(state.readiness.is_empty());
         assert!(state.personal_records.is_empty());
         assert!(state.progress_photos.is_empty());
@@ -1756,6 +1761,50 @@ mod tests {
         state.normalize();
         assert_eq!(state.readiness, "normal");
         assert_eq!(state.uni_reminders.thursday_food_time, "12:00");
+    }
+
+    #[test]
+    fn course_session_start_time_23_59_fixed() {
+        let mut state = crate::storage::seed();
+        state.courses = vec![CourseSession {
+            id: "c-late".into(),
+            name: "Late Class".into(),
+            professor: "Dr. Late".into(),
+            day_of_week: 0,
+            start_time: "23:59".into(),
+            end_time: "23:59".into(),
+            week_type: "all".into(),
+        }];
+        state.normalize();
+        assert_eq!(state.courses[0].start_time, "23:00");
+        assert_eq!(state.courses[0].end_time, "23:59");
+    }
+
+    #[test]
+    fn weekly_reset_clears_undated_sets_when_diet_is_old_week() {
+        let mut state = crate::storage::seed();
+        state.diet.last_reset_date = "2020-01-01".into();
+        state.days[0].warmups[0].done = true;
+        state.days[0].warmups[0].done_date = None;
+        state.days[0].exercises[0].logs[0].done = true;
+        state.days[0].exercises[0].logs[0].done_date = None;
+
+        state.normalize();
+
+        assert!(!state.days[0].warmups[0].done);
+        assert!(!state.days[0].exercises[0].logs[0].done);
+    }
+
+    #[test]
+    fn apply_overload_clears_deload_snapshot() {
+        let mut state = crate::storage::seed();
+        state.deload_active = true;
+        state.deload_snapshot.insert("e-1".into(), 80.0);
+
+        let changed = apply_overload(&mut state);
+        assert!(changed > 0);
+        assert!(!state.deload_active);
+        assert!(state.deload_snapshot.is_empty());
     }
 
     #[test]

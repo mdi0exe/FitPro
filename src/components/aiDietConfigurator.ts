@@ -14,7 +14,7 @@
 import { waterRow } from "../data/dietTemplates";
 import { copyText, readClipboardText } from "../lib/clipboard";
 import { btn, el } from "../lib/dom";
-import { faNum, parseFaFloat } from "../lib/fa";
+import { en, faNum, parseFaFloat } from "../lib/fa";
 import { getState, persist, requestRender, syncWaterChecklist } from "../lib/store";
 import type { CoachRule, DietItem, MealRow } from "../types";
 import { openModal, toast } from "./ui";
@@ -30,6 +30,13 @@ const LIMITS = {
 } as const;
 
 const round = (value: number): number => Math.round(value);
+
+function rangeNumber(value: unknown, min: number, max: number): number | null {
+  const raw =
+    typeof value === "number" ? value : parseFaFloat(typeof value === "string" ? value : null, Number.NaN);
+  if (!Number.isFinite(raw) || raw < min || raw > max) return null;
+  return round(raw);
+}
 
 function clampNumber(value: unknown, min: number, max: number): number | null {
   const raw =
@@ -163,8 +170,8 @@ function parsePlan(raw: string): ParsedPlan | null {
     : [];
 
   return {
-    calories: clampNumber(data.calories, LIMITS.calories[0], LIMITS.calories[1]),
-    protein: clampNumber(data.protein, LIMITS.protein[0], LIMITS.protein[1]),
+    calories: rangeNumber(data.calories, LIMITS.calories[0], LIMITS.calories[1]),
+    protein: rangeNumber(data.protein, LIMITS.protein[0], LIMITS.protein[1]),
     trainingWindow: cleanText(data.trainingWindow, 80),
     meals,
     checklist,
@@ -204,7 +211,7 @@ export function applyAiDietJson(raw: string): { ok: boolean; message: string } {
     // keeps its tick instead of disappearing with the old checklist.
     const water: DietItem = state.diet.items.find((item) => item.id === "diet-4") ?? waterRow();
     const isWaterRow = (text: string) =>
-      /(۸\s*لیوان|نوشیدن\s*۸|آب\s*کافی\s*روزانه)/.test(text);
+      /((?:8|[۸]|2\s*لیتر)\s*لیوان?\s*آب|نوشیدن\s*(?:8|[۸]|.*کافی)|آب\s*کافی\s*روزانه)/.test(en(text));
     const custom = state.diet.items.filter((item) => item.id.startsWith("custom-"));
     const aiRows = plan.checklist
       .filter((entry) => !isWaterRow(entry.text))

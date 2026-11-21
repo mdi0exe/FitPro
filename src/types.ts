@@ -216,6 +216,7 @@ export interface AppStateData {
   /** Per-exercise progression log, keyed by exercise id (oldest first). */
   exerciseHistory: Record<string, ExerciseHistoryEntry[]>;
   deloadActive: boolean;
+  deloadSnapshot?: Record<string, number>;
   readiness: Readiness;
   personalRecords: Record<string, PersonalRecord>;
   progressPhotos: ProgressPhoto[];

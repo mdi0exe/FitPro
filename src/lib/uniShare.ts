@@ -260,9 +260,10 @@ export function applyShareJson(raw: string, close: () => void, scope: UniShareSc
         .filter((course) => course && typeof course.name === "string" && course.name.trim())
         .slice(0, 60)
         .map((course) => {
-          const startTime = normalizeCourseTime(course.startTime, "09:00");
+          let startTime = normalizeCourseTime(course.startTime, "09:00");
           let endTime = normalizeCourseTime(course.endTime, "");
           if (!endTime || endTime <= startTime) {
+            if (startTime >= "23:59") startTime = "23:00";
             const [h, m] = startTime.split(":").map((n) => Number.parseInt(n, 10) || 0);
             const total = Math.min(23 * 60 + 59, h * 60 + m + 120);
             endTime = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;

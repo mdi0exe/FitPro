@@ -113,6 +113,7 @@ import { toastWithAction } from "../components/ui";
 import { getState, persist } from "./store";
 import {
   cancelScheduledWaterNotification,
+  hasNativeWaterBridge,
   incrementWaterGlassFromNotification,
   scheduleWaterNotificationAt,
   showWaterNotification,
@@ -494,9 +495,8 @@ function tickWater(): void {
     return;
   }
 
-  if (nextAt <= now) {
-    // The deadline passed while the app was closed or backgrounded. `waterAlert`
-    // stays silent inside the sleep window; the next deadline is pushed to 09:00.
+  const nativeGraceMs = hasNativeWaterBridge() ? 5_000 : 0;
+  if (nextAt <= now - nativeGraceMs) {
     const advancedTo = adjustTimestampForWaterQuietHours(now + totalSec * 1000);
     fireWaterReminder(advancedTo);
     waterTickListener?.(Math.max(0, Math.ceil((advancedTo - now) / 1000)), totalSec);

@@ -1134,6 +1134,10 @@ const DELOAD_SNAPSHOT_KEY = "persian-hypertrophy::deload-snapshot";
 
 function readDeloadSnapshot(): Record<string, number> {
   try {
+    const inState = getState().deloadSnapshot;
+    if (inState && Object.keys(inState).length > 0) return { ...inState };
+  } catch { /* before init */ }
+  try {
     const raw = window.localStorage.getItem(DELOAD_SNAPSHOT_KEY);
     return raw ? (JSON.parse(raw) as Record<string, number>) : {};
   } catch {
@@ -1148,10 +1152,13 @@ export function clearDeloadSnapshot(): void {
 
 function writeDeloadSnapshot(map: Record<string, number> | null): void {
   try {
+    getState().deloadSnapshot = map ? { ...map } : {};
+  } catch { /* before init */ }
+  try {
     if (!map) window.localStorage.removeItem(DELOAD_SNAPSHOT_KEY);
     else window.localStorage.setItem(DELOAD_SNAPSHOT_KEY, JSON.stringify(map));
   } catch {
-    /* storage unavailable — the × 1.25 fallback below still applies */
+    /* storage unavailable */
   }
 }
 

@@ -239,6 +239,7 @@ export function openExerciseEditor(options: {
       return;
     }
 
+    const hadGif = Boolean(initial?.gifUrl && initial.gifUrl !== "none");
     options.onSubmit({
       name,
       sets: Math.min(12, Math.max(1, Math.round(sets))),
@@ -246,7 +247,7 @@ export function openExerciseEditor(options: {
       targetWeight: Math.max(0, targetWeight),
       tip: tipInput.value.trim(),
       query: queryInput.value.trim() || `${name} gif`,
-      gifUrl: gifUrl || (initial?.gifUrl === "none" ? "none" : null),
+      gifUrl: gifUrl || (hadGif || initial?.gifUrl === "none" ? "none" : null),
     });
     handle.close();
   };

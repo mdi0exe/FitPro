@@ -206,6 +206,7 @@ fn reset_to_defaults(app: AppHandle) -> Result<AppStateData, String> {
         // multiply those defaults by 1.25 when the student later toggles it off,
         // so the flag is cleared here (the browser side also drops its snapshot).
         fresh.deload_active = false;
+        fresh.deload_snapshot.clear();
         fresh.readiness = current.readiness;
 
         fresh.push_milestone(&today, "برنامه تمرینی به حالت پیش‌فرض بازگشت.", "system");

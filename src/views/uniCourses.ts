@@ -190,11 +190,6 @@ function coursesForDay(day: number): CourseSession[] {
 export function renderClassScheduleCard(): HTMLElement {
   const state = getState();
   const fortnightly = hasFortnightlyCourses();
-  if (fortnightly && !state.semesterWeekAnchorDate) {
-    state.semesterWeekAnchorDate = currentWeekStartIso();
-    state.semesterWeekType = effectiveSemesterWeekType();
-    persist(0);
-  }
   const weekNumber = semesterWeekNumber();
   // With no * / ** class the flag never matters, but the rows still need a
   // value; "odd" keeps `courseActiveThisWeek` true for every weekly class.
@@ -475,7 +470,20 @@ function openCourseModal(existing?: CourseSession): void {
 
   paintSlots();
   paintShift();
-  timeWrap.append(slotGrid, shiftRow);
+  const durationRow = el("div", "mt-1.5 grid grid-cols-3 gap-1.5");
+  [90, 120, 180].forEach((mins) => {
+    const label = mins === 90 ? "۱٫۵ ساعت" : mins === 120 ? "۲ ساعت" : "۳ ساعت";
+    durationRow.append(
+      btn("btn-ghost py-1 text-[10px]", `طول: ${label}`, () => {
+        const start = toMinutes(startTime);
+        endTime = toHhmm(Math.min(23 * 60 + 59, start + mins));
+        softTap();
+        paintSlots();
+        paintShift();
+      }),
+    );
+  });
+  timeWrap.append(slotGrid, shiftRow, durationRow);
   body.append(timeWrap);
 
   // ------------------------------------------------------------------ week

@@ -95,6 +95,7 @@ export interface PickerOptions {
   onApplyAll?: (value: number) => void;
   applyAllLabel?: string;
   unit?: string;
+  onClose?: () => void;
 }
 
 /** Bottom-sheet picker: big number, ± steps, preset grid, apply-to-all. */
@@ -117,9 +118,19 @@ export function openValuePicker(options: PickerOptions): void {
   }
   body.append(bigWrap);
 
+  const presetButtons: Array<{ value: number; chip: HTMLButtonElement }> = [];
+  const paintPresets = () => {
+    for (const item of presetButtons) {
+      item.chip.className =
+        item.value === value
+          ? "rounded-xl border border-emerald-400/70 bg-emerald-400/15 px-2 py-2.5 text-sm font-bold text-emerald-300 transition active:scale-95"
+          : "rounded-xl border border-slate-800 bg-slate-900/70 px-2 py-2.5 text-sm font-bold text-slate-200 transition active:scale-95";
+    }
+  };
   const apply = (next: number) => {
     value = clamp(Number(next.toFixed(2)), min, max);
     bigValue.textContent = options.format(value);
+    paintPresets();
     options.onChange(value);
   };
 
@@ -140,22 +151,13 @@ export function openValuePicker(options: PickerOptions): void {
   const grid = el("div", "grid grid-cols-4 gap-2");
   options.presets.forEach((preset) => {
     const chip = btn(
-      `rounded-xl border px-2 py-2.5 text-sm font-bold transition active:scale-95 ${
-        preset === value
-          ? "border-emerald-400/70 bg-emerald-400/15 text-emerald-300"
-          : "border-slate-800 bg-slate-900/70 text-slate-200"
-      }`,
+      preset === value
+        ? "rounded-xl border border-emerald-400/70 bg-emerald-400/15 px-2 py-2.5 text-sm font-bold text-emerald-300 transition active:scale-95"
+        : "rounded-xl border border-slate-800 bg-slate-900/70 px-2 py-2.5 text-sm font-bold text-slate-200 transition active:scale-95",
       options.format(preset),
-      () => {
-        apply(preset);
-        grid.querySelectorAll("button").forEach((node) => {
-          node.className =
-            "rounded-xl border border-slate-800 bg-slate-900/70 px-2 py-2.5 text-sm font-bold text-slate-200 transition active:scale-95";
-        });
-        chip.className =
-          "rounded-xl border border-emerald-400/70 bg-emerald-400/15 px-2 py-2.5 text-sm font-bold text-emerald-300 transition active:scale-95";
-      },
+      () => apply(preset),
     );
+    presetButtons.push({ value: preset, chip });
     grid.append(chip);
   });
   body.append(grid);
@@ -179,5 +181,6 @@ export function openValuePicker(options: PickerOptions): void {
     title: options.title,
     subtitle: options.subtitle,
     body,
+    onClose: options.onClose,
   });
 }

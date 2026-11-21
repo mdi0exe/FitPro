@@ -8,7 +8,7 @@
 import type { AppStateData, Exercise, Milestone, SetLog } from "../types";
 import { createSeedState, localIso } from "../data/seed";
 import defaultGifs from "../data/default-gifs.json";
-import { en, fa, faNum, firstNumber, localDateFromIso } from "./fa";
+import { currentPersianWeekIsos, en, fa, faNum, firstNumber, localDateFromIso } from "./fa";
 import { uid } from "./dom";
 
 const STORAGE_KEY = "persian-hypertrophy::state::v1";
@@ -152,6 +152,10 @@ export function normalizeState(input: AppStateData): AppStateData {
   // Gym tools + uni tab fields (added after the first release).
   const seed = createSeedState();
   state.deloadActive = Boolean(state.deloadActive);
+  state.deloadSnapshot =
+    state.deloadSnapshot && typeof state.deloadSnapshot === "object" && !Array.isArray(state.deloadSnapshot)
+      ? state.deloadSnapshot
+      : {};
   if (!["high", "normal", "low"].includes(state.readiness)) state.readiness = "normal";
   state.personalRecords =
     state.personalRecords && typeof state.personalRecords === "object"
@@ -187,25 +191,27 @@ export function normalizeState(input: AppStateData): AppStateData {
   } else {
     state.courses = state.courses
       .filter((course) => course && typeof course.name === "string" && course.name.trim())
-      .map((course) => ({
-        id: course.id || uid("course"),
-        name: course.name.trim(),
-        professor: (course.professor ?? "").trim(),
-        dayOfWeek: Number.isInteger(course.dayOfWeek) && course.dayOfWeek >= 0 && course.dayOfWeek <= 6
-          ? course.dayOfWeek
-          : 0,
-        startTime: hhmm(course.startTime, "09:00"),
-        endTime: (() => {
-          const start = hhmm(course.startTime, "09:00");
-          const end = hhmm(course.endTime, "11:00");
-          if (end > start) return end;
-          // A class cannot end before it starts (usually a midnight wrap).
-          const [h, m] = start.split(":").map((n) => Number.parseInt(n, 10) || 0);
+      .map((course) => {
+        let startTime = hhmm(course.startTime, "09:00");
+        let endTime = hhmm(course.endTime, "11:00");
+        if (endTime <= startTime) {
+          if (startTime >= "23:59") startTime = "23:00";
+          const [h, m] = startTime.split(":").map((n) => Number.parseInt(n, 10) || 0);
           const total = Math.min(23 * 60 + 59, h * 60 + m + 120);
-          return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-        })(),
-        weekType: (["all", "odd", "even"] as const).includes(course.weekType) ? course.weekType : "all",
-      }))
+          endTime = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+        }
+        return {
+          id: course.id || uid("course"),
+          name: course.name.trim(),
+          professor: (course.professor ?? "").trim(),
+          dayOfWeek: Number.isInteger(course.dayOfWeek) && course.dayOfWeek >= 0 && course.dayOfWeek <= 6
+            ? course.dayOfWeek
+            : 0,
+          startTime,
+          endTime,
+          weekType: (["all", "odd", "even"] as const).includes(course.weekType) ? course.weekType : "all",
+        };
+      })
       .slice(0, 60);
   }
   if (state.semesterWeekType !== "odd" && state.semesterWeekType !== "even") {
@@ -316,8 +322,19 @@ export function normalizeState(input: AppStateData): AppStateData {
 
   if (state.days.length > 0) {
     state.activeDay = Math.min(Math.max(0, state.activeDay ?? 0), state.days.length - 1);
+    const weekStart = currentPersianWeekIsos(localIso())[0];
+    const dietFromEarlierWeek = Boolean(
+      state.diet.lastResetDate && state.diet.lastResetDate < weekStart,
+    );
+    const isOldWeek = (done: boolean, doneDate?: string | null) =>
+      done && ((Boolean(doneDate) && doneDate! < weekStart) || (!doneDate && dietFromEarlierWeek));
+
     for (const day of state.days) {
       for (const warmup of day.warmups ?? []) {
+        if (isOldWeek(warmup.done, warmup.doneDate)) {
+          warmup.done = false;
+          warmup.doneDate = null;
+        }
         // Same rule as `gif_needs_replacement` in models.rs: a blank or
         // Cloudflare-blocked hotlink falls back to the bundled offline demo.
         if (gifNeedsReplacement(warmup.gifUrl)) {
@@ -363,6 +380,24 @@ export function normalizeState(input: AppStateData): AppStateData {
           exercise.originalGifUrl = `/gifs/${baseId}.gif`;
         }
         exercise.logs = syncLogs(exercise);
+
+        const prescribedReps = firstNumber(exercise.reps);
+        for (const log of exercise.logs) {
+          if (isOldWeek(log.done, log.doneDate)) {
+            log.done = false;
+            log.doneDate = null;
+            if (
+              !exercise.bodyweight &&
+              exercise.targetWeight > 0 &&
+              (state.deloadActive || log.weight < exercise.targetWeight)
+            ) {
+              log.weight = exercise.targetWeight;
+              if (!state.deloadActive && prescribedReps > 0) log.reps = prescribedReps;
+            } else if (prescribedReps > log.reps) {
+              log.reps = prescribedReps;
+            }
+          }
+        }
       }
     }
   }
@@ -434,8 +469,10 @@ export function localLoad(): AppStateData {
       (exercise) => exercise.swappedDate && exercise.swappedDate !== localIso(),
     ),
   );
+  const before = JSON.stringify(raw);
   const normalized = normalizeState(raw);
   if (hadExpiredSwap) writeRaw(normalized);
+  else if (JSON.stringify(normalized) !== before) writeRaw(normalized);
   return clone(normalized);
 }
 
@@ -483,6 +520,7 @@ export function localApplyOverload(): AppStateData {
   // A new overload cycle ends recovery week; otherwise the next "end recovery"
   // tap multiplies the fresh weights by 1.25.
   state.deloadActive = false;
+  state.deloadSnapshot = {};
 
   for (const day of state.days) {
     for (const warmup of day.warmups) {
@@ -590,6 +628,7 @@ export function localReset(): AppStateData {
   // `fresh` carries 100% default weights: leaving recovery on would raise
   // them by 25% when the student toggles it off later.
   fresh.deloadActive = false;
+  fresh.deloadSnapshot = {};
   try {
     window.localStorage.removeItem("persian-hypertrophy::deload-snapshot");
   } catch {

@@ -21,7 +21,7 @@ import { toast } from "../components/ui";
 import { isTauri } from "./api";
 import { fa, isoToday } from "./fa";
 import { adjustTimestampForWaterQuietHours } from "./quietHours";
-import { getState, persist, requestRender, syncTodayActivity, syncWaterChecklist } from "./store";
+import { ensureDailyDietReset, getState, persist, requestRender, syncTodayActivity, syncWaterChecklist } from "./store";
 
 /** Android 8+ needs a channel; High importance gives a heads-up banner. */
 const CHANNEL_ID = "fitpro-alerts";
@@ -152,7 +152,8 @@ declare global {
       shareBackupFile?: (fileName: string, contents: string) => boolean;
     };
     /** Called by `WaterBroadcastReceiver` after it saves a glass natively. */
-    __onSilentWaterIncrement?: (newCount: number) => void;
+    __onSilentWaterIncrement?: (newCount: number, nextAtMs?: number) => void;
+    __onNativeWaterReminderFired?: (nextAtMs: number) => void;
   }
 }
 
@@ -237,10 +238,28 @@ export async function initNotificationActions(): Promise<void> {
   if (!isTauri() || actionsInitialized) return;
   actionsInitialized = true;
 
+  window.__onNativeWaterReminderFired = (nextAtMs: number) => {
+    try {
+      const state = getState();
+      if (!state.diet.waterReminderEnabled) return;
+      const value = Number.isFinite(nextAtMs) && nextAtMs > 0 ? Math.trunc(nextAtMs) : 0;
+      if (value <= 0) return;
+      state.diet.waterReminderNextAt = value;
+      try {
+        window.localStorage.setItem(WATER_MIRROR_KEY, String(value));
+      } catch {
+        /* storage unavailable */
+      }
+      if (document.visibilityState === "visible") requestRender();
+    } catch (error) {
+      console.warn("native water reminder sync failed", error);
+    }
+  };
+
   // The native receiver has already written the glass to gym_state.json; this
   // only brings the in-memory copy (and the visible count) back in sync without
   // the app being pulled to the foreground.
-  window.__onSilentWaterIncrement = (newCount: number) => {
+  window.__onSilentWaterIncrement = (newCount: number, nextAtMs?: number) => {
     try {
       const state = getState();
       const glasses = Math.max(0, Math.min(20, Math.round(Number(newCount) || 0)));
@@ -260,7 +279,10 @@ export async function initNotificationActions(): Promise<void> {
       // countdown does not keep showing the old, expired deadline.
       if (state.diet.waterReminderEnabled) {
         const mins = Math.min(240, Math.max(15, Math.round(state.diet.waterReminderMinutes || 60)));
-        const nextAt = adjustTimestampForWaterQuietHours(Date.now() + mins * 60_000);
+        const nextAt =
+          typeof nextAtMs === "number" && Number.isFinite(nextAtMs) && nextAtMs > Date.now()
+            ? nextAtMs
+            : adjustTimestampForWaterQuietHours(Date.now() + mins * 60_000);
         state.diet.waterReminderNextAt = Math.trunc(nextAt);
         try {
           window.localStorage.setItem(WATER_MIRROR_KEY, String(state.diet.waterReminderNextAt));
@@ -302,6 +324,7 @@ export async function initNotificationActions(): Promise<void> {
  * Returns the new count so callers can show a message.
  */
 export function addWaterGlass(count = 1): number {
+  ensureDailyDietReset();
   const state = getState();
   const next = Math.min(20, Math.max(0, (state.diet.waterGlasses ?? 0) + count));
   state.diet.waterGlasses = next;

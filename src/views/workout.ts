@@ -583,8 +583,6 @@ function exerciseCard(day: WorkoutDay, exercise: Exercise, index: number): HTMLE
       ? `/gifs/${baseId}-alt.gif`
       : `/gifs/${baseId}.gif`
     : null;
-  const legacyGifPath = `/gifs/${exercise.id}.gif`;
-  void legacyGifPath;
 
   const chips = el("div", "mt-1.5 flex flex-wrap items-center gap-1.5");
   chips.append(
@@ -747,11 +745,16 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
     ariaLabel: `وزنه ست ${log.index}`,
     onChange: (value) => {
       log.weight = value;
+      if (value > 0 && exercise.bodyweight) {
+        exercise.bodyweight = false;
+        if (exercise.targetWeight <= 0) exercise.targetWeight = value;
+      }
       if (log.done) recordExerciseHistory(exercise);
       if (log.done && !isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
       persist();
     },
-    onOpenPicker: (current, setValue) =>
+    onOpenPicker: (current, setValue) => {
+      let prUpdated = false;
       openValuePicker({
         title: `وزنه ست ${fa(log.index)}`,
         subtitle: exercise.name,
@@ -762,13 +765,23 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
         presets: [0, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 30, 35, 40, 50, 60, 70, 80, 100],
         onChange: (value) => {
           log.weight = value;
+          if (value > 0 && exercise.bodyweight) {
+            exercise.bodyweight = false;
+            if (exercise.targetWeight <= 0) exercise.targetWeight = value;
+          }
           if (log.done) recordExerciseHistory(exercise);
-          if (log.done && !isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
+          if (log.done && !isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) {
+            prUpdated = true;
+          }
           setValue(value);
           persist();
         },
         onApplyAll: (value) => applyToAllSets(exercise, "weight", value),
-      }),
+        onClose: () => {
+          if (prUpdated) requestRender();
+        },
+      });
+    },
   });
 
   const reps = stepper({
@@ -782,7 +795,8 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
       if (log.done && !isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
       persist();
     },
-    onOpenPicker: (current, setValue) =>
+    onOpenPicker: (current, setValue) => {
+      let prUpdated = false;
       openValuePicker({
         title: `تکرار ست ${fa(log.index)}`,
         subtitle: exercise.name,
@@ -795,12 +809,18 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
         onChange: (value) => {
           log.reps = value;
           if (log.done) recordExerciseHistory(exercise);
-          if (log.done && !isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) requestRender();
+          if (log.done && !isExerciseSwapped(exercise) && checkAndUpdatePR(exercise, log.weight, log.reps)) {
+            prUpdated = true;
+          }
           setValue(value);
           persist();
         },
         onApplyAll: (value) => applyToAllSets(exercise, "reps", value),
-      }),
+        onClose: () => {
+          if (prUpdated) requestRender();
+        },
+      });
+    },
   });
 
   const check = el(
@@ -888,6 +908,10 @@ function setRow(day: WorkoutDay, exercise: Exercise, log: SetLog): HTMLElement {
 /** Exercises already asked about today (in-memory: one prompt per session). */
 const progressionAsked = new Set<string>();
 
+export function clearProgressionAsked(): void {
+  progressionAsked.clear();
+}
+
 /** Asks the double-progression question once per exercise per day. */
 function offerDoubleProgression(exercise: Exercise): void {
   const key = `${exercise.id}:${isoToday()}`;
@@ -898,6 +922,10 @@ function offerDoubleProgression(exercise: Exercise): void {
 
 /** One tap sets the same weight (or reps) for every set of the exercise. */
 function applyToAllSets(exercise: Exercise, field: "weight" | "reps", value: number): void {
+  if (field === "weight" && value > 0 && exercise.bodyweight) {
+    exercise.bodyweight = false;
+    if (exercise.targetWeight <= 0) exercise.targetWeight = value;
+  }
   for (const log of exercise.logs) {
     if (field === "weight") log.weight = value;
     else log.reps = value;

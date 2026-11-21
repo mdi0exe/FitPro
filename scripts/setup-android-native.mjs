@@ -93,6 +93,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import org.json.JSONObject
 import java.io.File
@@ -100,6 +102,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 /**
  * ${MARKER}: silent "+۱ لیوان آب" action.
@@ -116,6 +119,44 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
         const val NOTIF_ID = 7701
         const val ACTION_SHOW_REMINDER = "${pkg}.ACTION_SHOW_WATER_REMINDER"
         const val ACTION_DRINK_ONE = "${pkg}.ACTION_DRINK_ONE_WATER"
+        private val ioExecutor = Executors.newSingleThreadExecutor()
+
+        /** قفل سبک مشترک با Rust برای جلوگیری از تداخل نوشتن روی gym_state.json */
+        private fun <T> withFileLock(context: Context, block: () -> T): T {
+            val file = stateFile(context)
+            val lockFile = File(file.parentFile, "gym_state.lock")
+            val deadline = System.currentTimeMillis() + 1500L
+            var locked = false
+            while (System.currentTimeMillis() < deadline) {
+                if (lockFile.exists() && System.currentTimeMillis() - lockFile.lastModified() > 5000L) {
+                    lockFile.delete()
+                }
+                if (try { lockFile.createNewFile() } catch (_: Exception) { false }) {
+                    locked = true
+                    break
+                }
+                try { Thread.sleep(25L) } catch (_: InterruptedException) { break }
+            }
+            return try {
+                block()
+            } finally {
+                if (locked) lockFile.delete()
+            }
+        }
+
+        /** شنبه شروع هفته شمسی جاری به فرمت YYYY-MM-DD */
+        private fun currentWeekStart(): String {
+            val cal = Calendar.getInstance()
+            // Calendar.SUNDAY = 1 ... SATURDAY = 7 -> فاصله از شنبه: (dayOfWeek % 7)
+            val offsetFromSaturday = cal.get(Calendar.DAY_OF_WEEK) % 7
+            cal.add(Calendar.DAY_OF_YEAR, -offsetFromSaturday)
+            return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+        }
+
+        private fun notifyWebView(jsCall: String) {
+            val wv = MainActivity.activeWebView?.get() ?: return
+            wv.post { wv.evaluateJavascript(jsCall, null) }
+        }
 
         /**
          * Same file the Rust side owns: app_data_dir()/gym_state.json.
@@ -272,22 +313,25 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
         }
 
         /** Arms the next OS alarm from the saved interval, without the app running. */
-        fun rescheduleFromState(context: Context) {
-            try {
-                val file = stateFile(context)
-                if (!file.exists()) return
+        fun rescheduleFromState(context: Context): Long {
+            return withFileLock(context) {
+                try {
+                    val file = stateFile(context)
+                    if (!file.exists()) return@withFileLock 0L
 
-                val root = JSONObject(file.readText(Charsets.UTF_8))
-                val diet = root.optJSONObject("diet") ?: return
-                if (!diet.optBoolean("waterReminderEnabled", false)) return
+                    val root = JSONObject(file.readText(Charsets.UTF_8))
+                    val diet = root.optJSONObject("diet") ?: return@withFileLock 0L
+                    if (!diet.optBoolean("waterReminderEnabled", false)) return@withFileLock 0L
 
-                val minutes = diet.optInt("waterReminderMinutes", 60).coerceIn(15, 240)
-                val nextAt = quietHoursAdjusted(System.currentTimeMillis() + minutes * 60_000L)
-                diet.put("waterReminderNextAt", nextAt)
-                writeAtomically(file, root)
-                scheduleAt(context, nextAt)
-            } catch (_: Exception) {
-                // Nothing to reschedule.
+                    val minutes = diet.optInt("waterReminderMinutes", 60).coerceIn(15, 240)
+                    val nextAt = quietHoursAdjusted(System.currentTimeMillis() + minutes * 60_000L)
+                    diet.put("waterReminderNextAt", nextAt)
+                    writeAtomically(file, root)
+                    scheduleAt(context, nextAt)
+                    nextAt
+                } catch (_: Exception) {
+                    0L
+                }
             }
         }
 
@@ -312,65 +356,76 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
-        when (intent?.action) {
-            ACTION_SHOW_REMINDER -> {
-                val file = stateFile(context)
-                if (!file.exists()) {
-                    cancelSchedule(context)
-                    return
-                }
-                val root = try {
-                    JSONObject(file.readText(Charsets.UTF_8))
-                } catch (_: Exception) {
-                    cancelSchedule(context)
-                    return
-                }
-                val diet = root.optJSONObject("diet")
-                if (diet == null || !diet.optBoolean("waterReminderEnabled", false)) {
-                    cancelSchedule(context)
-                    return
-                }
+        val action = intent?.action ?: return
+        val pending = goAsync()
+        ioExecutor.execute {
+            try {
+                when (action) {
+                    ACTION_SHOW_REMINDER -> {
+                        val nextAtToSync = withFileLock(context) {
+                            val file = stateFile(context)
+                            if (!file.exists()) {
+                                cancelSchedule(context)
+                                return@withFileLock -1L
+                            }
+                            val root = try {
+                                JSONObject(file.readText(Charsets.UTF_8))
+                            } catch (_: Exception) {
+                                cancelSchedule(context)
+                                return@withFileLock -1L
+                            }
+                            val diet = root.optJSONObject("diet")
+                            if (diet == null || !diet.optBoolean("waterReminderEnabled", false)) {
+                                cancelSchedule(context)
+                                return@withFileLock -1L
+                            }
 
-                val calendar = Calendar.getInstance()
-                if (calendar.get(Calendar.HOUR_OF_DAY) in 0..8) {
-                    val nextAt = quietHoursAdjusted(System.currentTimeMillis())
-                    diet.put("waterReminderNextAt", nextAt)
-                    writeAtomically(file, root)
-                    scheduleAt(context, nextAt)
-                    return
+                            val calendar = Calendar.getInstance()
+                            if (calendar.get(Calendar.HOUR_OF_DAY) in 0..8) {
+                                val nextAt = quietHoursAdjusted(System.currentTimeMillis())
+                                diet.put("waterReminderNextAt", nextAt)
+                                writeAtomically(file, root)
+                                scheduleAt(context, nextAt)
+                                return@withFileLock nextAt
+                            }
+                            0L
+                        }
+                        if (nextAtToSync > 0L) {
+                            notifyWebView("window.__onNativeWaterReminderFired && window.__onNativeWaterReminderFired(\$nextAtToSync)")
+                            return@execute
+                        }
+                        if (nextAtToSync < 0L) return@execute
+
+                        showNotification(
+                            context,
+                            "💧 وقت نوشیدن آب است!",
+                            "۱ لیوان آب بنوش (۷۰٪ حجم عضله آب است و برای ریکاوری حیاتی است)."
+                        )
+                        val nextAt = rescheduleFromState(context)
+                        if (nextAt > 0L) {
+                            notifyWebView("window.__onNativeWaterReminderFired && window.__onNativeWaterReminderFired(\$nextAt)")
+                        }
+                    }
+
+                    ACTION_DRINK_ONE -> {
+                        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        manager.cancel(NOTIF_ID)
+
+                        val glasses = incrementWaterInStateFile(context)
+                        val nextAt = rescheduleFromState(context)
+                        notifyWebView("window.__onSilentWaterIncrement && window.__onSilentWaterIncrement(\$glasses, \$nextAt)")
+
+                        Handler(Looper.getMainLooper()).post {
+                            Toast.makeText(
+                                context,
+                                "💧 نوش جان! آب امروز: " + toPersianDigits(glasses) + " لیوان",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
                 }
-                showNotification(
-                    context,
-                    "💧 وقت نوشیدن آب است!",
-                    "۱ لیوان آب بنوش (۷۰٪ حجم عضله آب است و برای ریکاوری حیاتی است)."
-                )
-                rescheduleFromState(context)
-            }
-
-            ACTION_DRINK_ONE -> {
-                val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                manager.cancel(NOTIF_ID)
-
-                val glasses = incrementWaterInStateFile(context)
-                // Drinking from the action button must restart the countdown,
-                // otherwise the pending alarm rings again moments later.
-                rescheduleFromState(context)
-
-                // If the WebView is alive in the background, update its memory so
-                // the next frame already shows the new count. Never brings the
-                // activity forward — evaluateJavascript runs in the WebView only.
-                MainActivity.activeWebView?.post {
-                    MainActivity.activeWebView?.evaluateJavascript(
-                        "window.__onSilentWaterIncrement && window.__onSilentWaterIncrement(" + glasses + ")",
-                        null
-                    )
-                }
-
-                Toast.makeText(
-                    context,
-                    "💧 نوش جان! آب امروز: " + toPersianDigits(glasses) + " لیوان",
-                    Toast.LENGTH_SHORT
-                ).show()
+            } finally {
+                pending.finish()
             }
         }
     }
@@ -382,16 +437,20 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
      * daily reset itself: without it, a glass logged at 00:30 would be added to
      * yesterday's count.
      */
-    private fun incrementWaterInStateFile(context: Context): Int {
-        return try {
+    private fun incrementWaterInStateFile(context: Context): Int = withFileLock(context) {
+        try {
             val file = stateFile(context)
-            if (!file.exists()) return 0
+            if (!file.exists()) return@withFileLock 0
 
             val root = JSONObject(file.readText(Charsets.UTF_8))
-            val diet = root.optJSONObject("diet") ?: return 0
+            val diet = root.optJSONObject("diet") ?: return@withFileLock 0
 
             val day = today()
-            if (diet.optString("lastResetDate", day) != day) {
+            val prevReset = diet.optString("lastResetDate", day)
+            val weekStart = currentWeekStart()
+            val crossedWeek = prevReset.isNotEmpty() && prevReset < weekStart
+
+            if (prevReset != day) {
                 diet.put("lastResetDate", day)
                 diet.put("waterGlasses", 0)
                 // Yesterday's meal ticks must go too, otherwise the JS
@@ -401,6 +460,40 @@ class WaterBroadcastReceiver : BroadcastReceiver() {
                 if (dayItems != null) {
                     for (index in 0 until dayItems.length()) {
                         dayItems.optJSONObject(index)?.put("done", false)
+                    }
+                }
+            }
+
+            // ریست خودکار هفتگی شنبه برای ست‌ها و گرم‌کردن‌های هفته قبل (از جمله داده‌های قدیمی بدون doneDate)
+            val daysArr = root.optJSONArray("days")
+            if (daysArr != null) {
+                for (d in 0 until daysArr.length()) {
+                    val dayObj = daysArr.optJSONObject(d) ?: continue
+                    val warmups = dayObj.optJSONArray("warmups")
+                    if (warmups != null) {
+                        for (w in 0 until warmups.length()) {
+                            val wu = warmups.optJSONObject(w) ?: continue
+                            val doneDate = wu.optString("doneDate", "")
+                            if (wu.optBoolean("done", false) && ((doneDate.isNotEmpty() && doneDate < weekStart) || (doneDate.isEmpty() && crossedWeek))) {
+                                wu.put("done", false)
+                                wu.put("doneDate", JSONObject.NULL)
+                            }
+                        }
+                    }
+                    val exArr = dayObj.optJSONArray("exercises")
+                    if (exArr != null) {
+                        for (e in 0 until exArr.length()) {
+                            val ex = exArr.optJSONObject(e) ?: continue
+                            val logs = ex.optJSONArray("logs") ?: continue
+                            for (l in 0 until logs.length()) {
+                                val log = logs.optJSONObject(l) ?: continue
+                                val doneDate = log.optString("doneDate", "")
+                                if (log.optBoolean("done", false) && ((doneDate.isNotEmpty() && doneDate < weekStart) || (doneDate.isEmpty() && crossedWeek))) {
+                                    log.put("done", false)
+                                    log.put("doneDate", JSONObject.NULL)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -667,7 +760,6 @@ class AndroidWaterBridge(activity: MainActivity) {
         return try {
             val safeName = BackupFileProvider.sanitizeName(fileName)
             val cacheDir = BackupFileProvider.backupCacheDir(context)
-            // Drop older backups so the cache cannot grow without bound.
             cacheDir.listFiles()?.forEach { old ->
                 if (old.name != safeName) old.delete()
             }
@@ -683,12 +775,17 @@ class AndroidWaterBridge(activity: MainActivity) {
                 clipData = ClipData.newRawUri(safeName, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
+            // بررسی همگام وجود برنامه مقصد قبل از برگرداندن true
+            if (context.packageManager.queryIntentActivities(sendIntent, 0).isEmpty()) {
+                return false
+            }
+            val act = activityRef.get()
             val chooser = Intent.createChooser(sendIntent, "ارسال فایل پشتیبان").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (act == null) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             Handler(Looper.getMainLooper()).post {
                 try {
-                    context.startActivity(chooser)
+                    (act ?: context).startActivity(chooser)
                 } catch (_: Exception) {
                     android.widget.Toast.makeText(
                         context,
@@ -706,16 +803,11 @@ class AndroidWaterBridge(activity: MainActivity) {
 
 class MainActivity : TauriActivity() {
     companion object {
-        /** Set in onWebViewCreate; the receiver evaluates JS through it. */
         @JvmStatic
-        var activeWebView: WebView? = null
+        var activeWebView: WeakReference<WebView>? = null
     }
 
-    /**
-     * Fallback for a plugin-delivered action (older build, or the bridge failed
-     * to attach): read the action extra and push the task back instead of
-     * leaving the app in the foreground.
-     */
+    private var ownWebView: WebView? = null
     private var fitproWaterMinimize = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -726,7 +818,8 @@ class MainActivity : TauriActivity() {
 
     override fun onWebViewCreate(webView: WebView) {
         super.onWebViewCreate(webView)
-        activeWebView = webView
+        ownWebView = webView
+        activeWebView = WeakReference(webView)
         webView.addJavascriptInterface(AndroidWaterBridge(this), "AndroidWater")
     }
 
@@ -745,7 +838,10 @@ class MainActivity : TauriActivity() {
     }
 
     override fun onDestroy() {
-        activeWebView = null
+        if (activeWebView?.get() === ownWebView) {
+            activeWebView = null
+        }
+        ownWebView = null
         super.onDestroy()
     }
 

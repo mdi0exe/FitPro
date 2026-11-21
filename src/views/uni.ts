@@ -768,7 +768,7 @@ export async function syncUniAlarms(): Promise<void> {
     await cancelNotifications([7901]);
   }
 
-  if (reminders.gymReminderEnabled) {
+  if (reminders.gymReminderEnabled && getState().appMode !== "uni_only") {
     const at = shiftEarlier(reminders.gymReminderTime, 0);
     await scheduleRepeatingNotification(
       7902,

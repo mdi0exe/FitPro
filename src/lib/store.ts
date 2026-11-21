@@ -327,7 +327,10 @@ export function syncTodayActivity(): boolean {
   // (and break the calendar/history e2e suites). Diet, water and weight are
   // still refreshed on every sync.
   if (setsDone > 0 && targetDay) {
-    entry.workoutTitle = `${targetDay.label} — ${targetDay.title}`;
+    entry.workoutTitle =
+      workedDays.length > 1
+        ? workedDays.map((d) => d.label).join(" + ")
+        : `${targetDay.label} — ${targetDay.title}`;
     entry.completedExercises = completedExercises;
     entry.setsDone = setsDone;
     entry.warmupsDone = warmupsDone;
@@ -375,6 +378,7 @@ export function clearTodayWorkoutActivity(): void {
 /** Flush pending writes when the app is backgrounded (Android included). */
 export function installLifecycleFlush(): void {
   const flush = () => {
+    if (!hasPendingSave()) return;
     if (saveTimer !== null) {
       window.clearTimeout(saveTimer);
       saveTimer = null;
